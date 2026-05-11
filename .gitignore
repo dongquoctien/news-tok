@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+*.tsbuildinfo
+
+# Generated data (projects + asset cache)
+data/
+
+# Local env
+.env
+.env.local
+.env.*.local
+
+# Render outputs (kept under data/ but also catch stray files)
+*.mp4
+*.mp3
+*.wav
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# Test
+coverage/
+
+# Remotion bundle cache and generated entry files
+.remotion-cache/
+.entry-cache/

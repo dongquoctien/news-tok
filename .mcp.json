@@ -1,0 +1,10 @@
+{
+  "mcpServers": {
+    "news-tok": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["./packages/mcp-server/dist/index.js"],
+      "env": {}
+    }
+  }
+}
