@@ -26,5 +26,7 @@ export default defineConfig({
     'jsdom',
     '@mozilla/readability',
     'ffmpeg-static',
+    'playwright-core',
+    'chromium-bidi',
   ],
 })

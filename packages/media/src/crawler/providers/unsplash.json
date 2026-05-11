@@ -1,0 +1,24 @@
+{
+  "name": "unsplash",
+  "kind": "image",
+  "license": "Unsplash License (commercial OK, hotlink + credit encouraged)",
+  "note": "Crawl fallback for when the API key is exhausted (50 req/h on demo tier).",
+  "search": {
+    "url": "https://unsplash.com/s/photos/{query}?orientation={orientation}",
+    "waitFor": {
+      "selector": "figure[itemprop='image']",
+      "timeoutMs": 20000
+    },
+    "extract": {
+      "items": "figure[itemprop='image']",
+      "itemFields": {
+        "downloadUrl": { "selector": "img[srcset]", "attr": "src" },
+        "pageUrl": { "selector": "a[href^='/photos/']", "attr": "href" },
+        "alt": { "selector": "img", "attr": "alt" },
+        "author": { "selector": "a[title][href*='@']", "text": true }
+      }
+    }
+  },
+  "download": { "mode": "direct" },
+  "rateLimit": { "requestsPerMin": 30 }
+}

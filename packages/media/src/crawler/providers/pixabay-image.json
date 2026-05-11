@@ -1,0 +1,24 @@
+{
+  "name": "pixabay-image",
+  "kind": "image",
+  "license": "pixabay-content-license (no attribution, commercial OK)",
+  "note": "Bypasses Cloudflare JA3 by running in real Chromium. Pixabay rebundles its CSS-modules class names regularly, so we anchor on stable attributes (href prefix + data-id) instead of hashed classes.",
+  "search": {
+    "url": "https://pixabay.com/images/search/{query}/?orientation={orientation}",
+    "waitFor": {
+      "selector": "a[href^='/photos/'][data-id] img",
+      "timeoutMs": 15000
+    },
+    "extract": {
+      "items": "a[href^='/photos/'][data-id]",
+      "itemFields": {
+        "pageUrl": { "selector": ":self", "attr": "href" },
+        "thumbnailUrl": { "selector": "img", "attr": "src" },
+        "downloadUrl": { "selector": "img", "attr": "src" },
+        "alt": { "selector": "img", "attr": "alt" }
+      }
+    }
+  },
+  "download": { "mode": "direct" },
+  "rateLimit": { "requestsPerMin": 20 }
+}

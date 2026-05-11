@@ -1,0 +1,24 @@
+{
+  "name": "pixabay-music",
+  "kind": "music",
+  "license": "pixabay-content-license (no attribution, commercial OK)",
+  "note": "Replaces the deprecated /api/music/ endpoint by crawling the public music page",
+  "search": {
+    "url": "https://pixabay.com/music/search/{query}/",
+    "waitFor": {
+      "selector": "div[data-track]",
+      "timeoutMs": 15000
+    },
+    "extract": {
+      "items": "div[data-track]",
+      "itemFields": {
+        "trackId": { "selector": ":self", "attr": "data-track" },
+        "title": { "selector": "a[href*='/music/']", "text": true },
+        "downloadUrl": { "selector": ":self", "attr": "data-audio-url" },
+        "duration": { "selector": "[class*=duration]", "text": true, "regex": "(\\d+:\\d+)" }
+      }
+    }
+  },
+  "download": { "mode": "direct" },
+  "rateLimit": { "requestsPerMin": 20 }
+}

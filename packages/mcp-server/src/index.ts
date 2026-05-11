@@ -10,6 +10,7 @@ import {
 } from '@news-tok/shared/schema'
 import {
   archive,
+  crawler,
   extractArticle,
   listVoices,
   pexels,
@@ -154,16 +155,26 @@ async function main() {
     {
       title: 'Search a free stock image',
       description:
-        'Search Pexels (default), Unsplash, or Pixabay for an image matching the query, download into the local cache, and return an AssetRef. Note: Pixabay sits behind Cloudflare and is occasionally rate-limited from Node; prefer Pexels or Unsplash for reliability.',
+        'Search for an image and return an AssetRef. Default provider is Pexels (most reliable). Crawl-based providers ("crawl:pixabay-image", "crawl:unsplash") use a headless Chromium to bypass Cloudflare JA3 fingerprinting; they are slower but work when the JSON APIs are blocked or rate-limited.',
       inputSchema: {
         query: z.string().min(1),
         orientation: z.enum(['landscape', 'portrait', 'square']).optional(),
-        provider: z.enum(['pexels', 'unsplash', 'pixabay']).optional(),
+        provider: z
+          .enum(['pexels', 'unsplash', 'pixabay', 'crawl:pixabay-image', 'crawl:unsplash'])
+          .optional(),
       },
     },
     async ({ query, orientation, provider }) => {
       try {
         const which = provider ?? 'pexels'
+        if (which.startsWith('crawl:')) {
+          const name = which.slice('crawl:'.length)
+          const asset = await crawler.crawlImage({
+            provider: name,
+            params: { query, orientation },
+          })
+          return ok(asset)
+        }
         if (which === 'pixabay') {
           const pxOrientation =
             orientation === 'landscape'
