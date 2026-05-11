@@ -1,0 +1,24 @@
+{
+  "name": "freesound",
+  "kind": "sfx",
+  "license": "Per-sound CC0/CC-BY/CC-BY-NC; check before commercial use.",
+  "note": "Short sound effects and music loops. Free public preview without login.",
+  "search": {
+    "url": "https://freesound.org/search/?q={query}",
+    "waitFor": {
+      "selector": ".sound_filename a",
+      "timeoutMs": 20000
+    },
+    "extract": {
+      "items": ".bw-player",
+      "itemFields": {
+        "soundId": { "selector": ":self", "attr": "data-sound-id" },
+        "title": { "selector": ":self", "attr": "data-title" },
+        "duration": { "selector": ":self", "attr": "data-duration" },
+        "downloadUrl": { "selector": ":self", "attr": "data-mp3" }
+      }
+    }
+  },
+  "download": { "mode": "direct" },
+  "rateLimit": { "requestsPerMin": 15 }
+}

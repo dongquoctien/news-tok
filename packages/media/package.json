@@ -17,7 +17,9 @@
     "@news-tok/shared": "workspace:*",
     "ffmpeg-static": "^5.2.0",
     "jsdom": "^25.0.1",
-    "msedge-tts": "^2.0.5"
+    "msedge-tts": "^2.0.5",
+    "playwright": "^1.49.1",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/jsdom": "^21.1.7",

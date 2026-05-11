@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { pexels, pixabay, unsplash } from '@news-tok/media'
+import { crawler, pexels, pixabay, unsplash } from '@news-tok/media'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -11,9 +11,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'missing ?q' }, { status: 400 })
   }
   const orientation = sp.get('orientation') as 'landscape' | 'portrait' | 'square' | null
-  const provider = (sp.get('provider') ?? 'pexels') as 'pexels' | 'pixabay' | 'unsplash'
+  const provider = (sp.get('provider') ?? 'pexels') as string
 
   try {
+    if (provider.startsWith('crawl:')) {
+      const name = provider.slice('crawl:'.length)
+      const asset = await crawler.crawlImage({
+        provider: name,
+        params: { query, orientation: orientation ?? undefined },
+      })
+      return NextResponse.json({ asset })
+    }
     if (provider === 'pixabay') {
       const pxOrientation =
         orientation === 'landscape'

@@ -1,0 +1,24 @@
+{
+  "name": "pexels-video",
+  "kind": "video",
+  "license": "Pexels License (commercial OK, no attribution required)",
+  "note": "Stock video clips usable as scene backgrounds.",
+  "search": {
+    "url": "https://www.pexels.com/search/videos/{query}/?orientation={orientation}",
+    "waitFor": {
+      "selector": "article a[href^='/video/']",
+      "timeoutMs": 20000
+    },
+    "extract": {
+      "items": "article",
+      "itemFields": {
+        "pageUrl": { "selector": "a[href^='/video/']", "attr": "href" },
+        "thumbnailUrl": { "selector": "img", "attr": "src" },
+        "downloadUrl": { "selector": "video", "attr": "src" },
+        "title": { "selector": "img", "attr": "alt" }
+      }
+    }
+  },
+  "download": { "mode": "direct" },
+  "rateLimit": { "requestsPerMin": 20 }
+}

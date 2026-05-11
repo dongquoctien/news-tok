@@ -70,6 +70,7 @@ export async function renderSegmentMedia(
     outputLocation: outPath,
     inputProps,
     concurrency: opts.concurrency ?? null,
+    chromiumOptions: { disableWebSecurity: true },
     onProgress: ({ progress }) => opts.onProgress?.(progress),
   })
 
@@ -109,6 +110,7 @@ export async function renderProjectMedia(
     outputLocation: outPath,
     inputProps,
     concurrency: opts.concurrency ?? null,
+    chromiumOptions: { disableWebSecurity: true },
     onProgress: ({ progress }) => opts.onProgress?.(progress),
   })
 

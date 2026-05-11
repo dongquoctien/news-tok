@@ -1,0 +1,25 @@
+{
+  "name": "jamendo",
+  "kind": "music",
+  "license": "Per-track Creative Commons (filter to CC0/CC-BY for commercial); preview MP3 stream is free.",
+  "note": "Public catalog UI. Production use should pursue Jamendo Licensing for monetized videos.",
+  "search": {
+    "url": "https://www.jamendo.com/search/tracks?q={query}",
+    "waitFor": {
+      "selector": ".js-track",
+      "timeoutMs": 20000
+    },
+    "extract": {
+      "items": ".js-track",
+      "itemFields": {
+        "trackId": { "selector": ":self", "attr": "data-track-id" },
+        "title": { "selector": ".js-track-name", "text": true },
+        "artist": { "selector": ".js-artist-name", "text": true },
+        "downloadUrl": { "selector": ":self", "attr": "data-track-mp3" },
+        "duration": { "selector": ".js-track-duration", "text": true, "regex": "(\\d+:\\d+)" }
+      }
+    }
+  },
+  "download": { "mode": "direct" },
+  "rateLimit": { "requestsPerMin": 20 }
+}

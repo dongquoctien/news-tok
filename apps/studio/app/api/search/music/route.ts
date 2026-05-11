@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { archive, pixabay } from '@news-tok/media'
+import { archive, crawler, pixabay } from '@news-tok/media'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -15,8 +15,17 @@ export async function GET(req: NextRequest) {
   if (!Number.isFinite(durationSec) || durationSec <= 0) {
     return NextResponse.json({ error: 'duration must be a positive number' }, { status: 400 })
   }
-  const provider = (sp.get('provider') ?? 'archive') as 'archive' | 'pixabay'
+  const provider = (sp.get('provider') ?? 'archive') as string
   try {
+    if (provider.startsWith('crawl:')) {
+      const name = provider.slice('crawl:'.length)
+      const asset = await crawler.crawlMusic({
+        provider: name,
+        params: { query: mood },
+        durationSec,
+      })
+      return NextResponse.json({ asset })
+    }
     if (provider === 'pixabay') {
       const asset = await pixabay.searchMusic({ mood, durationSec })
       return NextResponse.json({ asset })

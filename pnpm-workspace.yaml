@@ -11,4 +11,6 @@ allowBuilds:
   esbuild: true
   ffmpeg-static: true
   msedge-tts: true
+  playwright: true
+  playwright-core: true
   unrs-resolver: true
