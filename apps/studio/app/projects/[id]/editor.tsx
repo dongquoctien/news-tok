@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
   ArrowLeft,
@@ -36,6 +36,13 @@ import { cn } from '@/lib/utils'
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 type RenderStatus = 'idle' | 'running' | 'completed' | 'failed'
 
+function projectSignature(p: Project): string {
+  // Exclude `updatedAt` from dirty check — it changes on every patch.
+  const { updatedAt: _ignored, ...rest } = p
+  void _ignored
+  return JSON.stringify(rest)
+}
+
 export function ProjectEditor({ initial }: { initial: Project }) {
   const [project, setProject] = useState<Project>(initial)
   const [selectedId, setSelectedId] = useState<string | null>(
@@ -46,6 +53,10 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   const [renderStatus, setRenderStatus] = useState<RenderStatus>('idle')
   const [renderProgress, setRenderProgress] = useState(0)
   const [renderError, setRenderError] = useState<string | null>(null)
+  const [lastSavedSig, setLastSavedSig] = useState<string>(() => projectSignature(initial))
+
+  const currentSig = useMemo(() => projectSignature(project), [project])
+  const isDirty = currentSig !== lastSavedSig
 
   const selected = project.segments.find((s) => s.id === selectedId) ?? null
 
@@ -79,6 +90,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
       }
       const saved = (await res.json()) as Project
       setProject(saved)
+      setLastSavedSig(projectSignature(saved))
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 1200)
     } catch (err) {
@@ -104,6 +116,16 @@ export function ProjectEditor({ initial }: { initial: Project }) {
       setRenderError(err instanceof Error ? err.message : String(err))
     }
   }, [project.id])
+
+  useEffect(() => {
+    if (!isDirty) return
+    const beforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault()
+      e.returnValue = ''
+    }
+    window.addEventListener('beforeunload', beforeUnload)
+    return () => window.removeEventListener('beforeunload', beforeUnload)
+  }, [isDirty])
 
   useEffect(() => {
     if (renderStatus !== 'running') return
@@ -168,13 +190,13 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             onChange={(e) =>
               updateProject({ exportPreset: e.target.value as Project['exportPreset'] })
             }
-            className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
+            className="h-8 rounded-md border border-input bg-transparent px-3 text-xs font-medium [color-scheme:dark]"
             aria-label="Export preset"
           >
-            <option value="standard">Standard (30fps)</option>
-            <option value="tiktok">TikTok (60fps)</option>
-            <option value="youtube-shorts">YouTube Shorts</option>
-            <option value="reels">Reels</option>
+            <option value="standard" className="bg-background text-foreground">Standard (30fps)</option>
+            <option value="tiktok" className="bg-background text-foreground">TikTok (60fps)</option>
+            <option value="youtube-shorts" className="bg-background text-foreground">YouTube Shorts</option>
+            <option value="reels" className="bg-background text-foreground">Reels</option>
           </select>
           <Button
             variant="outline"
@@ -203,17 +225,35 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             }
           />
           <Button
-            variant="outline"
+            variant={isDirty ? 'default' : 'outline'}
             size="sm"
             onClick={save}
-            disabled={saveStatus === 'saving'}
+            disabled={saveStatus === 'saving' || (!isDirty && saveStatus !== 'error')}
+            title={
+              isDirty
+                ? 'Unsaved changes'
+                : saveStatus === 'saved'
+                  ? 'Saved'
+                  : 'No changes'
+            }
           >
             {saveStatus === 'saving' ? (
               <Loader2 className="animate-spin" />
             ) : (
-              <Save />
+              <span className="relative inline-flex items-center">
+                <Save />
+                {isDirty ? (
+                  <span className="absolute -right-1 -top-1 size-1.5 rounded-full bg-amber-400" />
+                ) : null}
+              </span>
             )}
-            {saveStatus === 'saved' ? 'Saved' : 'Save'}
+            {saveStatus === 'saving'
+              ? 'Saving…'
+              : saveStatus === 'saved'
+                ? 'Saved'
+                : isDirty
+                  ? 'Save*'
+                  : 'Saved'}
           </Button>
           <Button
             size="sm"
@@ -238,6 +278,32 @@ export function ProjectEditor({ initial }: { initial: Project }) {
       {(saveError || renderError) && (
         <div className="border-b border-destructive/40 bg-destructive/10 px-6 py-2 text-xs text-destructive">
           {saveError ?? renderError}
+        </div>
+      )}
+
+      {renderStatus === 'running' && (
+        <div className="border-b bg-primary/5 px-6 py-2 text-xs">
+          <div className="mb-1 flex items-center justify-between">
+            <span className="flex items-center gap-2 font-medium">
+              <Loader2 className="size-3 animate-spin" />
+              Rendering full video…
+            </span>
+            <span className="tabular-nums text-muted-foreground">
+              {Math.round(renderProgress * 100)}%
+            </span>
+          </div>
+          <div className="h-1 w-full overflow-hidden rounded-full bg-secondary">
+            <div
+              className="h-full rounded-full bg-primary transition-[width] duration-300"
+              style={{ width: `${Math.round(renderProgress * 100)}%` }}
+            />
+          </div>
+        </div>
+      )}
+
+      {renderStatus === 'completed' && (
+        <div className="border-b border-emerald-500/40 bg-emerald-500/10 px-6 py-2 text-xs text-emerald-200">
+          Render complete · output.mp4 saved.
         </div>
       )}
 
@@ -278,7 +344,11 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </aside>
 
         <section className="min-h-0 overflow-hidden">
-          <PlayerPane project={project} />
+          <PlayerPane
+            project={project}
+            selectedSegmentId={selectedId}
+            onSelectSegment={setSelectedId}
+          />
         </section>
 
         <aside className="overflow-y-auto border-l p-4">
