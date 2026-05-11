@@ -4,7 +4,11 @@
       "type": "stdio",
       "command": "node",
       "args": ["./packages/mcp-server/dist/index.js"],
-      "env": {}
+      "env": {
+        "PEXELS_API_KEY": "",
+        "PIXABAY_API_KEY": "",
+        "UNSPLASH_ACCESS_KEY": ""
+      }
     }
   }
 }

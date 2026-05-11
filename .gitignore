@@ -17,6 +17,9 @@ data/
 .env.local
 .env.*.local
 
+# MCP config may carry user-specific API keys; keep it out of git.
+.mcp.json
+
 # Render outputs (kept under data/ but also catch stray files)
 *.mp4
 *.mp3
