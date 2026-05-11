@@ -84,18 +84,29 @@ returns the same cached file; never re-download manually.
 
 1. Call `createProject({ source: { type: 'url', value: <url> }, language, aspect })`.
 2. Call `extractArticle({ url })` to get the body text.
-3. Plan 4–8 segments. Each segment should be 5–10 seconds. Pick a `scene` kind
-   for each: typically one `title` at the start, several `keypoint` in the
-   middle, and one `outro`.
-4. Use Write/Edit to update `data/projects/<id>/storyboard.json`. Make sure the
-   final JSON validates against `ProjectSchema`.
-5. For each segment, in parallel: call `searchImage({ query })` and
+3. **Confirm story structure with the user** before drafting segments. Use
+   `AskUserQuestion` and recommend the full three-part structure:
+   - **Mở bài (title, 1 segment, ~5s)** — headline / hook
+   - **Thân bài (keypoint, 2–5 segments, 5–8s mỗi đoạn)** — the article's
+     main beats
+   - **Kết bài (outro, 1 segment, ~4–6s)** — closing line. Recommended.
+   The recommended option should be "Full intro–body–outro". Honor whatever
+   the user picks (e.g. they may want intro + body only for a teaser clip).
+4. Plan the segments accordingly. Each segment is 5–10 seconds.
+   - **The outro is NOT a body keypoint.** It must wrap the story — a
+     forward-looking takeaway, a call-to-action, or a source credit (e.g.
+     "Theo dõi để cập nhật tin công nghệ mới nhất.", "Đọc đầy đủ tại
+     VnExpress."). Do not just paste the last sentence of the article as the
+     outro; that always reads as a half-finished body beat.
+5. Use Write/Edit to update `data/projects/<id>/storyboard.json`. Make sure
+   the final JSON validates against `ProjectSchema`.
+6. For each segment, in parallel: call `searchImage({ query })` and
    `synthesizeVoice({ text, voiceId })`. Update the segment's `visuals` and
    `audio.narration` with the returned paths.
-6. Call `searchMusic({ mood, durationSec })` for the project background music
+7. Call `searchMusic({ mood, durationSec })` for the project background music
    and set `bgMusic`.
-7. Call `renderProject({ projectId })`.
-8. Report the absolute path to `output.mp4` so the user can open it.
+8. Call `renderProject({ projectId })`.
+9. Report the absolute path to `output.mp4` so the user can open it.
 
 ## Common task: edit an existing segment
 
