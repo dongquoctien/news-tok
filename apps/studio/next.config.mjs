@@ -7,6 +7,9 @@ const NATIVE_OR_HEAVY_PACKAGES = [
   'jsdom',
   '@mozilla/readability',
   'webpack',
+  'playwright',
+  'playwright-core',
+  'chromium-bidi',
 ]
 
 /** @type {import('next').NextConfig} */
@@ -40,9 +43,13 @@ const nextConfig = {
       config.externals = [
         ...existing,
         ({ request }, callback) => {
-          if (request && NATIVE_OR_HEAVY_PACKAGES.includes(request)) {
-            return callback(null, `commonjs ${request}`)
-          }
+          if (!request) return callback()
+          // Exact match or subpath of a heavy/native package
+          // (e.g. "chromium-bidi/lib/cjs/...", "playwright-core/lib/...").
+          const matched = NATIVE_OR_HEAVY_PACKAGES.some(
+            (pkg) => request === pkg || request.startsWith(pkg + '/')
+          )
+          if (matched) return callback(null, `commonjs ${request}`)
           callback()
         },
       ]
