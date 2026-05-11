@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "moduleResolution": "Bundler",
+    "allowJs": true,
+    "noEmit": true,
+    "incremental": true,
+    "plugins": [{ "name": "next" }],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./*"],
+      "@news-tok/shared": ["../../packages/shared/src/index.ts"],
+      "@news-tok/shared/*": ["../../packages/shared/src/*"],
+      "@news-tok/media": ["../../packages/media/src/index.ts"],
+      "@news-tok/media/*": ["../../packages/media/src/*"],
+      "@news-tok/remotion": ["../../packages/remotion/src/index.ts"],
+      "@news-tok/remotion/*": ["../../packages/remotion/src/*"],
+      "@news-tok/render": ["../../packages/render/src/index.ts"],
+      "@news-tok/render/*": ["../../packages/render/src/*"]
+    }
+  },
+  "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],
+  "exclude": ["node_modules"]
+}

@@ -1,0 +1,14 @@
+packages:
+  - 'apps/*'
+  - 'packages/*'
+
+# Approve postinstall scripts for trusted native deps.
+# - esbuild: bundler used by tsup and Next.js
+# - ffmpeg-static: downloads the ffmpeg binary
+# - msedge-tts: shipped postinstall for the TTS adapter
+# - unrs-resolver: native module resolver used by Next.js
+allowBuilds:
+  esbuild: true
+  ffmpeg-static: true
+  msedge-tts: true
+  unrs-resolver: true
