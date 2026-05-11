@@ -61,12 +61,17 @@ export function VoicePicker({
     }
   }, [open, language, voices])
 
-  useEffect(() => {
-    if (!open) {
-      audioRef.current?.pause()
-      audioRef.current = null
-      setPreview({ voiceId: '', status: 'idle' })
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
     }
+    audioRef.current = null
+    setPreview({ voiceId: '', status: 'idle' })
+  }
+
+  useEffect(() => {
+    if (!open) stopAudio()
   }, [open])
 
   const grouped = useMemo(() => {
@@ -172,6 +177,7 @@ export function VoicePicker({
                         </Button>
                         <button
                           onClick={() => {
+                            stopAudio()
                             onSelect(v.ShortName)
                             setOpen(false)
                           }}

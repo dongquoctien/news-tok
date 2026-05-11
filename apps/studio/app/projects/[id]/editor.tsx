@@ -14,6 +14,7 @@ import {
   Mic,
   Music,
   PlayCircle,
+  RefreshCw,
   Save,
 } from 'lucide-react'
 import {
@@ -381,6 +382,45 @@ function SegmentEditor({
   aspect: Project['aspect']
   onChange: (patch: Partial<Segment>) => void
 }) {
+  const [synthStatus, setSynthStatus] = useState<'idle' | 'running' | 'error'>('idle')
+  const [synthError, setSynthError] = useState<string | null>(null)
+
+  const resynth = async () => {
+    setSynthStatus('running')
+    setSynthError(null)
+    try {
+      const res = await fetch('/api/voices/preview', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          voiceId: segment.voice.voiceId || DEFAULT_VOICES[language],
+          text: segment.text,
+          speed: segment.voice.speed,
+        }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      const { path, durationSec } = (await res.json()) as { path: string; durationSec: number }
+      onChange({
+        audio: {
+          ...segment.audio,
+          narration: {
+            kind: 'audio',
+            path,
+            source: { provider: 'edge-tts', id: segment.voice.voiceId || DEFAULT_VOICES[language] },
+            durationSec,
+          },
+        },
+      })
+      setSynthStatus('idle')
+    } catch (err) {
+      setSynthStatus('error')
+      setSynthError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div>
@@ -442,6 +482,29 @@ function SegmentEditor({
             }
           />
         </div>
+        <div className="mt-2 flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={resynth}
+            disabled={synthStatus === 'running' || !segment.text.trim()}
+            className="w-full"
+            title="Generate the narration mp3 with the current voice and text"
+          >
+            {synthStatus === 'running' ? (
+              <Loader2 className="animate-spin" />
+            ) : (
+              <RefreshCw />
+            )}
+            {synthStatus === 'running' ? 'Synthesizing…' : 'Re-synth narration'}
+          </Button>
+        </div>
+        {synthError ? (
+          <p className="mt-1 text-xs text-destructive">{synthError}</p>
+        ) : null}
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Changing the voice only updates metadata. Click Re-synth to regenerate the audio.
+        </p>
       </div>
 
       <div>

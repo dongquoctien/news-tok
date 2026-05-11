@@ -7,7 +7,9 @@ export const dynamic = 'force-dynamic'
 
 const Body = z.object({
   voiceId: z.string().min(1),
-  text: z.string().min(1).max(200).optional(),
+  // Used for two paths: a short voice sample (~200 chars) and a full
+  // segment re-synthesis. Cap is generous so segment narration fits.
+  text: z.string().min(1).max(2000).optional(),
   speed: z.number().min(0.5).max(2).optional(),
 })
 

@@ -80,6 +80,50 @@ All MCP tools are exposed under the `mcp__news-tok__*` namespace:
 These tools cache aggressively. Calling `searchImage` with the same query twice
 returns the same cached file; never re-download manually.
 
+## Choosing the narration language
+
+`createProject` requires a `language` (`'vi'` or `'en'`); there is no
+hard default. Pick it in this order, and **ask** when the signals
+disagree:
+
+1. **User stated it explicitly** — e.g. "make it English", "tiếng Việt
+   nhé" → use that.
+2. **Prompt language matches article language** (after `extractArticle`
+   returns) → use that single language; do not ask.
+3. **Prompt language differs from article language** — e.g. the user
+   wrote the request in Vietnamese but the URL is an English article.
+   Use `AskUserQuestion` to confirm which side should win. Default
+   suggestion: the **prompt language** (audience), with the article
+   language as the second option.
+4. **Unknown / unclear** (short prompt, no URL, article extraction
+   failed) → ask explicitly.
+
+When you pick a language that differs from the article's, **translate**
+each segment's `text` (and the project `title`) into the target language
+before calling `synthesizeVoice` — the narration must match the chosen
+TTS voice.
+
+The Edge TTS voices are picked from `DEFAULT_VOICES`
+(`packages/shared/src/schema.ts`):
+- `vi` → `vi-VN-HoaiMyNeural`
+- `en` → `en-US-AriaNeural`
+
+## Choosing the narration voice
+
+After locking the language, **ask the user which voice to use** before
+you call `synthesizeVoice` for the segments. Show 3–4 contrasting
+options sourced from `listVoices({ language })`, including the default
+plus one other gender and one regional variant. Examples:
+
+- For `vi`: `vi-VN-HoaiMyNeural` (female, default), `vi-VN-NamMinhNeural`
+  (male), and any further variants `listVoices` returns.
+- For `en`: `en-US-AriaNeural` (female US, default), `en-US-GuyNeural`
+  (male US), `en-GB-SoniaNeural` (female UK).
+
+Recommend the default first. Once the user picks a voice, use that
+`voiceId` for **every segment** unless the user later asks to vary it
+per segment.
+
 ## Common task: create video from a URL
 
 1. Call `createProject({ source: { type: 'url', value: <url> }, language, aspect })`.
@@ -103,8 +147,15 @@ returns the same cached file; never re-download manually.
 6. For each segment, in parallel: call `searchImage({ query })` and
    `synthesizeVoice({ text, voiceId })`. Update the segment's `visuals` and
    `audio.narration` with the returned paths.
-7. Call `searchMusic({ mood, durationSec })` for the project background music
-   and set `bgMusic`.
+7. Call `searchMusic({ mood, durationSec })` for the project background
+   music and set `bgMusic`. **Pick `mood` from the article's tone**, not a
+   hard-coded default — e.g. `'tense'` / `'dramatic'` for crime, fraud,
+   conflict; `'uplifting'` / `'inspiring'` for product launches and
+   features; `'calm'` for explainers; `'cinematic'` for big-picture
+   reporting; `'news'` for hard-news bulletins. Pass `durationSec` =
+   project total — the Remotion composition loops the track when it is
+   shorter and fades out the last ~1.2s when it is longer, so an exact
+   match is not required.
 8. Call `renderProject({ projectId })`.
 9. Report the absolute path to `output.mp4` so the user can open it.
 

@@ -69,6 +69,15 @@ export function MusicPicker({
     }
   }
 
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause()
+      audioRef.current.currentTime = 0
+    }
+    audioRef.current = null
+    setPlaying(false)
+  }
+
   const togglePlay = () => {
     if (!preview) return
     const url = assetUrl(preview.path)
@@ -92,9 +101,7 @@ export function MusicPicker({
       onOpenChange={(o) => {
         setOpen(o)
         if (!o) {
-          audioRef.current?.pause()
-          audioRef.current = null
-          setPlaying(false)
+          stopAudio()
           setPreview(null)
           setError(null)
         }
@@ -197,13 +204,20 @@ export function MusicPicker({
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => setOpen(false)}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              stopAudio()
+              setOpen(false)
+            }}
+          >
             Cancel
           </Button>
           <Button
             disabled={!preview}
             onClick={() => {
               if (preview) {
+                stopAudio()
                 onSelect(preview)
                 setOpen(false)
               }
