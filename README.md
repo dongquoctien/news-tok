@@ -84,6 +84,24 @@ You can opt out (e.g. intro + body only for a teaser) and Claude will honour tha
 
 ---
 
+## Narration language
+
+There is no hard default for `language` (`'vi'` or `'en'`) — `createProject` requires it. Claude picks it from your prompt and the article in this order:
+
+1. **You said it explicitly** ("in English", "tiếng Việt nhé") — wins.
+2. **Prompt language matches article language** — used silently.
+3. **Prompt language differs from article language** (e.g. Vietnamese prompt + English URL) — Claude asks which side should win. The default suggestion is the **prompt language** (your audience), with the article language offered as the alternative.
+4. **Unclear** (no URL, very short prompt) — Claude asks explicitly.
+
+When the chosen language differs from the source article, Claude translates each segment's `text` and the project title before calling `synthesizeVoice`. TTS voice defaults:
+
+- `vi` → `vi-VN-HoaiMyNeural` (Edge neural, female VI)
+- `en` → `en-US-AriaNeural` (Edge neural, female US)
+
+You can change the voice per segment in Studio via the **Change** button next to the voice ID.
+
+---
+
 ## Why split it like this?
 
 | Activity | Who does it better |
