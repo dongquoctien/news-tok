@@ -108,6 +108,22 @@ The Edge TTS voices are picked from `DEFAULT_VOICES`
 - `vi` → `vi-VN-HoaiMyNeural`
 - `en` → `en-US-AriaNeural`
 
+## Choosing the narration voice
+
+After locking the language, **ask the user which voice to use** before
+you call `synthesizeVoice` for the segments. Show 3–4 contrasting
+options sourced from `listVoices({ language })`, including the default
+plus one other gender and one regional variant. Examples:
+
+- For `vi`: `vi-VN-HoaiMyNeural` (female, default), `vi-VN-NamMinhNeural`
+  (male), and any further variants `listVoices` returns.
+- For `en`: `en-US-AriaNeural` (female US, default), `en-US-GuyNeural`
+  (male US), `en-GB-SoniaNeural` (female UK).
+
+Recommend the default first. Once the user picks a voice, use that
+`voiceId` for **every segment** unless the user later asks to vary it
+per segment.
+
 ## Common task: create video from a URL
 
 1. Call `createProject({ source: { type: 'url', value: <url> }, language, aspect })`.
@@ -131,8 +147,15 @@ The Edge TTS voices are picked from `DEFAULT_VOICES`
 6. For each segment, in parallel: call `searchImage({ query })` and
    `synthesizeVoice({ text, voiceId })`. Update the segment's `visuals` and
    `audio.narration` with the returned paths.
-7. Call `searchMusic({ mood, durationSec })` for the project background music
-   and set `bgMusic`.
+7. Call `searchMusic({ mood, durationSec })` for the project background
+   music and set `bgMusic`. **Pick `mood` from the article's tone**, not a
+   hard-coded default — e.g. `'tense'` / `'dramatic'` for crime, fraud,
+   conflict; `'uplifting'` / `'inspiring'` for product launches and
+   features; `'calm'` for explainers; `'cinematic'` for big-picture
+   reporting; `'news'` for hard-news bulletins. Pass `durationSec` =
+   project total — the Remotion composition loops the track when it is
+   shorter and fades out the last ~1.2s when it is longer, so an exact
+   match is not required.
 8. Call `renderProject({ projectId })`.
 9. Report the absolute path to `output.mp4` so the user can open it.
 

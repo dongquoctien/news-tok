@@ -93,12 +93,20 @@ There is no hard default for `language` (`'vi'` or `'en'`) — `createProject` r
 3. **Prompt language differs from article language** (e.g. Vietnamese prompt + English URL) — Claude asks which side should win. The default suggestion is the **prompt language** (your audience), with the article language offered as the alternative.
 4. **Unclear** (no URL, very short prompt) — Claude asks explicitly.
 
-When the chosen language differs from the source article, Claude translates each segment's `text` and the project title before calling `synthesizeVoice`. TTS voice defaults:
+When the chosen language differs from the source article, Claude translates each segment's `text` and the project title before calling `synthesizeVoice`.
 
-- `vi` → `vi-VN-HoaiMyNeural` (Edge neural, female VI)
-- `en` → `en-US-AriaNeural` (Edge neural, female US)
+### Voice selection
 
-You can change the voice per segment in Studio via the **Change** button next to the voice ID.
+After language is locked, Claude **asks which voice** to use before synthesizing. Defaults shown first, with the opposite gender and any regional variant as alternatives. Examples:
+
+- `vi`: `vi-VN-HoaiMyNeural` (female, default), `vi-VN-NamMinhNeural` (male).
+- `en`: `en-US-AriaNeural` (female US, default), `en-US-GuyNeural` (male US), `en-GB-SoniaNeural` (female UK).
+
+You can also change the voice per segment in Studio via the **Change** button, then click **Re-synth narration** to regenerate the audio with the new voice.
+
+### Background music behaviour
+
+When `bgMusic.durationSec` is shorter than the video, the composition **loops** the track. When it is longer (or equal), the last ~1.2s are **faded out** so the audio never cuts off mid-bar. Claude picks `mood` from the article's tone — `'tense'` / `'dramatic'` for crime and conflict, `'uplifting'` for launches, `'calm'` for explainers, `'news'` for hard news.
 
 ---
 
