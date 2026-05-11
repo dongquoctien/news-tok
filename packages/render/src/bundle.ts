@@ -1,9 +1,9 @@
 import { bundle } from '@remotion/bundler'
 import { createHash } from 'node:crypto'
-import { mkdir, readdir, writeFile, stat } from 'node:fs/promises'
+import { mkdir, readdir, writeFile, stat, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { bundleCacheRoot, dataDir, projectScenesDir, REPO_ROOT } from './paths.js'
+import { bundleCacheRoot, dataDir, projectScenesDir, projectStoryboardPath, REPO_ROOT } from './paths.js'
 
 // Stage temp entry files inside packages/remotion so module resolution finds
 // `remotion`, `react`, `@news-tok/*` via pnpm's nested node_modules.
@@ -22,7 +22,7 @@ async function listCustomScenes(projectId: string): Promise<{ name: string; path
 }
 
 async function hashScenes(scenes: { name: string; path: string }[]): Promise<string> {
-  if (scenes.length === 0) return 'base'
+  if (scenes.length === 0) return ''
   const h = createHash('sha256')
   for (const s of scenes) {
     h.update(s.name)
@@ -34,6 +34,40 @@ async function hashScenes(scenes: { name: string; path: string }[]): Promise<str
     h.update('\n')
   }
   return h.digest('hex').slice(0, 16)
+}
+
+/**
+ * Hash the set of asset files this project references in its storyboard.
+ * Remotion's bundler snapshots the `publicDir` listing into a runtime
+ * `window.remotion_staticFiles` registry; if a project downloads new
+ * assets after the bundle was cached, those files won't resolve via
+ * `staticFile()` / `<Img src="/public/...">`. Including the storyboard's
+ * asset paths in the cache key forces a rebundle whenever the set
+ * changes.
+ */
+async function hashStoryboardAssets(projectId: string): Promise<string> {
+  const path = projectStoryboardPath(projectId)
+  if (!existsSync(path)) return ''
+  let raw: string
+  try {
+    raw = await readFile(path, 'utf8')
+  } catch {
+    return ''
+  }
+  // Extract every "path": "..." occurrence — cheap and tolerant to schema
+  // additions (avoids parsing the whole project).
+  const matches = raw.match(/"path"\s*:\s*"((?:\\.|[^"\\])*)"/g) ?? []
+  const paths = Array.from(new Set(matches.map((m) => m.replace(/^"path"\s*:\s*"|"$/g, ''))))
+  if (paths.length === 0) return ''
+  paths.sort()
+  const h = createHash('sha256')
+  for (const p of paths) h.update(p + '\n')
+  return h.digest('hex').slice(0, 12)
+}
+
+function joinHashParts(...parts: string[]): string {
+  const nonEmpty = parts.filter(Boolean)
+  return nonEmpty.length === 0 ? 'base' : nonEmpty.join('-')
 }
 
 function entrySource(scenes: { name: string; path: string }[]): string {
@@ -63,7 +97,9 @@ export {}
 export async function bundleForProject(projectId: string): Promise<string> {
   const scenes = await listCustomScenes(projectId)
   const sceneHash = await hashScenes(scenes)
-  const outDir = resolve(bundleCacheRoot(), sceneHash)
+  const assetsHash = await hashStoryboardAssets(projectId)
+  const cacheKey = joinHashParts(sceneHash, assetsHash)
+  const outDir = resolve(bundleCacheRoot(), cacheKey)
 
   if (existsSync(resolve(outDir, 'index.html'))) {
     return outDir
@@ -71,7 +107,7 @@ export async function bundleForProject(projectId: string): Promise<string> {
   await mkdir(outDir, { recursive: true })
 
   await mkdir(ENTRY_STAGING_ROOT, { recursive: true })
-  const entryPath = resolve(ENTRY_STAGING_ROOT, `entry-${sceneHash}.tsx`)
+  const entryPath = resolve(ENTRY_STAGING_ROOT, `entry-${cacheKey}.tsx`)
   await writeFile(entryPath, entrySource(scenes), 'utf8')
 
   return bundle({

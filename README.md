@@ -1,27 +1,27 @@
 # news-tok
 
-Turn **articles / plain text / website links** into **short videos** (TikTok/Reels/Shorts) — runs 100% **locally**.
+Turn **articles, plain text, or website links** into **short videos** (TikTok / Reels / Shorts) — runs 100% **locally**.
 
 > **Two clearly separated halves:**
-> - **Claude CLI in the terminal** = the AI that creates a project (extract, plan, fetch assets, render full)
-> - **Local Web Studio** = the editor used to preview and fine-tune the result after Claude is done
+> - **Claude CLI in the terminal** — the AI orchestrator that drafts the project (extract, plan, fetch assets, render).
+> - **Local Web Studio** — the editor surface that previews and fine-tunes the result after Claude is done.
 
-There is no "AI orchestrator" inside the Node app. The Claude Code CLI itself **is** the orchestrator, living in the terminal. The Web Studio is just the editor shell.
+The Node app has no embedded "AI orchestrator". The Claude Code CLI **is** the orchestrator, and the Web Studio is its companion editor.
 
 ---
 
 ## Features
 
-- **Flexible input**: paste text, an article URL, or a file
-- **Claude CLI orchestrates everything**: extract → summarize → pick images/music → TTS → render → output.mp4
-- **Claude writes and edits scene TSX** whenever the user requests a custom effect
-- **Free AI voices** (VI + EN) — Edge neural voices
-- **AI-picked music + images** from Pexels / Unsplash / Internet Archive (free for commercial use)
-- **Formats**: 9:16 (TikTok), 16:9, 1:1
-- **Web Studio**: timeline, segment editor, real-time preview, swap images/music/voice, export
-- **100% local**: assets are cached on the machine. Outbound traffic only goes to Claude (Pro/Max sub) + Pexels/Pixabay
-- **Subscription-based**, no API key
-- **Unified UI**: a single icon set — **Lucide React** — is shared by Studio and Remotion compositions. **No emoji anywhere** (Studio, scene TSX, CLAUDE.md, docs).
+- **Flexible input**: paste text, an article URL, or a file path.
+- **Claude CLI orchestrates everything**: extract → summarize → pick images/music → TTS → render → `output.mp4`.
+- **Claude writes and edits scene TSX** when you ask for a custom effect (e.g. "give segment 2 a Cyberpunk glitch"). It forks a built-in scene into `data/projects/<id>/scenes/` and the dynamic scene resolver picks it up.
+- **Free neural TTS** (VI + EN) via Microsoft Edge voices.
+- **AI-picked music and images** from Pexels, Unsplash, and Internet Archive — all commercial-friendly licenses.
+- **Formats**: 9:16 (TikTok), 16:9, 1:1 — with export presets for TikTok 60fps / YouTube Shorts / Reels.
+- **Web Studio**: segment timeline with click-to-seek, inline narration editor, asset pickers, real-time `<Player>` preview, render-progress bar.
+- **100% local**: assets are cached on disk; outbound traffic only reaches your chosen providers (Pexels, Unsplash, Pixabay, Internet Archive, Microsoft Edge TTS) and Claude.
+- **Subscription-based** — no Anthropic API key. Auth via `claude login` with a Pro/Max subscription.
+- **Unified iconography**: a single icon set — **Lucide React** — is shared by Studio and Remotion compositions. **No emoji anywhere** (Studio UI, scene TSX, CLAUDE.md, docs, commit messages).
 
 ---
 
@@ -36,13 +36,15 @@ claude
 ```
 
 Claude will:
-1. Call the MCP tool `extractArticle` to read the article
-2. Build a storyboard and write it to `data/projects/<id>/storyboard.json`
-3. Call `searchImage`, `searchMusic`, `synthesizeVoice` in parallel
-4. Call `renderProject` → output.mp4
-5. Report the file path so you can open it in Studio
 
-Later, if you say "give segment 2 a glitch effect like Cyberpunk", Claude will `Read` the storyboard, fork a scene into `data/projects/<id>/scenes/CyberpunkGlitch.tsx`, edit the storyboard to reference the new scene, and call `renderSegment` to re-render.
+1. Call the MCP tool `extractArticle` to read the article.
+2. **Confirm the story structure** with you (intro → body → outro). The default and recommended option is the full three-part structure.
+3. Draft a storyboard and write it to `data/projects/<id>/storyboard.json`.
+4. Call `searchImage`, `searchMusic`, `synthesizeVoice` in parallel.
+5. Call `renderProject` → `output.mp4`.
+6. Report the file path so you can open it in Studio or any media player.
+
+Later, if you say "give segment 2 a glitch effect like Cyberpunk", Claude will `Read` the storyboard, fork a scene into `data/projects/<id>/scenes/CyberpunkGlitch.tsx`, point that segment at the new scene, and call `renderSegment` to re-render just that piece.
 
 ### 2) Web Studio (`pnpm studio`) — the editor side
 
@@ -50,14 +52,35 @@ Later, if you say "give segment 2 a glitch effect like Cyberpunk", Claude will `
 pnpm studio   # opens http://localhost:3000
 ```
 
-- **Project list**: see every project Claude has created under `data/projects/`
-- **Timeline editor**: drag-and-drop segments, edit text/voice/duration
-- **Asset picker**: swap images/music through the UI (search Pexels/Pixabay)
-- **Real-time preview**: Remotion `<Player>` driven by storyboard.json
-- **Re-render**: a single segment or the full project
-- **Export**: download output.mp4
+- **Project list** — every project Claude has created under `data/projects/`.
+- **Segment timeline** — click-to-seek, playhead synced to the Remotion `<Player>`.
+- **Inline inspector** — edit narration text, duration, scene, voice, speed, and background image.
+- **Asset pickers** — search Pexels / Unsplash / Internet Archive / Pixabay through dialogs.
+- **Real-time preview** — Remotion `<Player>` driven by `storyboard.json`.
+- **Dirty-save indicator** — an amber dot on the Save button when there are unsaved edits, plus a `beforeunload` guard.
+- **Render** — a single segment or the full project, with a progress bar in the header.
 
-Studio **does not spawn Claude**. If you want AI assistance for an edit, go back to the terminal and talk to Claude.
+Studio **does not spawn Claude**. For AI-assisted edits, go back to the terminal.
+
+---
+
+## Story structure (intro – body – outro)
+
+For URL-driven videos Claude follows a three-part structure by default and confirms it with you before drafting segments:
+
+| Part | Scene kind | Segments | Length | Purpose |
+|---|---|---|---|---|
+| Mở bài / Intro | `title` | 1 | ~5s | Headline or hook |
+| Thân bài / Body | `keypoint` | 2–5 | 5–8s each | The article's main beats |
+| Kết bài / Outro | `outro` | 1 | 4–6s | Forward-looking takeaway, call-to-action, or source credit |
+
+The **outro is not a body keypoint**. Claude should not paste the last sentence of the article verbatim — that always reads as a half-finished beat. Good outros:
+
+- *"Theo dõi để cập nhật tin công nghệ mới nhất."*
+- *"Đọc đầy đủ bài viết trên VnExpress."*
+- *"A small step today, a safer device tomorrow."*
+
+You can opt out (e.g. intro + body only for a teaser) and Claude will honour that.
 
 ---
 
@@ -65,15 +88,15 @@ Studio **does not spawn Claude**. If you want AI assistance for an edit, go back
 
 | Activity | Who does it better |
 |---|---|
-| Read an article, distill the main points | **Claude** (an LLM beats rules) |
+| Read an article, distil the main points | **Claude** — an LLM beats rules |
 | Pick keywords that find the right image | **Claude** |
-| Write TSX code for an effect | **Claude** |
-| Drag-and-drop segments, reorder | **Studio** (UI beats typing) |
-| Tweak a single word in a subtitle | **Studio** (filling a form is faster than asking Claude) |
-| Audition voice samples before choosing | **Studio** (UI player) |
-| Crop/resize an image | **Studio** (visual) |
+| Write TSX code for a new visual effect | **Claude** |
+| Drag-and-drop segments, reorder | **Studio** — UI beats typing |
+| Tweak a single word in a subtitle | **Studio** — a form is faster than asking Claude |
+| Audition voice samples before choosing | **Studio** — UI player |
+| Crop / re-frame an image | **Studio** — visual |
 
-Both sides share the same **storyboard.json** — nobody owns the state exclusively.
+Both sides share the same **`storyboard.json`** — neither owns the state exclusively.
 
 ---
 
@@ -82,20 +105,19 @@ Both sides share the same **storyboard.json** — nobody owns the state exclusiv
 ```
 news-tok/
 ├── CLAUDE.md                # instructions Claude reads when entering this project
-├── .mcp.json                # registers the MCP server with the Claude CLI
-├── prompts/
-│   ├── generate.md          # prompt template for "create a video"
-│   └── edit.md              # prompt template for "edit a video"
+├── .mcp.json                # registers the MCP server with the Claude CLI (gitignored)
+├── .mcp.json.example        # template — copy to .mcp.json and fill in keys
+├── prompts/                 # prompt templates for "create" / "edit"
 ├── apps/
 │   └── studio/              # Next.js — the Web Studio editor
 │       ├── app/
 │       │   ├── projects/    # list + editor pages
-│       │   └── api/         # read/write storyboard, trigger render, call media
-│       └── components/      # Player, Timeline, AssetPicker, ...
+│       │   └── api/         # read/write storyboard, trigger render, proxy media
+│       └── components/      # Player pane, asset pickers, ...
 ├── packages/
-│   ├── shared/              # zod schemas
-│   ├── media/               # Pexels, Pixabay, Edge TTS, Readability, ffmpeg
-│   ├── remotion/            # default composition + scene library
+│   ├── shared/              # zod schemas, UI tokens, sanitize helpers
+│   ├── media/               # Pexels, Unsplash, Pixabay, Internet Archive, Edge TTS, Readability
+│   ├── remotion/            # default composition + built-in scene library
 │   ├── render/              # programmatic Remotion render
 │   └── mcp-server/          # local stdio MCP server — used only by the Claude CLI
 └── data/                    # gitignored — shared state
@@ -109,22 +131,24 @@ news-tok/
 
 ### Dependency direction (no cycles)
 
-- `shared` ← used by everything
-- `media` ← used by `mcp-server`, `render`, `studio` (**studio imports it directly**, not through MCP)
-- `remotion` ← used by `render`, `studio` (Player)
-- `render` ← used by `mcp-server`, `studio`
-- `mcp-server` ← standalone process spawned by the Claude CLI via `.mcp.json`
-- `studio` ← the Web entry point
+- `shared` ← used by everything.
+- `media` ← used by `mcp-server`, `render`, and `studio` (**Studio imports it directly**, not through MCP).
+- `remotion` ← used by `render`, and by `studio` (`<Player>` preview).
+- `render` ← used by `mcp-server` and `studio`.
+- `mcp-server` ← a standalone process spawned by the Claude CLI via `.mcp.json`.
+- `studio` ← the Web entry point.
 
 ### Why doesn't Studio go through MCP?
 
-Studio and `packages/media` live in the same monorepo and the same Node process — direct imports avoid the cost of spawning a subprocess and the JSON-RPC overhead. The MCP server **exists only for the Claude CLI**, because that's the only way Claude can call into our Node code.
+Studio and `packages/media` live in the same monorepo, sharing one Node process — direct imports avoid the cost of spawning a subprocess and the JSON-RPC round-trip. The MCP server **exists only for the Claude CLI**, because that is the only way Claude can call into our Node code.
 
-Both sides use the **same `packages/media`** → Claude and Studio always stay consistent.
+Both sides use the **same `packages/media`** → Claude and Studio stay in sync automatically.
 
 ---
 
 ## Data model
+
+Authoritative schema lives in `packages/shared/src/schema.ts`. A simplified view:
 
 ```ts
 type Project = {
@@ -135,18 +159,23 @@ type Project = {
   aspect: '9:16' | '16:9' | '1:1'
   segments: Segment[]
   bgMusic?: AssetRef
-  createdAt: string; updatedAt: string
+  bgMusicVolume: number              // 0..1, default 0.2
+  subtitles: { enabled: boolean; bottomPct: number }
+  exportPreset: 'standard' | 'tiktok' | 'youtube-shorts' | 'reels'
+  createdAt: string
+  updatedAt: string
 }
 
 type Segment = {
   id: string
   durationSec: number
-  scene: 'title' | 'keypoint' | 'quote' | 'outro' | string  // string = custom
+  scene: 'title' | 'keypoint' | 'quote' | 'outro' | string   // string = custom
   text: string
   voice: { provider: 'edge-tts'; voiceId: string; speed: number }
   visuals: { background?: AssetRef; foreground?: AssetRef[] }
   effects: EffectSpec[]
-  audio?: { sfx?: AssetRef[] }
+  audio?: { narration?: AssetRef; sfx?: AssetRef[] }
+  wordBoundaries?: WordBoundary[]    // per-word timing for subtitle burn-in
   style?: Record<string, string | number>
 }
 ```
@@ -157,15 +186,16 @@ type Segment = {
 
 | Tool | Description |
 |---|---|
-| `extractArticle({ url })` | Fetch + Readability → `{ title, text, byline }` |
-| `searchImage({ query, orientation, provider? })` | Pexels (default) / Unsplash / Pixabay → local cache path |
-| `searchMusic({ mood, durationSec, provider? })` | Internet Archive (default, no key) / Pixabay → local cache path |
-| `synthesizeVoice({ text, voiceId, speed })` | Edge TTS → mp3 + word boundaries |
-| `listVoices({ language })` | List Edge TTS voices |
-| `renderSegment({ projectId, segmentId })` | Remotion render of one segment |
-| `renderProject({ projectId })` | Full render + ffmpeg concat |
-| `createProject({ source, language, aspect })` | Create `data/projects/<id>/` + an empty storyboard |
-| `listProjects()` | List `data/projects/` |
+| `createProject({ source, language, aspect })` | Create `data/projects/<id>/` with an empty storyboard. |
+| `listProjects()` | List `data/projects/`. |
+| `extractArticle({ url })` | Fetch + Readability → `{ title, text, byline, excerpt, siteName, lang }`. Strips emoji. |
+| `searchImage({ query, orientation?, provider? })` | Pexels (default), Unsplash, or Pixabay → local cache path. Crawl-based fallbacks (`crawl:pixabay-image`, `crawl:unsplash`) use headless Chromium when the JSON APIs are blocked. |
+| `searchMusic({ mood, durationSec, provider? })` | Internet Archive (default, no key) → local cache path. Pixabay's music API is deprecated. |
+| `synthesizeVoice({ text, voiceId, speed })` | Edge TTS → mp3 plus per-word boundaries. |
+| `listVoices({ language })` | List Edge TTS voices. |
+| `renderSegment({ projectId, segmentId })` | Remotion render of one segment. |
+| `renderProject({ projectId })` | Full render of the whole project to `output.mp4`. |
+| `getStoryboard({ projectId })` | Parsed storyboard JSON (validated against `ProjectSchema`). |
 
 **Built-in tools Claude also uses**: `Read`, `Edit`, `Write`, `Glob`, `Grep`, `Bash(node *, pnpm *)`.
 
@@ -177,50 +207,55 @@ type Segment = {
 |---|---|---|
 | Runtime | Node 20+ / TypeScript 5 | |
 | UI | Next.js 14 | RSC + API routes |
-| Video render | **Remotion 4** + `@remotion/renderer` + `@remotion/player` | Programmatic + Player preview |
-| AI | **Claude Code CLI** (terminal) | Pro/Max subscription, no API key |
-| MCP | `@modelcontextprotocol/sdk` | Official TS SDK |
-| TTS | `msedge-tts` | Free, VI+EN |
+| Video render | **Remotion 4** + `@remotion/renderer` + `@remotion/player` | Programmatic render and an in-browser preview Player |
+| AI | **Claude Code CLI** (terminal) | Pro / Max subscription — no API key |
+| MCP | `@modelcontextprotocol/sdk` | Official TypeScript SDK |
+| TTS | `msedge-tts` | Free, VI + EN |
 | Article extract | `@mozilla/readability` + `jsdom` | |
 | ffmpeg | `ffmpeg-static` + `execa` | Reliable on Windows |
-| Media APIs | Pexels + Unsplash (images), Internet Archive (music); Pixabay optional fallback | Free for commercial use. Pixabay sits behind Cloudflare and is often blocked from Node fetch. |
-| **Icons** | **`lucide-react`** | The single icon set for Studio + Remotion. Tree-shakeable, ~1500 icons, line-style. No emoji. |
-| **Studio CSS** | **Tailwind CSS v4 + shadcn/ui** | Utility-first, CSS-first design tokens via `@theme`. shadcn copy-paste components on top of Radix primitives. **Applies to Studio only, not to Remotion scenes.** |
-| **Scenes CSS** | **Inline styles + ui-tokens** | The Remotion bundle has its own webpack pipeline that doesn't include Tailwind PostCSS. Scenes use `style={{...}}` with constants from `packages/shared/src/ui-tokens.ts`. |
+| Media APIs | Pexels + Unsplash (images), Internet Archive (music); Pixabay optional fallback | Free for commercial use. Pixabay sits behind Cloudflare, which often blocks Node's `fetch`. |
+| Crawler fallback | `playwright` headless Chromium | Bypasses Cloudflare JA3 fingerprinting when the JSON APIs reject Node |
+| **Icons** | **`lucide-react`** | One icon set for Studio + Remotion. Tree-shakeable, ~1500 icons, line-style. No emoji. |
+| **Studio CSS** | **Tailwind CSS v4 + shadcn/ui** | Utility-first, CSS-first design tokens via `@theme`. Applies to Studio only — **not** to Remotion scenes. |
+| **Scenes CSS** | **Inline styles + `ui-tokens`** | The Remotion bundle has its own webpack pipeline that does not run Tailwind PostCSS. Scenes use `style={{...}}` with constants from `packages/shared/src/ui-tokens.ts`. |
 | Validation | `zod` | |
-| Mono-repo | `pnpm` workspaces | |
+| Monorepo | `pnpm` workspaces | |
 
 ### Notes
 
-- **Remotion**: free for teams of ≤ 3. For teams of 4+: Company License $25/dev/month. [remotion.dev/license](https://www.remotion.dev/license)
-- **Edge TTS**: reverse-engineered Microsoft API. Adapter pattern so it can be swapped easily
-- **Claude auth**: `claude login` with a Pro/Max subscription. **Do NOT set `ANTHROPIC_API_KEY`** — it would switch to per-token API billing
+- **Remotion**: free for teams of ≤ 3. For 4+ developers, a Company License is $25/dev/month — see [remotion.dev/license](https://www.remotion.dev/license).
+- **Edge TTS**: reverse-engineered Microsoft endpoint behind an adapter, so it can be swapped easily.
+- **Claude auth**: `claude login` with a Pro / Max subscription. **Do NOT set `ANTHROPIC_API_KEY`** — that would switch the Claude CLI to per-token API billing.
 
 ---
 
-## UI conventions (MANDATORY)
+## UI conventions (mandatory)
 
-Applies to **Studio UI**, **Remotion scenes**, **CLAUDE.md**, and every doc in this repo:
+Applies to **Studio UI**, **Remotion scenes**, **CLAUDE.md**, and every doc in this repo.
 
 ### Styling — two separate pipelines
 
 | Location | CSS approach | Why |
 |---|---|---|
-| `apps/studio/**` | **Tailwind v4 + shadcn/ui** | A component-rich UI needs utility classes + a design system |
+| `apps/studio/**` | **Tailwind v4 + shadcn/ui** | A component-rich UI needs utility classes plus a design system |
 | `packages/remotion/scenes/**` | **Inline `style={{...}}`** | The Remotion bundler has its own webpack and does not run Tailwind PostCSS — classes would be silently ignored |
 | `data/projects/<id>/scenes/**` | **Inline `style={{...}}`** | Same reason as above |
 
-**Single source of design values**: `packages/shared/src/ui-tokens.ts` (`COLOR`, `SPACE`, `RADIUS`, `ICON`, `FONT`). Studio maps these to Tailwind theme vars via `app/globals.css`; scenes import them directly.
+**Single source of design values**: `packages/shared/src/ui-tokens.ts` (`COLOR`, `SPACE`, `RADIUS`, `ICON`, `FONT`). Studio maps these to Tailwind theme vars in `app/globals.css`; scenes import them directly.
 
 ### Icon system
-- **Use only `lucide-react`**. Do not mix in other icon sets (Heroicons, Tabler, Material, Font Awesome, ...).
-- In Studio: use named imports, never barrel imports:
+
+- **Use only `lucide-react`**. Do not mix in other sets (Heroicons, Tabler, Material, Font Awesome, etc.).
+- In Studio: named imports only — never barrel imports.
+
   ```tsx
   import { Play, Pause, Trash2 } from 'lucide-react'   // OK
   import * as Icons from 'lucide-react'                // NOT OK
   ```
+
 - In Remotion scenes: same package — render with `size`, `color`, `strokeWidth` via props.
-- Centralize size & stroke in `packages/shared/src/ui-tokens.ts`:
+- Centralise size and stroke in `packages/shared/src/ui-tokens.ts`:
+
   ```ts
   export const ICON = {
     sm: 16, md: 20, lg: 24, xl: 32,
@@ -229,106 +264,72 @@ Applies to **Studio UI**, **Remotion scenes**, **CLAUDE.md**, and every doc in t
   ```
 
 ### No emoji
-- **Do not use emoji** anywhere: Studio UI, scene TSX, button labels, toast messages, log output, README/PLAN/CLAUDE.md, prompt examples, commit messages.
+
+- **Never use emoji** anywhere: Studio UI, scene TSX, button labels, toast messages, log output, README / PLAN / CLAUDE.md, prompt examples, commit messages.
 - Reasons:
-  1. Rendering emoji in Remotion is inconsistent across operating systems (Windows vs macOS emoji glyphs differ → the rendered video looks different on different machines)
-  2. The tool's visual identity is built on Lucide line-style icons — color emoji break the rhythm
-  3. CLAUDE.md has no emoji → Claude will not pick up an emoji style when it writes scene TSX
-- Replacement: use a Lucide icon component. Instead of a "tick emoji" prefix on an `OK`/`Done` button, use `<Check size={ICON.sm} />` next to the text.
-- Lint rule (M4): add an ESLint rule `no-emoji` (custom or `eslint-plugin-no-emoji`) for `apps/studio/**` and `packages/remotion/**`.
+  1. Emoji rendering in Remotion is inconsistent across OSes (Windows vs macOS glyphs differ → the rendered video looks different on different machines).
+  2. The tool's visual identity is built on Lucide line-style icons — colour emoji break the rhythm.
+  3. CLAUDE.md has no emoji, so Claude does not pick up an emoji style when it writes scene TSX.
+- Replacement: use a Lucide icon. Instead of a "tick" emoji on a `Done` button, render `<Check size={ICON.sm} />` next to the label.
 
-### Typography (to be finalized in M1)
-- Studio UI font: Inter (`next/font`)
-- Video Vietnamese font: Be Vietnam Pro (`@remotion/google-fonts/BeVietnamPro`)
-- Video English font: Inter (`@remotion/google-fonts/Inter`)
+### Typography
 
----
-
-## Roadmap
-
-### M0 — Setup (1 day)
-- [ ] pnpm workspace, TypeScript config
-- [ ] `.env.example` (PEXELS_API_KEY, PIXABAY_API_KEY — no ANTHROPIC_API_KEY)
-- [ ] Verify `claude --version` + `claude login` (Pro/Max sub)
-- [ ] zod schemas in `packages/shared`
-- [ ] `packages/shared/src/ui-tokens.ts` (ICON constants)
-- [ ] `CLAUDE.md` placeholder (with the "NEVER use emoji" line in it)
-
-### M1 — Remotion render core (3-5 days)
-- [ ] 9:16 composition with 3 sample scenes (TitleCard / KeyPoint / Outro)
-- [ ] Effects: Ken Burns, typewriter, fade
-- [ ] Dynamic scene loading (built-in + per-project custom)
-- [ ] `renderSegment` / `renderFull` through `@remotion/renderer`
-- [ ] Be Vietnam Pro font test with diacritic-heavy text
-
-### M2 — Media adapters (2-3 days)
-- [ ] Pexels + Pixabay (image search)
-- [ ] Pixabay Music (music search)
-- [ ] Edge TTS (synthesize VI/EN, list voices)
-- [ ] Readability (extract URL) + strip emoji from output
-- [ ] ffmpeg concat + mix
-- [ ] Hash-based cache
-- [ ] `packages/shared/src/sanitize.ts` — `stripEmoji()` via `emoji-regex`
-
-### M3 — MCP server for Claude (2-3 days)  ← **do this early to de-risk**
-- [ ] `packages/mcp-server` using `@modelcontextprotocol/sdk`
-- [ ] Wrap each media adapter + render as an MCP tool
-- [ ] Build with tsup into `dist/index.js`
-- [ ] `.mcp.json` at the repo root
-- [ ] Detailed `CLAUDE.md`
-- [ ] `prompts/generate.md`, `prompts/edit.md`
-- [ ] Test: `claude` in the terminal → "create a video from a URL" → produces output.mp4
-
-### M4 — Web Studio core (4-6 days)
-- [ ] Next.js skeleton, `/projects`, `/projects/[id]`
-- [ ] Install `lucide-react`, use it for every icon in Studio (Play, Trash2, Pencil, Settings, ...)
-- [ ] ESLint + `eslint-plugin-no-emoji` over `apps/studio/**`, `packages/remotion/**`, `**/*.md`
-- [ ] lint-staged + husky pre-commit hook
-- [ ] Remotion `<Player>` preview
-- [ ] Timeline listing segments, click → edit panel
-- [ ] Edit text/voice/duration → write storyboard.json (sanitize emoji) → Player reload
-- [ ] Trigger re-render (segment / full) via `packages/render`
-- [ ] Project list/delete/duplicate
-- [ ] Download output.mp4
-
-### M5 — Studio asset pickers (2-3 days)
-- [ ] Image picker UI (search Pexels/Pixabay, preview, pick)
-- [ ] Music picker UI (mood-based, audio preview)
-- [ ] Voice picker UI (list voices, sample preview)
-- [ ] Drag-reorder segments
-
-### M6 — Polish
-- [ ] Subtitle burn-in from Edge TTS word boundaries
-- [ ] Aspect 16:9 / 1:1
-- [ ] Export presets (TikTok 60fps, YouTube Shorts, Reels)
-- [ ] Project template / duplicate
-- [ ] Batch render
+- Studio UI font: Inter (`next/font`).
+- Video Vietnamese font: Be Vietnam Pro (`@remotion/google-fonts/BeVietnamPro`).
+- Video English font: Inter (`@remotion/google-fonts/Inter`).
 
 ---
 
-## Quick setup (once M0 is done)
+## Status / roadmap
+
+### Shipped
+
+- **M0 — Setup**: pnpm workspace, TypeScript config, `.env.example`, zod schemas, `ui-tokens.ts`, `CLAUDE.md`.
+- **M1 — Remotion render core**: 9:16 / 16:9 / 1:1 compositions, built-in scenes (`TitleCard`, `KeyPoint`, `Quote`, `Outro`, `MissingScene`), Ken Burns / typewriter / fade effects, dynamic scene loading (built-in + per-project custom), `renderSegment` / `renderProject`, Be Vietnam Pro font wiring.
+- **M2 — Media adapters**: Pexels + Unsplash + Pixabay (image), Internet Archive (music), Edge TTS (VI / EN), Readability with emoji strip, ffmpeg concat / mix, hash-based asset cache.
+- **M3 — MCP server**: stdio MCP server registered in `.mcp.json`, tools wired for media + render, `prompts/generate.md`, `prompts/edit.md`, end-to-end "URL → output.mp4" works.
+- **M4 — Web Studio core**: project list, project editor, Remotion `<Player>` preview, segment list with badges, inspector for text / voice / duration / scene / speed / image, save / render endpoints.
+- **M5 — Studio asset pickers**: image, music, voice pickers as dialogs.
+- **M6 — Studio UX polish**: segment timeline with click-to-seek, dirty-save indicator + `beforeunload` guard, render progress bar in the header, export-preset selector, subtitle toggle.
+- **Crawler fallback**: Playwright-based crawl providers (`crawl:pixabay-image`, `crawl:unsplash`) for when JSON APIs are blocked.
+
+### Next
+
+- Batch render across multiple projects.
+- Drag-to-reorder segments.
+- Project duplicate / template.
+- Lint rule: `no-emoji` over `apps/studio/**`, `packages/remotion/**`, `**/*.md`.
+
+---
+
+## Quick setup
 
 ```bash
 # 1. Install the Claude Code CLI and log in
 npm i -g @anthropic-ai/claude-code
 claude login
 
-# 2. Install deps + build the MCP server
+# 2. Install deps and build the MCP server
 pnpm install
 pnpm --filter @news-tok/mcp-server build
 
-# 3. Configure env
+# 3. Configure API keys
 cp .env.example .env
-# fill in PEXELS_API_KEY, PIXABAY_API_KEY
+# Fill in PEXELS_API_KEY (required), UNSPLASH_ACCESS_KEY (recommended).
+# PIXABAY_API_KEY is optional and frequently rate-limited.
 
-# 4. Verify Claude can find the MCP tools
-claude mcp list   # should show "news-tok"
+# 4. Configure the MCP server — the file is gitignored so each clone keeps its own
+cp .mcp.json.example .mcp.json
+# Mirror the API keys from .env into the "env" block. The MCP server reads them at startup.
 
-# 5a. Create a video using Claude (terminal)
+# 5. Verify Claude can find the MCP tools
+claude mcp list   # should list "news-tok"
+
+# 6a. Create a video using Claude (terminal)
 claude
 > Create a 30s video from https://vnexpress.net/... — VI, 9:16
 
-# 5b. Open Studio to tweak it
+# 6b. Open Studio to tweak it
 pnpm studio   # http://localhost:3000
 ```
 
