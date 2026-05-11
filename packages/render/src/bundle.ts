@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readdir, writeFile, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { bundleCacheRoot, projectScenesDir, REPO_ROOT } from './paths.js'
+import { bundleCacheRoot, dataDir, projectScenesDir, REPO_ROOT } from './paths.js'
 
 // Stage temp entry files inside packages/remotion so module resolution finds
 // `remotion`, `react`, `@news-tok/*` via pnpm's nested node_modules.
@@ -77,7 +77,7 @@ export async function bundleForProject(projectId: string): Promise<string> {
   return bundle({
     entryPoint: entryPath,
     outDir,
-    publicDir: null,
+    publicDir: dataDir(),
     onProgress: () => {},
     webpackOverride: (config) => ({
       ...config,

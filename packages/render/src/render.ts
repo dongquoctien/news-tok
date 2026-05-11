@@ -1,18 +1,63 @@
 import { renderMedia, selectComposition } from '@remotion/renderer'
 import { mkdir } from 'node:fs/promises'
-import { resolve } from 'node:path'
+import { relative, resolve, sep } from 'node:path'
 import {
   resolveRenderPreset,
   type Aspect,
+  type AssetRef,
   type Project,
   type Segment,
 } from '@news-tok/shared/schema'
 import { bundleForProject } from './bundle.js'
 import {
+  dataDir,
   projectOutput,
   projectSegmentsDir,
 } from './paths.js'
 import { readStoryboard } from './storyboard.js'
+
+/**
+ * Convert an absolute path inside data/ into a `/`-prefixed URL that
+ * Remotion serves from publicDir (set to dataDir() in bundle.ts). Paths
+ * outside data/ are left untouched (the asset will still fail to load,
+ * but the rewrite is conservative).
+ */
+function toPublicUrl(absPath: string): string {
+  const rel = relative(dataDir(), absPath)
+  if (rel.startsWith('..') || rel.startsWith(sep) || /^[a-zA-Z]:/.test(rel)) {
+    return absPath
+  }
+  return '/public/' + rel.split(sep).join('/')
+}
+
+function rewriteAsset<T extends AssetRef | undefined>(asset: T): T {
+  if (!asset) return asset
+  return { ...asset, path: toPublicUrl(asset.path) } as T
+}
+
+function rewriteSegment(segment: Segment): Segment {
+  return {
+    ...segment,
+    visuals: {
+      background: rewriteAsset(segment.visuals.background),
+      foreground: segment.visuals.foreground?.map((a) => rewriteAsset(a)),
+    },
+    audio: segment.audio
+      ? {
+          narration: rewriteAsset(segment.audio.narration),
+          sfx: segment.audio.sfx?.map((a) => rewriteAsset(a)),
+        }
+      : undefined,
+  }
+}
+
+function rewriteProjectAssets(project: Project): Project {
+  return {
+    ...project,
+    segments: project.segments.map(rewriteSegment),
+    bgMusic: rewriteAsset(project.bgMusic),
+  }
+}
 
 function compositionIdFor(aspect: Aspect): string {
   switch (aspect) {
@@ -48,7 +93,9 @@ export async function renderSegmentMedia(
   }
 
   const serveUrl = await bundleForProject(projectId)
-  const inputProps = { storyboard: segmentSubProject(project, segment) }
+  const inputProps = {
+    storyboard: rewriteProjectAssets(segmentSubProject(project, segment)),
+  }
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)
 
@@ -89,7 +136,7 @@ export async function renderProjectMedia(
 ): Promise<string> {
   const project = await readStoryboard(projectId)
   const serveUrl = await bundleForProject(projectId)
-  const inputProps = { storyboard: project }
+  const inputProps = { storyboard: rewriteProjectAssets(project) }
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)
 

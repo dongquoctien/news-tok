@@ -1,4 +1,4 @@
-import { AbsoluteFill, Sequence, useVideoConfig } from 'remotion'
+import { AbsoluteFill, Audio, Sequence, useVideoConfig } from 'remotion'
 import type { Project } from '@news-tok/shared/schema'
 import { resolveScene } from '../scenes/registry.js'
 import { MissingScene } from '../scenes/MissingScene.js'
@@ -16,8 +16,12 @@ export const NewsTokComposition = ({ storyboard }: NewsTokCompositionProps) => {
   const subtitleFont = fontFor(storyboard.language)
   let cursor = 0
 
+  const bgMusic = storyboard.bgMusic
+  const bgMusicVolume = storyboard.bgMusicVolume ?? 0.2
+
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
+      {bgMusic ? <Audio src={bgMusic.path} volume={bgMusicVolume} /> : null}
       {storyboard.segments.map((segment) => {
         const durationInFrames = Math.max(1, Math.round(segment.durationSec * fps))
         const Scene = resolveScene(segment.scene)
