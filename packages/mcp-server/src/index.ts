@@ -355,6 +355,26 @@ async function main() {
   process.stderr.write('[news-tok-mcp] ready on stdio\n')
 }
 
+// Never let an uncaught error in a third-party lib (notably the
+// edge-tts WebSocket, which sometimes emits 'error' after we've already
+// rejected the synth promise) take down the stdio server. Log and keep
+// the process alive — the next MCP tool call will simply succeed or
+// surface its own error via the tool wrapper.
+process.on('uncaughtException', (err) => {
+  process.stderr.write(
+    `[news-tok-mcp] uncaughtException (ignored): ${
+      err instanceof Error ? err.stack ?? err.message : String(err)
+    }\n`
+  )
+})
+process.on('unhandledRejection', (reason) => {
+  process.stderr.write(
+    `[news-tok-mcp] unhandledRejection (ignored): ${
+      reason instanceof Error ? reason.stack ?? reason.message : String(reason)
+    }\n`
+  )
+})
+
 main().catch((err) => {
   process.stderr.write(`[news-tok-mcp] fatal: ${err instanceof Error ? err.stack : String(err)}\n`)
   process.exit(1)
