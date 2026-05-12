@@ -6,6 +6,7 @@ import {
   ArrowLeft,
   Captions,
   CaptionsOff,
+  ChevronDown,
   Film,
   Image as ImageIcon,
   Languages,
@@ -19,7 +20,6 @@ import {
   Save,
   Share2,
   Type,
-  Volume2,
 } from 'lucide-react'
 import {
   DEFAULT_VOICES,
@@ -39,6 +39,7 @@ import { StylePicker } from '@/components/studio/style-picker'
 import { FontPicker } from '@/components/studio/font-picker'
 import { ColorPicker } from '@/components/studio/color-picker'
 import { SocialCaptionDialog } from '@/components/studio/social-caption-dialog'
+import { ProjectSettingsDialog } from '@/components/studio/project-settings-dialog'
 import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -359,19 +360,21 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           <ArrowLeft className="size-4" />
           Projects
         </Link>
-        <div className="min-w-0 flex-1 basis-[16rem]">
-          <h1 className="truncate text-base font-semibold">{project.title}</h1>
-          <p className="truncate whitespace-nowrap text-xs text-muted-foreground">
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-base font-semibold leading-tight">
+            {project.title}
+          </h1>
+          <p className="mt-0.5 truncate whitespace-nowrap text-[10px] uppercase tracking-wide text-muted-foreground/70">
             <span className="inline-flex items-center gap-1">
               <Film className="size-3" />
               {project.aspect}
             </span>
-            {' · '}
+            <span className="mx-1.5 opacity-50">·</span>
             <span className="inline-flex items-center gap-1">
               <Layers className="size-3" />
               {project.segments.length} segments
             </span>
-            {' · '}
+            <span className="mx-1.5 opacity-50">·</span>
             <span className="inline-flex items-center gap-1">
               <Languages className="size-3" />
               {project.language}
@@ -379,19 +382,6 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
-          <select
-            value={project.exportPreset}
-            onChange={(e) =>
-              updateProject({ exportPreset: e.target.value as Project['exportPreset'] })
-            }
-            className="h-8 rounded-md border border-input bg-transparent px-3 text-xs font-medium [color-scheme:dark]"
-            aria-label="Export preset"
-          >
-            <option value="standard" className="bg-background text-foreground">Standard (30fps)</option>
-            <option value="tiktok" className="bg-background text-foreground">TikTok (60fps)</option>
-            <option value="youtube-shorts" className="bg-background text-foreground">YouTube Shorts</option>
-            <option value="reels" className="bg-background text-foreground">Reels</option>
-          </select>
           <Button
             variant="outline"
             size="sm"
@@ -403,6 +393,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                 },
               })
             }
+            title={project.subtitles.enabled ? 'Subtitles on — click to hide' : 'Subtitles off — click to show'}
           >
             {project.subtitles.enabled ? <Captions /> : <CaptionsOff />}
             Subs {project.subtitles.enabled ? 'on' : 'off'}
@@ -418,28 +409,12 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               </Button>
             }
           />
-          <label
-            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-transparent px-2 text-xs font-medium"
-            title={`Master volume for text-transition SFX (current: ${Math.round((project.sfxVolume ?? 0.7) * 100)}%)`}
-          >
-            <Volume2 className="size-3" />
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={5}
-              value={Math.round((project.sfxVolume ?? 0.7) * 100)}
-              onChange={(e) => {
-                const v = Number.parseInt(e.target.value, 10) / 100
-                if (Number.isFinite(v)) updateProject({ sfxVolume: v })
-              }}
-              className="h-8 w-20 cursor-pointer accent-primary"
-              aria-label="SFX master volume"
-            />
-            <span className="tabular-nums text-muted-foreground">
-              {Math.round((project.sfxVolume ?? 0.7) * 100)}
-            </span>
-          </label>
+          <ProjectSettingsDialog
+            exportPreset={project.exportPreset}
+            sfxVolume={project.sfxVolume ?? 0.7}
+            onChangePreset={(preset) => updateProject({ exportPreset: preset })}
+            onChangeSfxVolume={(v) => updateProject({ sfxVolume: v })}
+          />
           <Button
             variant={isDirty ? 'default' : 'outline'}
             size="sm"
@@ -486,12 +461,17 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             }
           />
           {project.variants && project.variants.length > 0 ? (
-            <div className="flex items-center gap-1">
+            // Split button: primary action "Render all" on the left, a
+            // narrow caret on the right opens a native <select> hidden
+            // overlay to pick one variant. Visually a single control so
+            // the eye doesn't have to parse two separate render entries.
+            <div className="inline-flex items-stretch">
               <Button
                 size="sm"
                 onClick={() => triggerRender('all')}
                 disabled={renderStatus === 'running' || project.segments.length === 0}
                 title="Render every declared variant to output-<id>.mp4"
+                className="rounded-r-none border-r-0"
               >
                 {renderStatus === 'running' && renderingVariantId == null ? (
                   <>
@@ -505,27 +485,40 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   </>
                 )}
               </Button>
-              <select
-                value=""
-                onChange={(e) => {
-                  const v = e.target.value
-                  if (v) triggerRender(v)
-                  e.currentTarget.value = ''
-                }}
-                disabled={renderStatus === 'running' || project.segments.length === 0}
-                className="h-8 rounded-md border border-input bg-transparent px-2 text-xs font-medium [color-scheme:dark]"
-                aria-label="Render single variant"
-                title="Render one variant"
-              >
-                <option value="" className="bg-background text-foreground">
-                  Render one…
-                </option>
-                {project.variants.map((v) => (
-                  <option key={v.id} value={v.id} className="bg-background text-foreground">
-                    {v.id} · {v.label}
+              <div className="relative inline-flex">
+                <Button
+                  size="sm"
+                  disabled={renderStatus === 'running' || project.segments.length === 0}
+                  title="Pick one variant to render"
+                  className="rounded-l-none px-2"
+                  tabIndex={-1}
+                  asChild
+                >
+                  <span>
+                    <ChevronDown className="size-3.5" />
+                  </span>
+                </Button>
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const v = e.target.value
+                    if (v) triggerRender(v)
+                    e.currentTarget.value = ''
+                  }}
+                  disabled={renderStatus === 'running' || project.segments.length === 0}
+                  className="absolute inset-0 cursor-pointer opacity-0 [color-scheme:dark]"
+                  aria-label="Render single variant"
+                >
+                  <option value="" className="bg-background text-foreground" disabled>
+                    Pick a variant…
                   </option>
-                ))}
-              </select>
+                  {project.variants.map((v) => (
+                    <option key={v.id} value={v.id} className="bg-background text-foreground">
+                      Render {v.id} · {v.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           ) : (
             <Button
@@ -1075,7 +1068,7 @@ function SegmentEditor({
           </p>
         )}
         <p className="mt-1 text-[10px] text-muted-foreground">
-          SFX bound to the picked style. Adjust master volume in the header.
+          SFX bound to the picked style. Adjust master volume in Settings.
         </p>
       </div>
 
