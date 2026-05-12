@@ -81,6 +81,25 @@ function resolveStyle(
   return FALLBACK_STYLE
 }
 
+/**
+ * Resolve the font id override for a segment under the active variant.
+ * Priority (most specific wins):
+ *   1. variant.fontOverrideBySegmentId[segment.id]
+ *   2. segment.fontOverride
+ *   3. undefined — primitives fall back to style.fontFamily on their own.
+ */
+function resolveFontOverride(
+  segment: Segment,
+  variant: Variant | undefined
+): string | undefined {
+  if (variant) {
+    const perSegment = variant.fontOverrideBySegmentId?.[segment.id]
+    if (perSegment) return perSegment
+  }
+  if (segment.fontOverride) return segment.fontOverride
+  return undefined
+}
+
 /** Emit short SFX cues for a single segment based on its text style. */
 function SegmentSfx({
   segment,
@@ -174,10 +193,16 @@ export const NewsTokComposition = ({
         const hasSubs =
           subtitlesEnabled && segment.wordBoundaries && segment.wordBoundaries.length > 0
         const style = resolveStyle(segment, activeVariant, userStyles)
+        const fontOverride = resolveFontOverride(segment, activeVariant)
         return (
           <Sequence key={segment.id} from={from} durationInFrames={durationInFrames} name={segment.id}>
             {Scene ? (
-              <Scene segment={segment} project={storyboard} textStyle={style} />
+              <Scene
+                segment={segment}
+                project={storyboard}
+                textStyle={style}
+                fontOverride={fontOverride}
+              />
             ) : (
               <MissingScene segment={segment} project={storyboard} />
             )}

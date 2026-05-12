@@ -89,6 +89,10 @@ export const TextMotionSchema = z.enum([
   'wordReveal3d',
   'waveBounce',
   'maskWipe',
+  // Sprint-1 additions — sync per-word with Edge TTS wordBoundaries
+  // (karaoke) and per-letter intros for title segments (letterStagger).
+  'karaoke',
+  'letterStagger',
 ])
 export type TextMotion = z.infer<typeof TextMotionSchema>
 
@@ -166,6 +170,15 @@ export const TextStyleSchema = z.object({
   exit: z.enum(['fade', 'slideDown', 'none']).default('fade'),
   enterDurationSec: z.number().default(0.4),
   exitDurationSec: z.number().default(0.4),
+  // Karaoke-specific. Active when enter='karaoke'. Falls back to 'fill'
+  // when omitted; accent defaults to the style's main color.
+  karaokeMode: z.enum(['fill', 'pop', 'underline']).optional(),
+  karaokeAccentColor: z.string().optional(),
+  /** Inactive-word color before its boundary fires (karaoke only). */
+  karaokeIdleColor: z.string().optional(),
+  // Letter-stagger-specific. Active when enter='letterStagger'. Default
+  // 0.04s feels snappy at 30fps without dragging on long titles.
+  staggerStep: z.number().optional(),
   // Sound
   sfx: TextSfxSchema.optional(),
   // Provenance
@@ -201,6 +214,13 @@ export const SegmentSchema = z.object({
    * kind, then to `classic`.
    */
   textStyleId: z.string().optional(),
+  /**
+   * Optional font id override (one of `ALLOWED_FONT_IDS`). Lets a user
+   * swap the typeface without forking the entire text style. Variant
+   * override and segment override resolve before the style's own
+   * `fontFamily`.
+   */
+  fontOverride: z.string().optional(),
 })
 export type Segment = z.infer<typeof SegmentSchema>
 
@@ -221,6 +241,11 @@ export const VariantSchema = z.object({
    * segment under other variants.
    */
   textStyleBySegmentId: z.record(z.string()).default({}),
+  /**
+   * Optional per-variant font override keyed by segment id. Same shape
+   * and priority idea as `textStyleBySegmentId` but for typeface only.
+   */
+  fontOverrideBySegmentId: z.record(z.string()).default({}),
 })
 export type Variant = z.infer<typeof VariantSchema>
 

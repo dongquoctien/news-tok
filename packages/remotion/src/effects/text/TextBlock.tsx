@@ -16,15 +16,20 @@ import { GlitchText } from './GlitchText.js'
 import { WordReveal3dText } from './WordReveal3dText.js'
 import { WaveBounceText } from './WaveBounceText.js'
 import { MaskWipeText } from './MaskWipeText.js'
+import { KaraokeText } from './KaraokeText.js'
+import { LetterStaggerText } from './LetterStaggerText.js'
 
 type PrimitiveProps = {
   text: string
   style: TextStyle
   wordBoundaries?: WordBoundary[]
+  fontOverride?: string
 }
 
 const PRIMITIVES: Record<TextStyle['enter'], (p: PrimitiveProps) => React.JSX.Element> = {
-  none: ({ text, style }) => <FadeInText text={text} style={{ ...style, enterDurationSec: 0 }} />,
+  none: ({ text, style, fontOverride }) => (
+    <FadeInText text={text} style={{ ...style, enterDurationSec: 0 }} fontOverride={fontOverride} />
+  ),
   fade: FadeInText,
   slideUp: SlideUpText,
   slideDown: SlideDownText,
@@ -39,6 +44,8 @@ const PRIMITIVES: Record<TextStyle['enter'], (p: PrimitiveProps) => React.JSX.El
   wordReveal3d: WordReveal3dText,
   waveBounce: WaveBounceText,
   maskWipe: MaskWipeText,
+  karaoke: KaraokeText,
+  letterStagger: LetterStaggerText,
 }
 
 function plateStyle(style: TextStyle, padBasePx: number): CSSProperties | null {
@@ -86,21 +93,32 @@ function anchorStyle(style: TextStyle): CSSProperties {
  * Owns layout (anchor / align / margin / plate); delegates motion to a
  * primitive picked by `style.enter`. Scenes still own their background,
  * icon, and any subordinate elements.
+ *
+ * `fontOverride` is computed once by the composition (variant → segment →
+ * style chain) and passed through to every primitive so they don't all
+ * repeat the lookup.
  */
 export function TextBlock({
   text,
   style,
   wordBoundaries,
+  fontOverride,
 }: {
   text: string
   style: TextStyle
   wordBoundaries?: WordBoundary[]
+  fontOverride?: string
 }) {
   const r = useResponsive()
   const Primitive = PRIMITIVES[style.enter] ?? FadeInText
   const plate = plateStyle(style, r.unit * 16)
   const wrap = (
-    <Primitive text={text} style={style} wordBoundaries={wordBoundaries} />
+    <Primitive
+      text={text}
+      style={style}
+      wordBoundaries={wordBoundaries}
+      fontOverride={fontOverride}
+    />
   )
   return (
     <AbsoluteFill style={{ display: 'flex', ...anchorStyle(style) }}>
@@ -125,4 +143,6 @@ export {
   WordReveal3dText,
   WaveBounceText,
   MaskWipeText,
+  KaraokeText,
+  LetterStaggerText,
 }

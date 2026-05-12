@@ -11,7 +11,7 @@ import { useResponsive } from './sizing.js'
 
 const CLASSIC = findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
-export const KeyPoint = ({ segment, textStyle }: SceneProps) => {
+export const KeyPoint = ({ segment, textStyle, fontOverride }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 16 })
   const r = useResponsive()
   const bg = segment.visuals.background
@@ -55,7 +55,12 @@ export const KeyPoint = ({ segment, textStyle }: SceneProps) => {
           </div>
         </AbsoluteFill>
       </Fade>
-      <TextBlock text={segment.text} style={style} wordBoundaries={segment.wordBoundaries} />
+      <TextBlock
+        text={segment.text}
+        style={style}
+        wordBoundaries={segment.wordBoundaries}
+        fontOverride={fontOverride}
+      />
       {narration ? <Audio src={narration.path} /> : null}
     </AbsoluteFill>
   )

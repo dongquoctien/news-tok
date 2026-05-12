@@ -10,14 +10,24 @@ import { resolveFontFamily } from '../../scenes/fonts.js'
 export type TextPrimitiveProps = {
   text: string
   style: TextStyle
-  /** Per-word timing from Edge TTS — only used by `wordHighlight`. */
+  /** Per-word timing from Edge TTS. Used by `wordHighlight` and `karaoke`. */
   wordBoundaries?: WordBoundary[]
+  /**
+   * Resolved font id (one of `ALLOWED_FONT_IDS`). When provided, overrides
+   * `style.fontFamily`. The composition computes this from the variant /
+   * segment / style chain so primitives don't repeat the lookup.
+   */
+  fontOverride?: string
 }
 
 /** Style fragment shared by every primitive: typography only. */
-export function typographyStyle(style: TextStyle, fontPx: number): React.CSSProperties {
+export function typographyStyle(
+  style: TextStyle,
+  fontPx: number,
+  fontOverride?: string
+): React.CSSProperties {
   const css: React.CSSProperties = {
-    fontFamily: resolveFontFamily(style.fontFamily),
+    fontFamily: resolveFontFamily(fontOverride ?? style.fontFamily),
     fontSize: fontPx,
     fontWeight: style.fontWeight,
     letterSpacing: style.letterSpacing,
