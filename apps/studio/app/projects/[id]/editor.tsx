@@ -17,6 +17,7 @@ import {
   RefreshCw,
   Save,
   Type,
+  Volume2,
 } from 'lucide-react'
 import {
   DEFAULT_VOICES,
@@ -24,6 +25,7 @@ import {
   type Project,
   type Segment,
 } from '@news-tok/shared/schema'
+import { findTextStyle } from '@news-tok/shared/text-styles'
 import { PlayerPane } from '@/components/studio/player-pane'
 import { VariantsPanel } from '@/components/studio/variants-panel'
 import { VoicePicker } from '@/components/studio/voice-picker'
@@ -286,6 +288,28 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               </Button>
             }
           />
+          <label
+            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-transparent px-2 text-xs font-medium"
+            title={`Master volume for text-transition SFX (current: ${Math.round((project.sfxVolume ?? 0.7) * 100)}%)`}
+          >
+            <Volume2 className="size-3" />
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round((project.sfxVolume ?? 0.7) * 100)}
+              onChange={(e) => {
+                const v = Number.parseInt(e.target.value, 10) / 100
+                if (Number.isFinite(v)) updateProject({ sfxVolume: v })
+              }}
+              className="h-8 w-20 cursor-pointer accent-primary"
+              aria-label="SFX master volume"
+            />
+            <span className="tabular-nums text-muted-foreground">
+              {Math.round((project.sfxVolume ?? 0.7) * 100)}
+            </span>
+          </label>
           <Button
             variant={isDirty ? 'default' : 'outline'}
             size="sm"
@@ -542,6 +566,13 @@ function SegmentEditor({
     }
   }
 
+  // Resolve the text style currently applied to this segment so the
+  // inspector can show which SFX cues will play. Empty textStyleId =
+  // segment inherits from the active variant's mapping at render time;
+  // we can't preview that here without picking a variant, so we just
+  // show the literal style id.
+  const resolvedStyle = findTextStyle(segment.textStyleId, [])
+
   return (
     <div className="space-y-4">
       <div>
@@ -669,6 +700,37 @@ function SegmentEditor({
             Leaving this empty lets the variant default for {String(segment.scene)} segments win.
           </p>
         </div>
+      </div>
+
+      <div>
+        <Label>Sound effect</Label>
+        {resolvedStyle?.sfx ? (
+          <div className="mt-1 space-y-1 rounded-md border bg-muted/40 px-2 py-1.5 text-xs">
+            {resolvedStyle.sfx.enterSoundId ? (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Enter</span>
+                <code className="font-mono">{resolvedStyle.sfx.enterSoundId}</code>
+              </div>
+            ) : (
+              <div className="text-muted-foreground">No enter cue</div>
+            )}
+            {resolvedStyle.sfx.perWordSoundId ? (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Per word</span>
+                <code className="font-mono">{resolvedStyle.sfx.perWordSoundId}</code>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {segment.textStyleId
+              ? 'This style has no SFX cues.'
+              : 'SFX is set by the resolved text style — pick one above to hear cues.'}
+          </p>
+        )}
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          SFX bound to the picked style. Adjust master volume in the header.
+        </p>
       </div>
 
       <div>
