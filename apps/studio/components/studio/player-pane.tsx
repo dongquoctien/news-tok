@@ -132,6 +132,7 @@ export function PlayerPane({
           controls
           loop
           style={{ width: '100%' }}
+          acknowledgeRemotionLicense
         />
       </div>
       {segmentMarkers.length > 0 ? (

@@ -106,9 +106,13 @@ export async function renderSegmentMedia(
     throw new Error(`Segment ${segmentId} not found in project ${projectId}`)
   }
 
-  const serveUrl = await bundleForProject(projectId)
+  // Stage SFX into publicDir BEFORE bundling — Remotion's bundler
+  // snapshots the publicDir listing into `window.remotion_staticFiles`
+  // at bundle time. If we stage after, the bundler resolves the URL but
+  // the snapshot has no entry, so the renderer 404s on every cue.
   const sfxIds = collectUsedSfxIds(project)
   const sfxUrlMap = await stageSfxFiles(sfxIds)
+  const serveUrl = await bundleForProject(projectId)
   const inputProps = {
     storyboard: rewriteProjectAssets(segmentSubProject(project, segment)),
     sfxUrlMap,
@@ -152,14 +156,14 @@ export async function renderProjectMedia(
   opts: RenderProjectOptions = {}
 ): Promise<string[]> {
   const project = await readStoryboard(projectId)
+  // Stage SFX once per render call BEFORE bundling — the bundler
+  // snapshots publicDir into `window.remotion_staticFiles`, so cues must
+  // be on disk before bundle, not after. (Same reason as renderSegmentMedia.)
+  const sfxIds = collectUsedSfxIds(project)
+  const sfxUrlMap = await stageSfxFiles(sfxIds)
   const serveUrl = await bundleForProject(projectId)
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)
-
-  // Stage SFX once per render call — the URL map is identical for every
-  // variant because the bank is project-wide.
-  const sfxIds = collectUsedSfxIds(project)
-  const sfxUrlMap = await stageSfxFiles(sfxIds)
 
   const projectVariants = project.variants ?? []
   const requested: (string | null)[] =

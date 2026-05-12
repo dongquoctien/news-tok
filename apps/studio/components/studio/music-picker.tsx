@@ -17,8 +17,11 @@ import {
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { UploadDropzone } from '@/components/studio/upload-dropzone'
 
 const MOODS = ['calm', 'news', 'dramatic', 'energetic', 'cinematic', 'chill'] as const
+
+type Mode = 'search' | 'upload'
 
 export function MusicPicker({
   defaultMood,
@@ -32,6 +35,7 @@ export function MusicPicker({
   trigger: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
+  const [mode, setMode] = useState<Mode>('search')
   const [mood, setMood] = useState(defaultMood ?? 'calm')
   const [duration, setDuration] = useState(defaultDurationSec)
   const [provider, setProvider] = useState<'archive' | 'pixabay'>('archive')
@@ -104,6 +108,7 @@ export function MusicPicker({
           stopAudio()
           setPreview(null)
           setError(null)
+          setMode('search')
         }
       }}
     >
@@ -112,13 +117,65 @@ export function MusicPicker({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Music className="size-5" />
-            Pick background music
+            {mode === 'search' ? 'Pick background music' : 'Upload your own track'}
           </DialogTitle>
           <DialogDescription>
-            Pixabay Music — picks the track closest to the target duration.
+            {mode === 'search'
+              ? 'Internet Archive / Pixabay — picks the track closest to the target duration.'
+              : 'Drop an MP3, WAV, OGG, AAC, or M4A. Stored under data/cache/uploads/.'}
           </DialogDescription>
         </DialogHeader>
 
+        <div className="flex gap-1 rounded-md border p-1 text-xs">
+          {(['search', 'upload'] as const).map((m) => (
+            <button
+              key={m}
+              onClick={() => {
+                setMode(m)
+                setError(null)
+                stopAudio()
+              }}
+              className={cn(
+                'flex-1 rounded-sm px-3 py-1.5 uppercase tracking-wide transition-colors',
+                m === mode
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground hover:bg-secondary'
+              )}
+            >
+              {m === 'search' ? 'Search online' : 'Upload from computer'}
+            </button>
+          ))}
+        </div>
+
+        {mode === 'upload' ? (
+          <div className="space-y-3">
+            <UploadDropzone
+              accept="audio/*"
+              hint="MP3 / WAV / OGG / AAC / M4A · up to 50 MB"
+              onUploaded={(asset) => {
+                stopAudio()
+                setPreview(asset)
+                setError(null)
+              }}
+            />
+            {preview ? (
+              <div className="flex items-center gap-3 rounded-md border p-3">
+                <Button variant="outline" size="icon" onClick={togglePlay}>
+                  {playing ? <Pause /> : <Play />}
+                </Button>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-medium">
+                    {preview.source.attribution ?? preview.source.id ?? 'Track'}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    Local upload · {preview.source.provider}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+            {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
+        ) : (
         <div className="space-y-4">
           <div className="grid grid-cols-[1fr_140px_auto] gap-2">
             <div>
@@ -196,12 +253,13 @@ export function MusicPicker({
                   {preview.source.attribution ?? preview.source.id ?? 'Track'}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  {preview.durationSec ? `${preview.durationSec.toFixed(0)}s` : 'unknown duration'} · pixabay
+                  {preview.durationSec ? `${preview.durationSec.toFixed(0)}s` : 'unknown duration'} · {provider}
                 </div>
               </div>
             </div>
           ) : null}
         </div>
+        )}
 
         <DialogFooter>
           <Button

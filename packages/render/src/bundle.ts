@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto'
 import { mkdir, readdir, writeFile, stat, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { bundleCacheRoot, dataDir, projectScenesDir, projectStoryboardPath, REPO_ROOT } from './paths.js'
+import { bundleCacheRoot, dataDir, projectScenesDir, projectStoryboardPath, REPO_ROOT, sfxStagingDir } from './paths.js'
 
 // Stage temp entry files inside packages/remotion so module resolution finds
 // `remotion`, `react`, `@news-tok/*` via pnpm's nested node_modules.
@@ -65,6 +65,42 @@ async function hashStoryboardAssets(projectId: string): Promise<string> {
   return h.digest('hex').slice(0, 12)
 }
 
+/**
+ * Hash the staged SFX directory (data/sfx). Remotion's bundler snapshots
+ * publicDir at bundle time, so a project that bundled while data/sfx was
+ * empty (or missing files later added to the bank) keeps that snapshot
+ * forever and 404s on the missing cues. Including the staged file list
+ * in the cache key forces a rebundle whenever the bank is repopulated.
+ */
+async function hashSfxStaging(): Promise<string> {
+  const dir = sfxStagingDir()
+  if (!existsSync(dir)) return ''
+  let entries
+  try {
+    entries = await readdir(dir, { withFileTypes: true })
+  } catch {
+    return ''
+  }
+  const files = entries
+    .filter((e) => e.isFile() && e.name.endsWith('.mp3'))
+    .map((e) => e.name)
+    .sort()
+  if (files.length === 0) return ''
+  const h = createHash('sha256')
+  for (const name of files) {
+    h.update(name)
+    h.update('|')
+    try {
+      const st = await stat(resolve(dir, name))
+      h.update(String(st.size))
+    } catch {
+      h.update('?')
+    }
+    h.update('\n')
+  }
+  return h.digest('hex').slice(0, 12)
+}
+
 function joinHashParts(...parts: string[]): string {
   const nonEmpty = parts.filter(Boolean)
   return nonEmpty.length === 0 ? 'base' : nonEmpty.join('-')
@@ -98,7 +134,8 @@ export async function bundleForProject(projectId: string): Promise<string> {
   const scenes = await listCustomScenes(projectId)
   const sceneHash = await hashScenes(scenes)
   const assetsHash = await hashStoryboardAssets(projectId)
-  const cacheKey = joinHashParts(sceneHash, assetsHash)
+  const sfxHash = await hashSfxStaging()
+  const cacheKey = joinHashParts(sceneHash, assetsHash, sfxHash)
   const outDir = resolve(bundleCacheRoot(), cacheKey)
 
   if (existsSync(resolve(outDir, 'index.html'))) {

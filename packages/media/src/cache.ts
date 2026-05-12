@@ -4,7 +4,7 @@ import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { cacheNamespaceRoot } from './paths.js'
 
-export type CacheNamespace = 'images' | 'videos' | 'music' | 'tts' | 'articles'
+export type CacheNamespace = 'images' | 'videos' | 'music' | 'tts' | 'articles' | 'uploads'
 
 export function cacheKey(parts: unknown[]): string {
   const h = createHash('sha256')
