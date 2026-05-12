@@ -10,7 +10,7 @@ import { useResponsive } from './sizing.js'
 
 const CLASSIC = findTextStyle('quote-soft', []) ?? findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
-export const Quote = ({ segment, textStyle, fontOverride }: SceneProps) => {
+export const Quote = ({ segment, textStyle, fontOverride, colorOverride }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 14 })
   const r = useResponsive()
   const narration = segment.audio?.narration
@@ -45,6 +45,7 @@ export const Quote = ({ segment, textStyle, fontOverride }: SceneProps) => {
         style={style}
         wordBoundaries={segment.wordBoundaries}
         fontOverride={fontOverride}
+        colorOverride={colorOverride}
       />
       {narration ? <Audio src={narration.path} /> : null}
     </AbsoluteFill>

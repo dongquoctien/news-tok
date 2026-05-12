@@ -24,15 +24,22 @@ export const KaraokeText = ({
   style,
   wordBoundaries,
   fontOverride,
+  colorOverride,
 }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
   const mode = style.karaokeMode ?? 'fill'
-  const accent = style.karaokeAccentColor ?? '#fde047'
-  const idle = style.karaokeIdleColor ?? 'rgba(255,255,255,0.32)'
+  // Override priority: colorOverride.accent → style.karaokeAccentColor →
+  // hard-coded yellow. Same idea for idle.
+  const accent = colorOverride?.accent ?? style.karaokeAccentColor ?? '#fde047'
+  const idle = colorOverride?.idle ?? style.karaokeIdleColor ?? 'rgba(255,255,255,0.32)'
 
-  const base = typographyStyle(style, style.fontSize * r.font, fontOverride)
+  const base = typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride)
+  // Body color used for the "already spoken" state. typographyStyle()
+  // already applied the override to `base.color`; mirror it here so the
+  // ternary below uses the same value.
+  const spokenColor = colorOverride?.primary ?? style.color
 
   if (!wordBoundaries || wordBoundaries.length === 0) {
     return <div style={{ ...base, display: 'block' }}>{text}</div>
@@ -46,8 +53,8 @@ export const KaraokeText = ({
         const isActive = frame >= start && frame <= end
         const isSpoken = frame > end
 
-        // Color: idle → accent (active) → style.color (spoken).
-        const color = isActive ? accent : isSpoken ? style.color : idle
+        // Color: idle → accent (active) → spokenColor (after the word).
+        const color = isActive ? accent : isSpoken ? spokenColor : idle
 
         // Pop scale for `pop` mode only. Spring rises during the word's
         // own window so the pop reads even on short words.

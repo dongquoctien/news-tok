@@ -8,7 +8,12 @@ import { useResponsive } from '../../scenes/sizing.js'
  *   .word.in { transform: rotateX(0); opacity: 1 }
  * Per-word stagger reads as a card-flip cascade.
  */
-export const WordReveal3dText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
+export const WordReveal3dText = ({
+  text,
+  style,
+  fontOverride,
+  colorOverride,
+}: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -17,7 +22,7 @@ export const WordReveal3dText = ({ text, style, fontOverride }: TextPrimitivePro
   return (
     <div
       style={{
-        ...typographyStyle(style, style.fontSize * r.font, fontOverride),
+        ...typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride),
         // perspective applied on the container so child transforms share
         // the same vanishing point.
         perspective: '800px',

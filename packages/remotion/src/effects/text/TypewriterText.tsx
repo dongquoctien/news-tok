@@ -7,7 +7,7 @@ import { useResponsive } from '../../scenes/sizing.js'
  * completes around `style.enterDurationSec`. Reuses the visual pattern
  * of `effects/Typewriter.tsx` but accepts a TextStyle for typography.
  */
-export const TypewriterText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
+export const TypewriterText = ({ text, style, fontOverride, colorOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -22,7 +22,7 @@ export const TypewriterText = ({ text, style, fontOverride }: TextPrimitiveProps
   const slice = text.slice(0, Math.max(0, Math.min(totalChars, visible)))
   const showCaret = visible < totalChars
   return (
-    <div style={typographyStyle(style, style.fontSize * r.font, fontOverride)}>
+    <div style={typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride)}>
       {slice}
       {showCaret ? (
         <span style={{ opacity: frame % fps < fps / 2 ? 1 : 0 }}>|</span>

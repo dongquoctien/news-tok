@@ -7,7 +7,12 @@ import { useResponsive } from '../../scenes/sizing.js'
  * `style.enterDurationSec`. Requires `style.gradientFill`; without it,
  * falls back to a plain fade so the segment still renders something.
  */
-export const GradientWipeText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
+export const GradientWipeText = ({
+  text,
+  style,
+  fontOverride,
+  colorOverride,
+}: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -16,7 +21,7 @@ export const GradientWipeText = ({ text, style, fontOverride }: TextPrimitivePro
     extrapolateLeft: 'clamp',
     extrapolateRight: 'clamp',
   })
-  const css = typographyStyle(style, style.fontSize * r.font, fontOverride)
+  const css = typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride)
   // Use clip-path to wipe a vertical band from left to right.
   const clip = `inset(0 ${(1 - progress) * 100}% 0 0)`
   return (

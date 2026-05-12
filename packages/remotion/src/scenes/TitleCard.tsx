@@ -11,7 +11,13 @@ import { useResponsive } from './sizing.js'
 
 const CLASSIC = findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
-export const TitleCard = ({ segment, project, textStyle, fontOverride }: SceneProps) => {
+export const TitleCard = ({
+  segment,
+  project,
+  textStyle,
+  fontOverride,
+  colorOverride,
+}: SceneProps) => {
   const spring = useEntranceSpring({ damping: 14 })
   const r = useResponsive()
   const bg = segment.visuals.background
@@ -60,6 +66,7 @@ export const TitleCard = ({ segment, project, textStyle, fontOverride }: ScenePr
         style={style}
         wordBoundaries={segment.wordBoundaries}
         fontOverride={fontOverride}
+        colorOverride={colorOverride}
       />
       {narration ? <Audio src={narration.path} /> : null}
     </AbsoluteFill>

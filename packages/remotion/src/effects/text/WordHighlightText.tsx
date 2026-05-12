@@ -8,24 +8,32 @@ import { useResponsive } from '../../scenes/sizing.js'
  * from `style.gradientFill.from` (a convenient single-colour knob), or
  * falls back to a neutral accent.
  */
-export const WordHighlightText = ({ text, style, wordBoundaries, fontOverride }: TextPrimitiveProps) => {
+export const WordHighlightText = ({
+  text,
+  style,
+  wordBoundaries,
+  fontOverride,
+  colorOverride,
+}: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
   const tSec = frame / fps
-  const accent = style.gradientFill?.from ?? '#a5b4fc'
+  // accent chip color: explicit override → style.gradientFill.from → default.
+  const accent = colorOverride?.accent ?? style.gradientFill?.from ?? '#a5b4fc'
+  const idleColor = colorOverride?.primary ?? style.color
 
   // When word boundaries are missing, behave like FadeInText.
   if (!wordBoundaries || wordBoundaries.length === 0) {
     return (
-      <div style={typographyStyle(style, style.fontSize * r.font, fontOverride)}>
+      <div style={typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride)}>
         {text}
       </div>
     )
   }
 
   return (
-    <div style={typographyStyle(style, style.fontSize * r.font, fontOverride)}>
+    <div style={typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride)}>
       {wordBoundaries.map((w, i) => {
         const active = tSec >= w.offsetSec && tSec < w.offsetSec + w.durationSec
         return (
@@ -37,7 +45,7 @@ export const WordHighlightText = ({ text, style, wordBoundaries, fontOverride }:
               padding: active ? '0 0.18em' : 0,
               borderRadius: 6,
               background: active ? accent : 'transparent',
-              color: active ? '#0b0b0f' : style.color,
+              color: active ? '#0b0b0f' : idleColor,
               transition: 'none',
             }}
           >

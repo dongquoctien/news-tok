@@ -188,6 +188,25 @@ export const TextStyleSchema = z.object({
 })
 export type TextStyle = z.infer<typeof TextStyleSchema>
 
+/**
+ * Per-segment color overrides — drop-in replacement for individual
+ * fields on the resolved TextStyle at render time. Every field is
+ * optional so users can override one color (e.g. just `accent` on a
+ * karaoke preset) without redefining the whole palette.
+ *
+ *   - primary  → TextStyle.color (the main body fill)
+ *   - accent   → TextStyle.karaokeAccentColor (active-word color)
+ *   - idle     → TextStyle.karaokeIdleColor (yet-to-be-spoken color)
+ *   - stroke   → TextStyle.textStroke.color (keeps existing stroke width)
+ */
+export const ColorOverrideSchema = z.object({
+  primary: z.string().optional(),
+  accent: z.string().optional(),
+  idle: z.string().optional(),
+  stroke: z.string().optional(),
+})
+export type ColorOverride = z.infer<typeof ColorOverrideSchema>
+
 export const SegmentSchema = z.object({
   id: z.string().min(1),
   durationSec: z.number().positive(),
@@ -221,6 +240,15 @@ export const SegmentSchema = z.object({
    * `fontFamily`.
    */
   fontOverride: z.string().optional(),
+  /**
+   * Optional per-segment color overrides. Each field overrides the
+   * corresponding TextStyle field at render time. Skipping a field
+   * keeps the style's own value — e.g. setting only `accent` on a
+   * karaoke preset swaps the highlighted-word color without touching
+   * the idle / stroke colors. Variant.colorOverrideBySegmentId wins
+   * over this, so per-variant tweaks don't leak across renders.
+   */
+  colorOverride: ColorOverrideSchema.optional(),
 })
 export type Segment = z.infer<typeof SegmentSchema>
 
@@ -246,6 +274,13 @@ export const VariantSchema = z.object({
    * and priority idea as `textStyleBySegmentId` but for typeface only.
    */
   fontOverrideBySegmentId: z.record(z.string()).default({}),
+  /**
+   * Optional per-variant color override keyed by segment id. Wins over
+   * `Segment.colorOverride` so a user can pin a palette to one segment
+   * in one variant without affecting the same segment under other
+   * variants (mirrors the `textStyleBySegmentId` pattern).
+   */
+  colorOverrideBySegmentId: z.record(ColorOverrideSchema).default({}),
 })
 export type Variant = z.infer<typeof VariantSchema>
 
