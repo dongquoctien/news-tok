@@ -25,6 +25,10 @@ data/
 *.mp3
 *.wav
 
+# Keep the bundled SFX bank in git — those are intentionally committed
+# so renders are deterministic and offline. Each clip is < 5 KB.
+!packages/shared/sfx/*.mp3
+
 # IDE / OS
 .vscode/
 .idea/
