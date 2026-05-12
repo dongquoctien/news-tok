@@ -26,6 +26,7 @@ import {
   type Segment,
 } from '@news-tok/shared/schema'
 import { findTextStyle } from '@news-tok/shared/text-styles'
+import { recommendSegmentDurationSec } from '@news-tok/shared/sanitize'
 import { PlayerPane } from '@/components/studio/player-pane'
 import { VariantsPanel } from '@/components/studio/variants-panel'
 import { VoicePicker } from '@/components/studio/voice-picker'
@@ -76,7 +77,22 @@ export function ProjectEditor({ initial }: { initial: Project }) {
     (id: string, patch: Partial<Segment>) => {
       setProject((p) => ({
         ...p,
-        segments: p.segments.map((s) => (s.id === id ? { ...s, ...patch } : s)),
+        segments: p.segments.map((s) => {
+          if (s.id !== id) return s
+          const merged = { ...s, ...patch }
+          // If the patch lands new narration audio, stretch the slot to
+          // fit it so the next render does not cut the voice mid-word.
+          // We respect the planned duration as a minimum — users may have
+          // deliberately set the slot longer for a visual beat.
+          const narrationSec = merged.audio?.narration?.durationSec ?? 0
+          if (narrationSec > 0) {
+            merged.durationSec = recommendSegmentDurationSec(
+              narrationSec,
+              merged.durationSec
+            )
+          }
+          return merged
+        }),
         updatedAt: new Date().toISOString(),
       }))
     },
@@ -627,6 +643,12 @@ function SegmentEditor({
           ? 'sceneKind'
           : 'default'
 
+  // Surface narration length so users see when the planned slot is too
+  // short. 0.2s tolerance because the renderer guards anyway — only flag
+  // when the gap is meaningful.
+  const narrationSec = segment.audio?.narration?.durationSec ?? 0
+  const durationTooShort = narrationSec > 0 && segment.durationSec < narrationSec + 0.2
+
   return (
     <div className="space-y-4">
       <div>
@@ -645,7 +667,10 @@ function SegmentEditor({
           <Label htmlFor="segment-duration">Duration (s)</Label>
           <Input
             id="segment-duration"
-            className="mt-1"
+            className={cn(
+              'mt-1',
+              durationTooShort ? 'border-destructive focus-visible:ring-destructive' : ''
+            )}
             type="number"
             min={1}
             max={60}
@@ -656,6 +681,37 @@ function SegmentEditor({
               if (Number.isFinite(v) && v > 0) onChange({ durationSec: v })
             }}
           />
+          {narrationSec > 0 ? (
+            <div className="mt-1 flex items-center justify-between gap-2 text-[10px]">
+              <span
+                className={cn(
+                  'text-muted-foreground',
+                  durationTooShort ? 'text-destructive' : ''
+                )}
+                title={
+                  durationTooShort
+                    ? 'Narration is longer than this slot — audio will be cut off.'
+                    : 'Narration audio length for this segment.'
+                }
+              >
+                narration: {narrationSec.toFixed(1)}s
+              </span>
+              {durationTooShort ? (
+                <button
+                  type="button"
+                  className="rounded border border-destructive px-1.5 py-0.5 text-destructive hover:bg-destructive/10"
+                  onClick={() =>
+                    onChange({
+                      durationSec: recommendSegmentDurationSec(narrationSec, segment.durationSec),
+                    })
+                  }
+                  title="Stretch this segment to fit narration + 0.4s buffer"
+                >
+                  Auto-fit
+                </button>
+              ) : null}
+            </div>
+          ) : null}
         </div>
         <div>
           <Label htmlFor="segment-scene">Scene</Label>

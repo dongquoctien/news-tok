@@ -8,6 +8,7 @@ import {
   LanguageSchema,
   ProjectSchema,
 } from '@news-tok/shared/schema'
+import { recommendSegmentDurationSec } from '@news-tok/shared/sanitize'
 import {
   archive,
   crawler,
@@ -242,7 +243,7 @@ async function main() {
     {
       title: 'Synthesize narration via Edge TTS',
       description:
-        'Generate an mp3 narration using Microsoft Edge neural voices (free). Returns {asset, durationSec, wordBoundaries}.',
+        'Generate an mp3 narration using Microsoft Edge neural voices (free). Returns {asset, durationSec, wordBoundaries, recommendedSegmentDurationSec}. The orchestrator should set segment.durationSec = recommendedSegmentDurationSec after this call so the narration is never clipped by a too-short slot.',
       inputSchema: {
         text: z.string().min(1),
         voiceId: z.string().min(1),
@@ -252,7 +253,14 @@ async function main() {
     async ({ text, voiceId, speed }) => {
       try {
         const result = await synthesize({ text, voiceId, speed })
-        return ok(result)
+        // Surface a one-number hint so the orchestrator can write
+        // `segment.durationSec = recommendedSegmentDurationSec` directly
+        // and avoid narration getting clipped by a too-short slot.
+        const recommendedSegmentDurationSec =
+          result.durationSec > 0
+            ? recommendSegmentDurationSec(result.durationSec)
+            : undefined
+        return ok({ ...result, recommendedSegmentDurationSec })
       } catch (err) {
         return fail(err)
       }
