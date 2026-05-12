@@ -8,7 +8,7 @@ import { useResponsive } from '../../scenes/sizing.js'
  * from `style.gradientFill.from` (a convenient single-colour knob), or
  * falls back to a neutral accent.
  */
-export const WordHighlightText = ({ text, style, wordBoundaries }: TextPrimitiveProps) => {
+export const WordHighlightText = ({ text, style, wordBoundaries, fontOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -18,14 +18,14 @@ export const WordHighlightText = ({ text, style, wordBoundaries }: TextPrimitive
   // When word boundaries are missing, behave like FadeInText.
   if (!wordBoundaries || wordBoundaries.length === 0) {
     return (
-      <div style={typographyStyle(style, style.fontSize * r.font)}>
+      <div style={typographyStyle(style, style.fontSize * r.font, fontOverride)}>
         {text}
       </div>
     )
   }
 
   return (
-    <div style={typographyStyle(style, style.fontSize * r.font)}>
+    <div style={typographyStyle(style, style.fontSize * r.font, fontOverride)}>
       {wordBoundaries.map((w, i) => {
         const active = tSec >= w.offsetSec && tSec < w.offsetSec + w.durationSec
         return (

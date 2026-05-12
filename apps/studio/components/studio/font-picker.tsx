@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { FONT_LABEL } from '@/lib/font-label'
 
 /**
  * CSS font stack the Studio uses to PREVIEW each logical font id. The
@@ -35,21 +36,6 @@ const FONT_CSS: Record<string, string> = {
   oswald: 'Oswald, "Arial Narrow", sans-serif',
   archivoBlack: '"Archivo Black", system-ui, sans-serif',
   nunito: 'Nunito, system-ui, sans-serif',
-}
-
-const FONT_LABEL: Record<string, string> = {
-  beVietnamPro: 'Be Vietnam Pro',
-  inter: 'Inter',
-  montserrat: 'Montserrat',
-  anton: 'Anton',
-  bebasNeue: 'Bebas Neue',
-  playfairDisplay: 'Playfair Display',
-  jetBrainsMono: 'JetBrains Mono',
-  lexend: 'Lexend',
-  manrope: 'Manrope',
-  oswald: 'Oswald',
-  archivoBlack: 'Archivo Black',
-  nunito: 'Nunito',
 }
 
 const FONT_NOTE: Record<string, string> = {

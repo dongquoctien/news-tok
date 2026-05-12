@@ -7,7 +7,7 @@ import { useResponsive } from '../../scenes/sizing.js'
  *   clip-path: polygon(...) — animated via interpolate.
  * Produces a stronger reveal than gradientWipe for hero headlines.
  */
-export const MaskWipeText = ({ text, style }: TextPrimitiveProps) => {
+export const MaskWipeText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -24,7 +24,7 @@ export const MaskWipeText = ({ text, style }: TextPrimitiveProps) => {
   return (
     <div
       style={{
-        ...typographyStyle(style, style.fontSize * r.font),
+        ...typographyStyle(style, style.fontSize * r.font, fontOverride),
         clipPath: clip,
         WebkitClipPath: clip,
       }}
