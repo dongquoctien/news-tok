@@ -69,7 +69,7 @@ export default async function ProjectsListPage() {
                   </CardTitle>
                   <CardDescription>{relativeTime(p.updatedAt)}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <CardContent className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
                     <Film className="size-4" />
                     {p.aspect}
@@ -99,9 +99,11 @@ export default async function ProjectsListPage() {
                   ) : p.declaredVariantIds.length > 0 ? (
                     <span className="inline-flex items-center gap-1 text-muted-foreground/80">
                       <Sparkles className="size-4" />
-                      {p.declaredVariantIds.length} variants, none rendered
+                      {p.declaredVariantIds.length} variants
                     </span>
-                  ) : null}
+                  ) : (
+                    <span />
+                  )}
                 </CardContent>
               </Link>
               <div className="absolute right-3 top-3">
