@@ -13,6 +13,7 @@ import {
   crawler,
   extractArticle,
   listVoices,
+  openverse,
   pexels,
   pixabay,
   synthesize,
@@ -161,7 +162,14 @@ async function main() {
         query: z.string().min(1),
         orientation: z.enum(['landscape', 'portrait', 'square']).optional(),
         provider: z
-          .enum(['pexels', 'unsplash', 'pixabay', 'crawl:pixabay-image', 'crawl:unsplash'])
+          .enum([
+            'pexels',
+            'unsplash',
+            'pixabay',
+            'openverse',
+            'crawl:pixabay-image',
+            'crawl:unsplash',
+          ])
           .optional(),
       },
     },
@@ -188,6 +196,10 @@ async function main() {
         }
         if (which === 'unsplash') {
           const asset = await unsplash.searchImage({ query, orientation })
+          return ok(asset)
+        }
+        if (which === 'openverse') {
+          const asset = await openverse.searchImage({ query, orientation })
           return ok(asset)
         }
         const asset = await pexels.searchImage({ query, orientation })

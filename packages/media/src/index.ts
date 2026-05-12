@@ -7,6 +7,7 @@ export type { WordBoundary, SynthesizeOptions, SynthesizeResult } from './edge-t
 export * as pexels from './pexels.js'
 export * as pixabay from './pixabay.js'
 export * as unsplash from './unsplash.js'
+export * as openverse from './openverse.js'
 export * as archive from './internet-archive.js'
 export * as crawler from './crawler/index.js'
 export { CloudflareBlockedError } from './pixabay.js'

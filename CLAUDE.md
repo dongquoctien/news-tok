@@ -64,8 +64,10 @@ All MCP tools are exposed under the `mcp__news-tok__*` namespace:
 - `extractArticle({ url })` — fetches a URL and returns clean article text.
 - `searchImage({ query, orientation?, provider? })` — returns a local cached
   image path. `provider` is one of `pexels` (default, reliable), `unsplash`
-  (fallback when Pexels has no match), or `pixabay` (often rate-limited by
-  Cloudflare; avoid unless explicitly requested).
+  (fallback when Pexels has no match), `openverse` (federated CC-licensed
+  search across Wikimedia / Flickr / Smithsonian / museums — best for
+  niche or historical topics, anonymous OK), or `pixabay` (often
+  rate-limited by Cloudflare; avoid unless explicitly requested).
 - `searchMusic({ mood, durationSec, provider? })` — returns a local cached
   audio path. Always use `provider: 'archive'` (default). Pixabay's music
   API has been deprecated (404) — do not pass `provider: 'pixabay'`.
@@ -128,21 +130,36 @@ per segment.
 
 1. Call `createProject({ source: { type: 'url', value: <url> }, language, aspect })`.
 2. Call `extractArticle({ url })` to get the body text.
-3. **Research the project aesthetic** with the brand-new MCP tool
-   `researchProjectAesthetic({ articleTitle, articleText, language })`. It
-   classifies the article topic (crime / finance / tech / health / sports /
+3. **Research the project aesthetic.** First call
+   `researchProjectAesthetic({ articleTitle, articleText, language })`
+   to classify the topic (crime / finance / tech / health / sports /
    entertainment / lifestyle / travel / food / nature / politics /
-   education / generic) by keyword and returns a strong three-variant set
-   plus a music mood string. Use the result to seed
-   `project.variants` and the later `searchMusic` call.
-   - If the tool returns `confidence < 0.34` (no keyword hits), call it
-     again with `proposeNewStyles: true` so it mints one or two tailored
-     `TextStyle` JSONs from the topic palette. Append them to
-     `project.userTextStyles` and rewire the variants to point at the
-     new ids — this is the slow path when the built-in 28 presets do not
-     fit the article.
-   - Confirm the picks via `AskUserQuestion` (show topic + variant
-     labels + music mood). Honor any user override.
+   education / generic) and surface a strong three-variant set plus a
+   music mood. Then **ask the user** how to proceed via
+   `AskUserQuestion` (default-first):
+
+   - **Use the recommended preset trio (recommended when `confidence ≥
+     0.67`)** — write the returned `variantPicks` straight into
+     `project.variants`. Fastest, deterministic, deterministic across
+     re-runs.
+   - **Research and mint a tailored style for this project** — call
+     `researchProjectAesthetic` again with `proposeNewStyles: true`,
+     append the returned `newUserStyles` to `project.userTextStyles`,
+     and rewire one variant (or all three) to reference the new ids.
+     This is the slow path when the built-in 28 presets are not a tight
+     fit; mention the topic palette in the question so the user knows
+     what they will get.
+   - **Skip — let me edit variants manually in Studio** — write an
+     empty `variants: []` and stop here; Studio will surface the style
+     picker.
+
+   When the research tool reports `confidence < 0.34` (no keyword hits)
+   the default recommendation flips: prefer the "Research and mint
+   tailored style" option, since the built-in pool clearly does not
+   know this kind of article.
+
+   Always show the rationale string from the tool in the question
+   description so the user understands why the topic was picked.
 4. **Confirm story structure with the user** before drafting segments. Use
    `AskUserQuestion` and recommend the full three-part structure:
    - **Mở bài (title, 1 segment, ~5s)** — headline / hook
@@ -209,8 +226,10 @@ When the user requests a visual effect not covered by the built-in library:
 - **Default voice (English)**: `en-US-AriaNeural`
 - **Default aspect**: `9:16`, 30 fps, 1080×1920
 - **Prefer Pexels** for images (most reliable); use `unsplash` as fallback
-  when Pexels has no good match. Avoid `pixabay` unless the user asks for
-  it — Cloudflare often blocks Node requests.
+  when Pexels has no good match, and `openverse` when the topic is niche
+  / historical / museum-flavored (it federates Wikimedia, Flickr CC,
+  Smithsonian, museums.victoria, etc.). Avoid `pixabay` unless the user
+  asks for it — Cloudflare often blocks Node requests.
 - **Prefer Internet Archive** for music (default in `searchMusic`); it is
   filtered to commercial-friendly CC0/CC-BY licenses and needs no key.
 - Always validate `storyboard.json` against `ProjectSchema` before saving.
