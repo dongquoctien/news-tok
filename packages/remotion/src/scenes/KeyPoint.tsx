@@ -1,19 +1,22 @@
 import { AbsoluteFill, Audio } from 'remotion'
 import { ListChecks } from 'lucide-react'
 import { ICON } from '@news-tok/shared/ui-tokens'
+import { BUILT_IN_TEXT_STYLES, findTextStyle } from '@news-tok/shared/text-styles'
 import type { SceneProps } from './types.js'
-import { fontFor } from './fonts.js'
 import { Fade } from '../effects/Fade.js'
 import { KenBurns } from '../effects/KenBurns.js'
 import { useEntranceSpring } from '../effects/timing.js'
+import { TextBlock } from '../effects/text/TextBlock.js'
 import { useResponsive } from './sizing.js'
 
-export const KeyPoint = ({ segment, project }: SceneProps) => {
+const CLASSIC = findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
+
+export const KeyPoint = ({ segment, textStyle }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 16 })
   const r = useResponsive()
   const bg = segment.visuals.background
   const narration = segment.audio?.narration
-  const fontFamily = fontFor(project.language)
+  const style = textStyle ?? CLASSIC
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
@@ -27,10 +30,10 @@ export const KeyPoint = ({ segment, project }: SceneProps) => {
       <Fade inSec={0.35} outSec={0.35}>
         <AbsoluteFill
           style={{
-            justifyContent: r.landscape ? 'center' : 'flex-end',
+            justifyContent: 'flex-start',
+            alignItems: 'flex-start',
             padding: 72 * r.unit,
-            color: '#f4f4f6',
-            fontFamily,
+            pointerEvents: 'none',
           }}
         >
           <div
@@ -50,22 +53,9 @@ export const KeyPoint = ({ segment, project }: SceneProps) => {
             <ListChecks size={ICON.lg * r.unit} strokeWidth={ICON.strokeWidth} />
             Key point
           </div>
-          <div
-            style={{
-              marginTop: 20 * r.unit,
-              fontSize: 64 * r.font,
-              fontWeight: 600,
-              lineHeight: 1.18,
-              letterSpacing: -0.5,
-              maxWidth: r.landscape ? '65%' : '100%',
-              opacity: spring,
-              transform: `translateY(${(1 - spring) * 50}px)`,
-            }}
-          >
-            {segment.text}
-          </div>
         </AbsoluteFill>
       </Fade>
+      <TextBlock text={segment.text} style={style} wordBoundaries={segment.wordBoundaries} />
       {narration ? <Audio src={narration.path} /> : null}
     </AbsoluteFill>
   )
