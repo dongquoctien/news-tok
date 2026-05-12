@@ -156,8 +156,19 @@ per segment.
    project total — the Remotion composition loops the track when it is
    shorter and fades out the last ~1.2s when it is longer, so an exact
    match is not required.
-8. Call `renderProject({ projectId })`.
-9. Report the absolute path to `output.mp4` so the user can open it.
+8. **Ask how many variants to render** before calling `renderProject`. Use
+   `AskUserQuestion` with these options (default-first):
+   - **1 video (recommended)** — render only variant `A` (Classic).
+     Fastest, smallest disk footprint, easiest to compare against any
+     follow-up edit. This should be the default suggestion.
+   - **3 videos (Classic / Bold news / Cinematic)** — render every variant
+     declared on the project so the user can pick the look they like.
+   - **Skip render** — leave it for the user to trigger from Studio.
+   When the user picks 1 video, call `renderProject({ projectId, variants:
+   ['A'] })` (or omit `variants` for the legacy single output). When the
+   user picks all 3, call `renderProject({ projectId, variants: 'all' })`.
+9. Report the absolute path(s) to the output file(s) so the user can open
+   them — for multi-variant renders, list every output explicitly.
 
 ## Common task: edit an existing segment
 
