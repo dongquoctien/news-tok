@@ -8,7 +8,11 @@ import {
   LanguageSchema,
   ProjectSchema,
 } from '@news-tok/shared/schema'
-import { recommendSegmentDurationSec } from '@news-tok/shared/sanitize'
+import {
+  fitSegmentDurations,
+  recommendSegmentDurationSec,
+  stripEmoji,
+} from '@news-tok/shared/sanitize'
 import {
   archive,
   crawler,
@@ -24,6 +28,7 @@ import {
   projectStoryboardPath,
   renderProjectMedia,
   renderSegmentMedia,
+  writeStoryboard,
 } from '@news-tok/render'
 import { createProject, listProjects } from './projects.js'
 import { researchProjectAesthetic } from './research.js'
@@ -126,6 +131,59 @@ async function main() {
           )
         }
         return ok(parsed.data)
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'updateStoryboard',
+    {
+      title: 'Persist a full project storyboard',
+      description:
+        "Write a fully-formed project JSON to data/projects/<id>/storyboard.json. The tool runs Studio-equivalent sanitisation (strip emoji from title + every segment.text, stretch each segment.durationSec to fit narration + 0.4s buffer) and validates the result against ProjectSchema before writing. Prefer this over raw Write/Edit on storyboard.json so the file never lands in an invalid state. Returns the persisted project (after sanitisation) plus a list of duration adjustments the helper applied, if any.",
+      inputSchema: {
+        projectId: z.string().min(1),
+        project: z.unknown(),
+      },
+    },
+    async ({ projectId, project }) => {
+      try {
+        const parsed = ProjectSchema.safeParse(project)
+        if (!parsed.success) {
+          const issues = parsed.error.issues.map((i) => ({
+            path: i.path.join('.'),
+            message: i.message,
+          }))
+          return fail(
+            new Error(
+              `Invalid project payload (${issues.length} issue${issues.length === 1 ? '' : 's'}): ` +
+                issues.map((i) => `${i.path || '<root>'}: ${i.message}`).join('; ')
+            )
+          )
+        }
+        if (parsed.data.id !== projectId) {
+          return fail(
+            new Error(`Project id mismatch: payload.id=${parsed.data.id} vs projectId=${projectId}`)
+          )
+        }
+        // Sanitisation chain: strip emoji from title + every segment.text,
+        // then stretch durations to fit narration. Same chain Studio's
+        // PATCH /api/projects/[id] runs, so MCP and HTTP callers end up
+        // with identical on-disk shape.
+        const cleaned = {
+          ...parsed.data,
+          title: stripEmoji(parsed.data.title),
+          segments: parsed.data.segments.map((s) => ({ ...s, text: stripEmoji(s.text) })),
+          updatedAt: new Date().toISOString(),
+        }
+        const { project: fitted, adjustments } = fitSegmentDurations(cleaned)
+        // Re-parse so the on-disk file is always schema-clean even if the
+        // sanitisation step accidentally introduced an invalid shape.
+        const final = ProjectSchema.parse(fitted)
+        await writeStoryboard(projectId, final)
+        return ok({ project: final, adjustments })
       } catch (err) {
         return fail(err)
       }
