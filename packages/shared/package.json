@@ -9,7 +9,9 @@
     ".": "./src/index.ts",
     "./schema": "./src/schema.ts",
     "./ui-tokens": "./src/ui-tokens.ts",
-    "./sanitize": "./src/sanitize.ts"
+    "./sanitize": "./src/sanitize.ts",
+    "./text-styles": "./src/text-styles.ts",
+    "./sfx": "./src/sfx.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",

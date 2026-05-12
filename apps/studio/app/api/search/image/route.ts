@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server'
-import { crawler, pexels, pixabay, unsplash } from '@news-tok/media'
+import { crawler, openverse, pexels, pixabay, unsplash } from '@news-tok/media'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -34,6 +34,13 @@ export async function GET(req: NextRequest) {
     }
     if (provider === 'unsplash') {
       const asset = await unsplash.searchImage({
+        query,
+        orientation: orientation ?? undefined,
+      })
+      return NextResponse.json({ asset })
+    }
+    if (provider === 'openverse') {
+      const asset = await openverse.searchImage({
         query,
         orientation: orientation ?? undefined,
       })

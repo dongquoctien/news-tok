@@ -1,6 +1,6 @@
 import { renderMedia, selectComposition } from '@remotion/renderer'
 import { mkdir } from 'node:fs/promises'
-import { relative, resolve, sep } from 'node:path'
+import { relative, resolve, sep, dirname } from 'node:path'
 import {
   resolveRenderPreset,
   type Aspect,
@@ -11,10 +11,12 @@ import {
 import { bundleForProject } from './bundle.js'
 import {
   dataDir,
+  projectDir,
   projectOutput,
   projectSegmentsDir,
 } from './paths.js'
 import { readStoryboard } from './storyboard.js'
+import { collectUsedSfxIds, stageSfxFiles } from './sfx-staging.js'
 
 /**
  * Convert an absolute path inside data/ into a `/`-prefixed URL that
@@ -81,6 +83,18 @@ export type RenderOptions = {
   onProgress?: (progress: number) => void
 }
 
+export type RenderProjectOptions = RenderOptions & {
+  /**
+   * Variant ids to render. `'all'` renders every variant declared on the
+   * project. An empty array (or omitted) renders a single mp4 at the
+   * legacy path `output.mp4`, using whichever default style each scene
+   * picks.
+   */
+  variants?: string[] | 'all'
+  /** Optional progress callback that also reports which variant is active. */
+  onVariantProgress?: (info: { variantId: string; progress: number }) => void
+}
+
 export async function renderSegmentMedia(
   projectId: string,
   segmentId: string,
@@ -93,8 +107,11 @@ export async function renderSegmentMedia(
   }
 
   const serveUrl = await bundleForProject(projectId)
+  const sfxIds = collectUsedSfxIds(project)
+  const sfxUrlMap = await stageSfxFiles(sfxIds)
   const inputProps = {
     storyboard: rewriteProjectAssets(segmentSubProject(project, segment)),
+    sfxUrlMap,
   }
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)
@@ -125,41 +142,72 @@ export async function renderSegmentMedia(
 }
 
 /**
- * Render the entire project as a single mp4 (no ffmpeg concat needed —
- * Remotion renders the full composition with all segments).
- * NOTE: In M2 we may switch to per-segment render + ffmpeg concat to enable
- * incremental edits; for M1 smoke test, full-composition render is simpler.
+ * Render the project as one or more mp4 files. When `opts.variants` is
+ * omitted or empty, this preserves the legacy behavior and produces a
+ * single `output.mp4`. Otherwise it emits `output-<variantId>.mp4` for
+ * each requested variant, reusing the same bundle across variants.
  */
 export async function renderProjectMedia(
   projectId: string,
-  opts: RenderOptions = {}
-): Promise<string> {
+  opts: RenderProjectOptions = {}
+): Promise<string[]> {
   const project = await readStoryboard(projectId)
   const serveUrl = await bundleForProject(projectId)
-  const inputProps = { storyboard: rewriteProjectAssets(project) }
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)
 
-  const composition = await selectComposition({
-    serveUrl,
-    id: compositionId,
-    inputProps,
-  })
+  // Stage SFX once per render call — the URL map is identical for every
+  // variant because the bank is project-wide.
+  const sfxIds = collectUsedSfxIds(project)
+  const sfxUrlMap = await stageSfxFiles(sfxIds)
 
-  const outPath = projectOutput(projectId)
-  await mkdir(resolve(outPath, '..'), { recursive: true })
+  const projectVariants = project.variants ?? []
+  const requested: (string | null)[] =
+    opts.variants === 'all'
+      ? projectVariants.map((v) => v.id)
+      : Array.isArray(opts.variants) && opts.variants.length > 0
+        ? opts.variants
+        : projectVariants.length > 0
+          ? [projectVariants[0]!.id]
+          : [null] // legacy single render
 
-  await renderMedia({
-    serveUrl,
-    composition,
-    codec: 'h264',
-    pixelFormat: preset.pixelFormat,
-    outputLocation: outPath,
-    inputProps,
-    concurrency: opts.concurrency ?? null,
-    chromiumOptions: { disableWebSecurity: true },
-    onProgress: ({ progress }) => opts.onProgress?.(progress),
-  })
+  const outputs: string[] = []
+  const rewrittenStoryboard = rewriteProjectAssets(project)
 
-  return outPath
+  for (const variantId of requested) {
+    const outPath =
+      variantId == null
+        ? projectOutput(projectId)
+        : resolve(projectDir(projectId), `output-${variantId}.mp4`)
+    await mkdir(dirname(outPath), { recursive: true })
+
+    const inputProps = {
+      storyboard: rewrittenStoryboard,
+      variantId: variantId ?? undefined,
+      sfxUrlMap,
+    }
+
+    const composition = await selectComposition({
+      serveUrl,
+      id: compositionId,
+      inputProps,
+    })
+
+    await renderMedia({
+      serveUrl,
+      composition,
+      codec: 'h264',
+      pixelFormat: preset.pixelFormat,
+      outputLocation: outPath,
+      inputProps,
+      concurrency: opts.concurrency ?? null,
+      chromiumOptions: { disableWebSecurity: true },
+      onProgress: ({ progress }) => {
+        opts.onProgress?.(progress)
+        if (variantId != null) opts.onVariantProgress?.({ variantId, progress })
+      },
+    })
+    outputs.push(outPath)
+  }
+  return outputs
 }

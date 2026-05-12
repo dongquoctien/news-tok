@@ -43,7 +43,11 @@ const calculateMetadata =
       fps: preset.fps,
       width: preset.width,
       height: preset.height,
-      props: { storyboard },
+      // Preserve every caller-provided prop (variantId, sfxUrlMap, ...).
+      // Dropping unknown keys here is what made every variant render
+      // identically — the composition resolved variantId=undefined and
+      // always fell back to variants[0].
+      props: { ...props, storyboard },
     }
   }
 

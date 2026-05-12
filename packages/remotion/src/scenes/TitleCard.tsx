@@ -1,19 +1,22 @@
 import { AbsoluteFill, Audio } from 'remotion'
 import { Newspaper } from 'lucide-react'
 import { ICON } from '@news-tok/shared/ui-tokens'
+import { BUILT_IN_TEXT_STYLES, findTextStyle } from '@news-tok/shared/text-styles'
 import type { SceneProps } from './types.js'
-import { fontFor } from './fonts.js'
 import { Fade } from '../effects/Fade.js'
 import { useEntranceSpring } from '../effects/timing.js'
 import { KenBurns } from '../effects/KenBurns.js'
+import { TextBlock } from '../effects/text/TextBlock.js'
 import { useResponsive } from './sizing.js'
 
-export const TitleCard = ({ segment, project }: SceneProps) => {
+const CLASSIC = findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
+
+export const TitleCard = ({ segment, project, textStyle }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 14 })
   const r = useResponsive()
   const bg = segment.visuals.background
   const narration = segment.audio?.narration
-  const fontFamily = fontFor(project.language)
+  const style = textStyle ?? CLASSIC
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
@@ -27,10 +30,10 @@ export const TitleCard = ({ segment, project }: SceneProps) => {
       <Fade inSec={0.4} outSec={0.4}>
         <AbsoluteFill
           style={{
-            justifyContent: r.landscape ? 'center' : 'flex-end',
+            justifyContent: 'flex-start',
+            alignItems: 'flex-start',
             padding: 80 * r.unit,
-            color: '#f4f4f6',
-            fontFamily,
+            pointerEvents: 'none',
           }}
         >
           <div
@@ -50,22 +53,9 @@ export const TitleCard = ({ segment, project }: SceneProps) => {
             <Newspaper size={ICON.xl * r.unit} strokeWidth={ICON.strokeWidth} />
             {project.title || 'News'}
           </div>
-          <div
-            style={{
-              marginTop: 24 * r.unit,
-              fontSize: 84 * r.font,
-              fontWeight: 700,
-              lineHeight: 1.05,
-              letterSpacing: -1,
-              maxWidth: r.landscape ? '70%' : '100%',
-              opacity: spring,
-              transform: `translateY(${(1 - spring) * 60}px)`,
-            }}
-          >
-            {segment.text}
-          </div>
         </AbsoluteFill>
       </Fade>
+      <TextBlock text={segment.text} style={style} wordBoundaries={segment.wordBoundaries} />
       {narration ? <Audio src={narration.path} /> : null}
     </AbsoluteFill>
   )

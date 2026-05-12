@@ -13,6 +13,7 @@ import {
   crawler,
   extractArticle,
   listVoices,
+  openverse,
   pexels,
   pixabay,
   synthesize,
@@ -24,6 +25,7 @@ import {
   renderSegmentMedia,
 } from '@news-tok/render'
 import { createProject, listProjects } from './projects.js'
+import { researchProjectAesthetic } from './research.js'
 
 function ok(payload: unknown) {
   const text = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2)
@@ -160,7 +162,14 @@ async function main() {
         query: z.string().min(1),
         orientation: z.enum(['landscape', 'portrait', 'square']).optional(),
         provider: z
-          .enum(['pexels', 'unsplash', 'pixabay', 'crawl:pixabay-image', 'crawl:unsplash'])
+          .enum([
+            'pexels',
+            'unsplash',
+            'pixabay',
+            'openverse',
+            'crawl:pixabay-image',
+            'crawl:unsplash',
+          ])
           .optional(),
       },
     },
@@ -187,6 +196,10 @@ async function main() {
         }
         if (which === 'unsplash') {
           const asset = await unsplash.searchImage({ query, orientation })
+          return ok(asset)
+        }
+        if (which === 'openverse') {
+          const asset = await openverse.searchImage({ query, orientation })
           return ok(asset)
         }
         const asset = await pexels.searchImage({ query, orientation })
@@ -287,17 +300,50 @@ async function main() {
   )
 
   server.registerTool(
+    'researchProjectAesthetic',
+    {
+      title: 'Recommend variants + music mood from an article',
+      description:
+        'Classify an article by topic (crime / finance / tech / health / sports / entertainment / lifestyle / travel / food / nature / politics / education / generic) using cheap keyword matching, then return a set of three variant picks (textStyleId per scene kind) and a music mood string compatible with `searchMusic`. Optionally returns one or two tailored TextStyle JSON entries when `proposeNewStyles=true` — the orchestrator should append those to project.userTextStyles before render. Deterministic, sub-millisecond, no network. Call this right after `extractArticle` and use the result to seed the project.',
+      inputSchema: {
+        articleTitle: z.string(),
+        articleText: z.string(),
+        language: LanguageSchema,
+        userStyles: z.array(z.any()).optional(),
+        proposeNewStyles: z.boolean().optional(),
+      },
+    },
+    async ({ articleTitle, articleText, language, userStyles, proposeNewStyles }) => {
+      try {
+        const result = researchProjectAesthetic({
+          articleTitle,
+          articleText,
+          language,
+          userStyles: userStyles as Parameters<typeof researchProjectAesthetic>[0]['userStyles'],
+          proposeNewStyles,
+        })
+        return ok(result)
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
     'renderProject',
     {
       title: 'Render the full project video',
       description:
-        'Render the entire project composition to data/projects/<id>/output.mp4. Use as the final step after the storyboard and all per-segment assets are ready.',
-      inputSchema: { projectId: z.string().min(1) },
+        'Render the project. With no `variants` arg, behaves as before and writes data/projects/<id>/output.mp4. Pass `variants: ["A"]` to render a single variant, `variants: ["A","B","C"]` to render specific ones, or `variants: "all"` to render every variant declared on the project. Each variant produces data/projects/<id>/output-<variantId>.mp4 and the response returns the list of output paths.',
+      inputSchema: {
+        projectId: z.string().min(1),
+        variants: z.union([z.array(z.string()), z.literal('all')]).optional(),
+      },
     },
-    async ({ projectId }) => {
+    async ({ projectId, variants }) => {
       try {
-        const outPath = await renderProjectMedia(projectId)
-        return ok({ outputPath: outPath })
+        const outPaths = await renderProjectMedia(projectId, { variants })
+        return ok({ outputPaths: outPaths })
       } catch (err) {
         return fail(err)
       }

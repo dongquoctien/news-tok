@@ -17,12 +17,14 @@ export const dynamic = 'force-dynamic'
  * Query params:
  *   scope=segment|full (default: full)
  *   segmentId=...      (required when scope=segment)
+ *   variant=A|B|C|all  (optional; only used when scope=full)
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
     const url = new URL(req.url)
     const scope = (url.searchParams.get('scope') ?? 'full') as 'segment' | 'full'
     const segmentId = url.searchParams.get('segmentId') ?? undefined
+    const variantParam = url.searchParams.get('variant') ?? undefined
 
     if (scope === 'segment' && !segmentId) {
       return NextResponse.json(
@@ -50,7 +52,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     })
 
     // Fire and forget — the Studio polls .job.json via GET.
-    void runRender(params.id, jobId, scope, segmentId).catch(async (err) => {
+    void runRender(params.id, jobId, scope, segmentId, variantParam).catch(async (err) => {
       const message = err instanceof Error ? err.message : String(err)
       await writeJob(params.id, {
         jobId,
@@ -83,7 +85,8 @@ async function runRender(
   projectId: string,
   jobId: string,
   scope: 'segment' | 'full',
-  segmentId: string | undefined
+  segmentId: string | undefined,
+  variantParam: string | undefined
 ): Promise<void> {
   const startedAt = new Date().toISOString()
   let lastProgress = 0
@@ -100,10 +103,29 @@ async function runRender(
     })
   }
 
-  const outPath =
-    scope === 'segment'
-      ? await renderSegmentMedia(projectId, segmentId!, { onProgress })
-      : await renderProjectMedia(projectId, { onProgress })
+  if (scope === 'segment') {
+    const outPath = await renderSegmentMedia(projectId, segmentId!, { onProgress })
+    await writeJob(projectId, {
+      jobId,
+      scope,
+      segmentId,
+      status: 'completed',
+      progress: 1,
+      startedAt,
+      endedAt: new Date().toISOString(),
+      outputPath: outPath,
+    })
+    return
+  }
+
+  // scope === 'full' — optionally per variant.
+  const variants =
+    variantParam === 'all'
+      ? ('all' as const)
+      : variantParam
+        ? [variantParam]
+        : undefined
+  const outPaths = await renderProjectMedia(projectId, { onProgress, variants })
 
   await writeJob(projectId, {
     jobId,
@@ -113,6 +135,9 @@ async function runRender(
     progress: 1,
     startedAt,
     endedAt: new Date().toISOString(),
-    outputPath: outPath,
+    // Surface the first output for back-compat with the editor UI; the full
+    // list is also stored so future Studio versions can show all variants.
+    outputPath: outPaths[0],
+    outputPaths: outPaths,
   })
 }
