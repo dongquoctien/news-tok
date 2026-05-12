@@ -64,6 +64,110 @@ export const WordBoundarySchema = z.object({
 })
 export type WordBoundary = z.infer<typeof WordBoundarySchema>
 
+// --- Text style library --------------------------------------------------
+
+/**
+ * Motion primitive used to enter / exit a text block. Each value maps to
+ * a component under `packages/remotion/src/effects/text/`. `none` renders
+ * the text statically.
+ */
+export const TextMotionSchema = z.enum([
+  'none',
+  'fade',
+  'slideUp',
+  'slideDown',
+  'scaleIn',
+  'typewriter',
+  'wordPop',
+  'wordHighlight',
+  'gradientWipe',
+  'slotMachine',
+])
+export type TextMotion = z.infer<typeof TextMotionSchema>
+
+/** Optional plate rendered behind the text. */
+export const TextBackgroundSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('none') }),
+  z.object({
+    kind: z.literal('solid'),
+    color: z.string(),
+    paddingPct: z.number().default(2),
+    radiusPx: z.number().default(8),
+    opacity: z.number().min(0).max(1).default(1),
+  }),
+  z.object({
+    kind: z.literal('gradient'),
+    from: z.string(),
+    to: z.string(),
+    angleDeg: z.number().default(180),
+    paddingPct: z.number().default(2),
+    radiusPx: z.number().default(8),
+  }),
+])
+export type TextBackground = z.infer<typeof TextBackgroundSchema>
+
+/**
+ * Short SFX cue tied to a text style. The renderer triggers `enterSoundId`
+ * at the start of the segment; `perWordSoundId` fires once per word using
+ * `Segment.wordBoundaries`. Both reference ids in
+ * `packages/shared/src/sfx.ts`.
+ */
+export const TextSfxSchema = z.object({
+  enterSoundId: z.string().optional(),
+  enterVolume: z.number().min(0).max(1).default(0.6),
+  perWordSoundId: z.string().optional(),
+  perWordVolume: z.number().min(0).max(1).default(0.4),
+})
+export type TextSfx = z.infer<typeof TextSfxSchema>
+
+export const TextStyleSchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  family: z.enum(['news', 'social', 'cinematic', 'retro', 'playful']),
+  // Typography
+  fontFamily: z.string(),
+  fontSize: z.number().int().positive(), // logical px @ 1080w; scaled by useResponsive
+  fontWeight: z.number().int().default(700),
+  letterSpacing: z.number().default(0),
+  lineHeight: z.number().default(1.15),
+  color: z.string(),
+  // Decorators
+  background: TextBackgroundSchema.default({ kind: 'none' }),
+  textStroke: z.object({ widthPx: z.number(), color: z.string() }).optional(),
+  textShadow: z
+    .object({
+      blur: z.number(),
+      color: z.string(),
+      offsetX: z.number().default(0),
+      offsetY: z.number().default(0),
+      // Optional second shadow layer for RGB-split / glitch presets.
+      secondary: z
+        .object({ blur: z.number(), color: z.string(), offsetX: z.number(), offsetY: z.number() })
+        .optional(),
+    })
+    .optional(),
+  /** Gradient text fill (sets `background-clip: text`). */
+  gradientFill: z
+    .object({ from: z.string(), to: z.string(), angleDeg: z.number().default(180) })
+    .optional(),
+  // Layout (relative to the 9:16 canvas; renderer adapts to 16:9 / 1:1)
+  align: z.enum(['left', 'center', 'right']).default('center'),
+  anchor: z.enum(['top', 'middle', 'bottom']).default('bottom'),
+  marginPct: z.number().min(0).max(40).default(8),
+  // Motion
+  enter: TextMotionSchema.default('fade'),
+  exit: z.enum(['fade', 'slideDown', 'none']).default('fade'),
+  enterDurationSec: z.number().default(0.4),
+  exitDurationSec: z.number().default(0.4),
+  // Sound
+  sfx: TextSfxSchema.optional(),
+  // Provenance
+  source: z.enum(['builtin', 'user']).default('builtin'),
+  /** Restrict suggestions to specific scene kinds; empty = any scene. */
+  scope: z.array(SceneKindSchema).default([]),
+})
+export type TextStyle = z.infer<typeof TextStyleSchema>
+
 export const SegmentSchema = z.object({
   id: z.string().min(1),
   durationSec: z.number().positive(),
@@ -84,8 +188,27 @@ export const SegmentSchema = z.object({
   /** Per-word timing produced by Edge TTS for subtitle alignment. */
   wordBoundaries: z.array(WordBoundarySchema).optional(),
   style: z.record(z.union([z.string(), z.number()])).optional(),
+  /**
+   * Reference into the text style registry (built-in + user). When null /
+   * absent the renderer falls back to the variant default for this scene
+   * kind, then to `classic`.
+   */
+  textStyleId: z.string().optional(),
 })
 export type Segment = z.infer<typeof SegmentSchema>
+
+/**
+ * A render variant: a named text-style mapping per scene kind. Rendering a
+ * project with `variants.length >= 2` produces one mp4 per variant
+ * (`output-<id>.mp4`).
+ */
+export const VariantSchema = z.object({
+  id: z.string().min(1), // 'A' | 'B' | 'C' | free-form
+  label: z.string(),
+  /** id of a TextStyle, keyed by scene kind. */
+  textStyleBySceneKind: z.record(z.string()),
+})
+export type Variant = z.infer<typeof VariantSchema>
 
 export const ExportPresetSchema = z.enum(['tiktok', 'youtube-shorts', 'reels', 'standard'])
 export type ExportPreset = z.infer<typeof ExportPresetSchema>
@@ -106,8 +229,17 @@ export const ProjectSchema = z.object({
   segments: z.array(SegmentSchema),
   bgMusic: AssetRefSchema.optional(),
   bgMusicVolume: z.number().min(0).max(1).default(0.2),
+  /** Master volume for text-transition SFX (multiplied into each cue). */
+  sfxVolume: z.number().min(0).max(1).default(0.7),
   subtitles: SubtitleConfigSchema.default({ enabled: false, bottomPct: 0.18 }),
   exportPreset: ExportPresetSchema.default('standard'),
+  /**
+   * Render variants. Empty array preserves the legacy single-render behavior
+   * (`output.mp4`). Non-empty produces `output-<id>.mp4` per variant.
+   */
+  variants: z.array(VariantSchema).default([]),
+  /** Inline user-authored text styles, merged with built-ins at render time. */
+  userTextStyles: z.array(TextStyleSchema).default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 })
