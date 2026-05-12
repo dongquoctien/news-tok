@@ -17,18 +17,48 @@ export type ProjectSummary = {
   aspect: Aspect
   segmentCount: number
   hasOutput: boolean
+  /**
+   * Variant ids that have an `output-<id>.mp4` on disk. Empty when the
+   * project has only the legacy single `output.mp4` (or no render yet).
+   */
+  outputVariantIds: string[]
+  /** Variant ids declared on the storyboard, regardless of render state. */
+  declaredVariantIds: string[]
   createdAt: string
   updatedAt: string
 }
 
-function summarize(project: Project): ProjectSummary {
+async function scanOutputs(projectId: string): Promise<string[]> {
+  const dir = projectDir(projectId)
+  if (!existsSync(dir)) return []
+  try {
+    const entries = await readdir(dir, { withFileTypes: true })
+    const ids: string[] = []
+    for (const e of entries) {
+      if (!e.isFile()) continue
+      const match = /^output-([A-Za-z0-9_-]+)\.mp4$/.exec(e.name)
+      if (match) ids.push(match[1]!)
+    }
+    ids.sort()
+    return ids
+  } catch {
+    return []
+  }
+}
+
+async function summarize(project: Project): Promise<ProjectSummary> {
+  const outputVariantIds = await scanOutputs(project.id)
+  const declaredVariantIds = (project.variants ?? []).map((v) => v.id)
+  const legacyOutput = existsSync(resolve(projectDir(project.id), 'output.mp4'))
   return {
     projectId: project.id,
     title: project.title,
     language: project.language,
     aspect: project.aspect,
     segmentCount: project.segments.length,
-    hasOutput: existsSync(resolve(projectDir(project.id), 'output.mp4')),
+    hasOutput: legacyOutput || outputVariantIds.length > 0,
+    outputVariantIds,
+    declaredVariantIds,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   }
@@ -47,7 +77,7 @@ export async function listProjects(): Promise<ProjectSummary[]> {
       const raw = await readFile(sbPath, 'utf8')
       const parsed = ProjectSchema.safeParse(JSON.parse(raw))
       if (!parsed.success) continue
-      out.push(summarize(parsed.data))
+      out.push(await summarize(parsed.data))
     } catch {
       // Skip unreadable project folders rather than failing the whole list.
     }

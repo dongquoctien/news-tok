@@ -178,7 +178,14 @@ per segment.
    the final JSON validates against `ProjectSchema`.
 6. For each segment, in parallel: call `searchImage({ query })` and
    `synthesizeVoice({ text, voiceId })`. Update the segment's `visuals` and
-   `audio.narration` with the returned paths.
+   `audio.narration` with the returned paths. **Always set
+   `segment.durationSec = recommendedSegmentDurationSec`** from the
+   `synthesizeVoice` response — Edge TTS read length is content-driven
+   (Vietnamese sentences with polysyllabic words frequently run 7–8s when
+   estimated 5–6s) and the renderer will otherwise cut the audio when the
+   slot is shorter than the clip. If `recommendedSegmentDurationSec` is
+   missing (older MCP servers), compute it as `Math.max(plannedSec,
+   narrationDurationSec + 0.4)` yourself.
 7. Call `searchMusic({ mood, durationSec })` for the project background
    music and set `bgMusic`. **Use the `musicMood` returned by
    `researchProjectAesthetic` in step 3**. If that mood produces no

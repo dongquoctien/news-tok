@@ -34,6 +34,43 @@ export type ConcatOptions = {
   reencode?: boolean
 }
 
+export type ExtractThumbnailOptions = {
+  /** Source video path. */
+  videoPath: string
+  /** Where to write the JPEG thumbnail. */
+  outputPath: string
+  /** Timestamp to grab in seconds. Defaults to 1 (skip the cold-open fade). */
+  atSec?: number
+  /** Target width; height auto-scales to preserve aspect ratio. */
+  widthPx?: number
+}
+
+/**
+ * Grab a single JPEG frame from a video. Used by the project list to
+ * surface a thumbnail per rendered variant without bundling a heavier
+ * still-frame pipeline.
+ */
+export async function extractThumbnail(opts: ExtractThumbnailOptions): Promise<string> {
+  await mkdir(dirname(opts.outputPath), { recursive: true })
+  const at = opts.atSec ?? 1
+  const width = opts.widthPx ?? 320
+  await runFfmpeg([
+    '-y',
+    '-ss',
+    String(at),
+    '-i',
+    opts.videoPath,
+    '-vframes',
+    '1',
+    '-vf',
+    `scale=${width}:-1`,
+    '-q:v',
+    '5',
+    opts.outputPath,
+  ])
+  return opts.outputPath
+}
+
 /**
  * Concatenate a sequence of video files into `outputPath` using ffmpeg's
  * concat demuxer. All inputs should share codec/timebase/resolution; if not,

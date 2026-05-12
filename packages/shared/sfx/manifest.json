@@ -1,0 +1,71 @@
+{
+  "_note": [
+    "Direct-download URLs for each SFX in BUILT_IN_SFX.",
+    "Override any entry with a personal URL when re-running fetch.ts.",
+    "Internet Archive + Mixkit URLs are stable; Pixabay/Freesound need",
+    "you to download manually and drop the mp3 into packages/shared/sfx/.",
+    "Anything that 404s is skipped — the renderer treats missing files as silence."
+  ],
+  "downloads": [
+    {
+      "id": "whoosh-short",
+      "url": "https://assets.mixkit.co/active_storage/sfx/2435/2435-preview.mp3",
+      "trimToSec": 0.5
+    },
+    {
+      "id": "whoosh-long",
+      "url": "https://assets.mixkit.co/active_storage/sfx/2438/2438-preview.mp3",
+      "trimToSec": 0.9
+    },
+    {
+      "id": "pop",
+      "url": "https://assets.mixkit.co/active_storage/sfx/2356/2356-preview.mp3",
+      "trimToSec": 0.3
+    },
+    {
+      "id": "pop-bright",
+      "url": "https://assets.mixkit.co/active_storage/sfx/2358/2358-preview.mp3",
+      "trimToSec": 0.3
+    },
+    {
+      "id": "ding",
+      "url": "https://assets.mixkit.co/active_storage/sfx/270/270-preview.mp3",
+      "trimToSec": 0.4
+    },
+    {
+      "id": "click",
+      "url": "https://assets.mixkit.co/active_storage/sfx/2997/2997-preview.mp3",
+      "trimToSec": 0.15
+    },
+    {
+      "id": "boing",
+      "url": "https://assets.mixkit.co/active_storage/sfx/1683/1683-preview.mp3",
+      "trimToSec": 0.6
+    },
+    {
+      "id": "cartoon-whoosh",
+      "url": "https://assets.mixkit.co/active_storage/sfx/2437/2437-preview.mp3",
+      "trimToSec": 0.7
+    },
+    {
+      "id": "sparkle",
+      "url": "https://assets.mixkit.co/active_storage/sfx/2856/2856-preview.mp3",
+      "trimToSec": 0.8
+    },
+    {
+      "id": "glitch",
+      "url": "https://assets.mixkit.co/active_storage/sfx/2820/2820-preview.mp3",
+      "trimToSec": 0.5
+    },
+    {
+      "id": "arcade-coin",
+      "url": "https://assets.mixkit.co/active_storage/sfx/270/270-preview.mp3",
+      "trimToSec": 0.5
+    },
+    {
+      "id": "typewriter-key",
+      "url": "https://assets.mixkit.co/active_storage/sfx/1118/1118-preview.mp3",
+      "trimToSec": 0.15
+    }
+  ]
+}

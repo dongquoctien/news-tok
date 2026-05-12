@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { ProjectSchema, type Project } from '@news-tok/shared/schema'
-import { stripEmoji } from '@news-tok/shared/sanitize'
+import { fitSegmentDurations, stripEmoji } from '@news-tok/shared/sanitize'
 import { deleteProject, readStoryboard, writeStoryboard } from '@news-tok/render'
 
 export const runtime = 'nodejs'
@@ -60,7 +60,11 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         { status: 400 }
       )
     }
-    const next = sanitize({ ...parsed.data, updatedAt: new Date().toISOString() })
+    const cleaned = sanitize({ ...parsed.data, updatedAt: new Date().toISOString() })
+    // Defence in depth: even if the client forgets to stretch a segment to
+    // fit narration, normalise here so the storyboard durations always
+    // match what the renderer will play.
+    const { project: next } = fitSegmentDurations(cleaned)
     await writeStoryboard(params.id, next)
     return NextResponse.json(next)
   } catch (err) {

@@ -54,14 +54,22 @@ const FALLBACK_STYLE: TextStyle =
 
 /**
  * Resolve which text style applies to a segment under the active variant.
- * Priority: segment.textStyleId → variant.textStyleBySceneKind[scene]
- * → DEFAULT_TEXT_STYLE_ID.
+ * Priority (most specific wins):
+ *   1. variant.textStyleBySegmentId[segment.id] — per-variant per-segment override
+ *   2. segment.textStyleId — project-wide segment override
+ *   3. variant.textStyleBySceneKind[scene] — variant default for this scene kind
+ *   4. DEFAULT_TEXT_STYLE_ID
  */
 function resolveStyle(
   segment: Segment,
   variant: Variant | undefined,
   userStyles: TextStyle[]
 ): TextStyle {
+  if (variant) {
+    const perSegmentId = variant.textStyleBySegmentId?.[segment.id]
+    const perSegment = findTextStyle(perSegmentId, userStyles)
+    if (perSegment) return perSegment
+  }
   const direct = findTextStyle(segment.textStyleId, userStyles)
   if (direct) return direct
   if (variant) {
@@ -131,11 +139,22 @@ export const NewsTokComposition = ({
   const bgMusic = storyboard.bgMusic
   const bgMusicVolume = storyboard.bgMusicVolume ?? 0.2
   const masterSfxVolume = storyboard.sfxVolume ?? 0.7
-  const videoDurationSec = storyboard.segments.reduce((s, x) => s + x.durationSec, 0)
   const userStyles = storyboard.userTextStyles ?? []
   const variants = storyboard.variants ?? []
   const activeVariant =
     variants.find((v) => v.id === variantId) ?? variants[0] ?? undefined
+
+  // Compute each segment's effective duration first, so the bg-music fade
+  // window uses the same number the renderer actually plays — including any
+  // stretch the guard applies to keep narration audible.
+  const SAFETY_FRAMES = Math.round(0.2 * fps)
+  const segmentFrames = storyboard.segments.map((segment) => {
+    const plannedFrames = Math.max(1, Math.round(segment.durationSec * fps))
+    const narrationSec = segment.audio?.narration?.durationSec ?? 0
+    const narrationFrames = narrationSec > 0 ? Math.ceil(narrationSec * fps) : 0
+    return Math.max(plannedFrames, narrationFrames + SAFETY_FRAMES)
+  })
+  const videoDurationSec = segmentFrames.reduce((s, f) => s + f, 0) / fps
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
@@ -147,8 +166,8 @@ export const NewsTokComposition = ({
           videoDurationSec={videoDurationSec}
         />
       ) : null}
-      {storyboard.segments.map((segment) => {
-        const durationInFrames = Math.max(1, Math.round(segment.durationSec * fps))
+      {storyboard.segments.map((segment, i) => {
+        const durationInFrames = segmentFrames[i]!
         const Scene = resolveScene(segment.scene)
         const from = cursor
         cursor += durationInFrames

@@ -36,8 +36,17 @@ const calculateMetadata =
     const parsed = ProjectSchema.safeParse(props.storyboard)
     const storyboard = parsed.success ? parsed.data : FALLBACK_PROJECT
     const preset = resolveRenderPreset(aspect, storyboard.exportPreset)
-    const totalSec = storyboard.segments.reduce((sum, s) => sum + s.durationSec, 0)
-    const durationInFrames = Math.max(1, Math.round(totalSec * preset.fps))
+    // Match the per-segment guard in NewsTokComposition: never cut a
+    // segment shorter than its narration + 0.2s safety, even if the
+    // storyboard says otherwise. Keeps the composition long enough so
+    // audio is never clipped on the last frame.
+    const safetyFrames = Math.round(0.2 * preset.fps)
+    const durationInFrames = storyboard.segments.reduce((sum, s) => {
+      const planned = Math.max(1, Math.round(s.durationSec * preset.fps))
+      const narrationSec = s.audio?.narration?.durationSec ?? 0
+      const narration = narrationSec > 0 ? Math.ceil(narrationSec * preset.fps) : 0
+      return sum + Math.max(planned, narration + safetyFrames)
+    }, 0) || 1
     return {
       durationInFrames,
       fps: preset.fps,

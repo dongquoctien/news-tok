@@ -214,6 +214,13 @@ export const VariantSchema = z.object({
   label: z.string(),
   /** id of a TextStyle, keyed by scene kind. */
   textStyleBySceneKind: z.record(z.string()),
+  /**
+   * Optional per-variant override keyed by segment id. When present, the
+   * renderer prefers this over `segment.textStyleId` so a user can pin a
+   * style to one segment in one variant without affecting the same
+   * segment under other variants.
+   */
+  textStyleBySegmentId: z.record(z.string()).default({}),
 })
 export type Variant = z.infer<typeof VariantSchema>
 

@@ -150,10 +150,16 @@ export type StylePickerProps = {
   sampleText: string
   /** Scene kind used by "Apply to all `<scene>`". */
   sceneKind?: SceneKind
+  /**
+   * When set, the picker shows a "This segment in variant X only" option as
+   * the safest default so style edits do not leak into other variants of
+   * the same project.
+   */
+  activeVariantId?: string | null
   /** Apply choice on confirm. */
   onApply: (input: {
     styleId: string
-    scope: 'segment' | 'all' | 'sceneKind'
+    scope: 'segmentInVariant' | 'segment' | 'sceneKind' | 'all'
   }) => void
   trigger: React.ReactNode
 }
@@ -162,6 +168,7 @@ export function StylePicker({
   currentStyleId,
   sampleText,
   sceneKind,
+  activeVariantId,
   onApply,
   trigger,
 }: StylePickerProps) {
@@ -200,7 +207,7 @@ export function StylePicker({
     return styles.filter((s) => s.family === filter)
   }, [styles, filter])
 
-  const apply = (scope: 'segment' | 'all' | 'sceneKind') => {
+  const apply = (scope: 'segmentInVariant' | 'segment' | 'sceneKind' | 'all') => {
     if (!picked) return
     onApply({ styleId: picked, scope })
     setOpen(false)
@@ -263,13 +270,22 @@ export function StylePicker({
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
+          {activeVariantId ? (
+            <Button
+              disabled={!picked}
+              onClick={() => apply('segmentInVariant')}
+              title={`Pin to this segment in variant ${activeVariantId} only — other variants keep their look`}
+            >
+              This segment · variant {activeVariantId}
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             disabled={!picked}
             onClick={() => apply('segment')}
-            title="Apply only to the segment you opened the picker from"
+            title="Apply to this segment across every variant"
           >
-            This segment
+            This segment · all variants
           </Button>
           {sceneKind ? (
             <Button
@@ -282,6 +298,7 @@ export function StylePicker({
             </Button>
           ) : null}
           <Button
+            variant="outline"
             disabled={!picked}
             onClick={() => apply('all')}
             title="Apply to every segment in the project"
