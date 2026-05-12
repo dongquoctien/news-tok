@@ -42,9 +42,20 @@ export type PlayerPaneProps = {
   project: Project
   selectedSegmentId?: string | null
   onSelectSegment?: (id: string) => void
+  /**
+   * If set, the in-browser preview renders that variant. Omitting it
+   * leaves the composition to its own variant-resolution logic (first
+   * declared variant wins).
+   */
+  previewVariantId?: string | null
 }
 
-export function PlayerPane({ project, selectedSegmentId, onSelectSegment }: PlayerPaneProps) {
+export function PlayerPane({
+  project,
+  selectedSegmentId,
+  onSelectSegment,
+  previewVariantId,
+}: PlayerPaneProps) {
   const preset = ASPECT_PRESETS[project.aspect]
   const totalSec = project.segments.reduce((sum, s) => sum + s.durationSec, 0)
   const durationInFrames = Math.max(1, Math.round(totalSec * preset.fps))
@@ -105,12 +116,15 @@ export function PlayerPane({ project, selectedSegmentId, onSelectSegment }: Play
   }
 
   return (
-    <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-black/40 p-4">
+    <div className="flex w-full flex-col items-center gap-3">
       <div className="w-full max-w-[420px]">
         <Player
           ref={playerRef}
           component={NewsTokComposition}
-          inputProps={{ storyboard: playerProject }}
+          inputProps={{
+            storyboard: playerProject,
+            variantId: previewVariantId ?? undefined,
+          }}
           durationInFrames={durationInFrames}
           fps={preset.fps}
           compositionWidth={preset.width}

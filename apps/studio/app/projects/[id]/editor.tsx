@@ -16,6 +16,8 @@ import {
   PlayCircle,
   RefreshCw,
   Save,
+  Type,
+  Volume2,
 } from 'lucide-react'
 import {
   DEFAULT_VOICES,
@@ -23,10 +25,13 @@ import {
   type Project,
   type Segment,
 } from '@news-tok/shared/schema'
+import { findTextStyle } from '@news-tok/shared/text-styles'
 import { PlayerPane } from '@/components/studio/player-pane'
+import { VariantsPanel } from '@/components/studio/variants-panel'
 import { VoicePicker } from '@/components/studio/voice-picker'
 import { ImagePicker } from '@/components/studio/image-picker'
 import { MusicPicker } from '@/components/studio/music-picker'
+import { StylePicker } from '@/components/studio/style-picker'
 import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -55,6 +60,12 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   const [renderProgress, setRenderProgress] = useState(0)
   const [renderError, setRenderError] = useState<string | null>(null)
   const [lastSavedSig, setLastSavedSig] = useState<string>(() => projectSignature(initial))
+  /** Which variant the in-browser preview is showing (null = default). */
+  const [previewVariantId, setPreviewVariantId] = useState<string | null>(null)
+  /** Which variant is currently rendering, if any. */
+  const [renderingVariantId, setRenderingVariantId] = useState<string | null>(null)
+  /** variantId → output mp4 absolute path from the latest render. */
+  const [outputsByVariant, setOutputsByVariant] = useState<Record<string, string>>({})
 
   const currentSig = useMemo(() => projectSignature(project), [project])
   const isDirty = currentSig !== lastSavedSig
@@ -75,6 +86,33 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   const updateProject = useCallback((patch: Partial<Project>) => {
     setProject((p) => ({ ...p, ...patch, updatedAt: new Date().toISOString() }))
   }, [])
+
+  /**
+   * Apply a textStyleId to a single segment, every segment in the project, or
+   * every segment of a given scene kind. Called from the style picker dialog.
+   */
+  const applyStyle = useCallback(
+    (input: {
+      styleId: string
+      scope: 'segment' | 'all' | 'sceneKind'
+      segmentId: string
+      sceneKind?: string
+    }) => {
+      setProject((p) => {
+        const next = p.segments.map((s) => {
+          if (input.scope === 'segment') {
+            return s.id === input.segmentId ? { ...s, textStyleId: input.styleId } : s
+          }
+          if (input.scope === 'sceneKind') {
+            return s.scene === input.sceneKind ? { ...s, textStyleId: input.styleId } : s
+          }
+          return { ...s, textStyleId: input.styleId }
+        })
+        return { ...p, segments: next, updatedAt: new Date().toISOString() }
+      })
+    },
+    []
+  )
 
   const save = useCallback(async () => {
     setSaveStatus('saving')
@@ -100,23 +138,30 @@ export function ProjectEditor({ initial }: { initial: Project }) {
     }
   }, [project])
 
-  const triggerRender = useCallback(async () => {
-    setRenderStatus('running')
-    setRenderProgress(0)
-    setRenderError(null)
-    try {
-      const res = await fetch(`/api/projects/${project.id}/render?scope=full`, {
-        method: 'POST',
-      })
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(body.error ?? `HTTP ${res.status}`)
+  const triggerRender = useCallback(
+    async (variant?: string) => {
+      setRenderStatus('running')
+      setRenderProgress(0)
+      setRenderError(null)
+      setRenderingVariantId(variant && variant !== 'all' ? variant : null)
+      try {
+        const qs = new URLSearchParams({ scope: 'full' })
+        if (variant) qs.set('variant', variant)
+        const res = await fetch(`/api/projects/${project.id}/render?${qs}`, {
+          method: 'POST',
+        })
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+      } catch (err) {
+        setRenderStatus('failed')
+        setRenderError(err instanceof Error ? err.message : String(err))
+        setRenderingVariantId(null)
       }
-    } catch (err) {
-      setRenderStatus('failed')
-      setRenderError(err instanceof Error ? err.message : String(err))
-    }
-  }, [project.id])
+    },
+    [project.id]
+  )
 
   useEffect(() => {
     if (!isDirty) return
@@ -140,14 +185,32 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           status: RenderStatus
           progress: number
           error?: string
+          outputPath?: string
+          outputPaths?: string[]
         }
         setRenderProgress(job.progress)
         if (job.status === 'completed') {
           setRenderStatus('completed')
+          // Map outputPaths back onto variant ids by parsing the file name.
+          // The render pipeline writes `output-<variantId>.mp4`; legacy
+          // single-renders write `output.mp4` which we file under '*'.
+          if (job.outputPaths && job.outputPaths.length > 0) {
+            setOutputsByVariant((prev) => {
+              const next = { ...prev }
+              for (const p of job.outputPaths!) {
+                const match = /output-([A-Za-z0-9_-]+)\.mp4$/.exec(p)
+                if (match) next[match[1]!] = p
+                else next['*'] = p
+              }
+              return next
+            })
+          }
+          setRenderingVariantId(null)
           setTimeout(() => setRenderStatus('idle'), 3000)
         } else if (job.status === 'failed') {
           setRenderStatus('failed')
           setRenderError(job.error ?? 'render failed')
+          setRenderingVariantId(null)
         }
       } catch {
         // Network blip — try again on next tick.
@@ -225,6 +288,28 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               </Button>
             }
           />
+          <label
+            className="inline-flex items-center gap-1.5 rounded-md border border-input bg-transparent px-2 text-xs font-medium"
+            title={`Master volume for text-transition SFX (current: ${Math.round((project.sfxVolume ?? 0.7) * 100)}%)`}
+          >
+            <Volume2 className="size-3" />
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={5}
+              value={Math.round((project.sfxVolume ?? 0.7) * 100)}
+              onChange={(e) => {
+                const v = Number.parseInt(e.target.value, 10) / 100
+                if (Number.isFinite(v)) updateProject({ sfxVolume: v })
+              }}
+              className="h-8 w-20 cursor-pointer accent-primary"
+              aria-label="SFX master volume"
+            />
+            <span className="tabular-nums text-muted-foreground">
+              {Math.round((project.sfxVolume ?? 0.7) * 100)}
+            </span>
+          </label>
           <Button
             variant={isDirty ? 'default' : 'outline'}
             size="sm"
@@ -256,23 +341,67 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   ? 'Save*'
                   : 'Saved'}
           </Button>
-          <Button
-            size="sm"
-            onClick={triggerRender}
-            disabled={renderStatus === 'running' || project.segments.length === 0}
-          >
-            {renderStatus === 'running' ? (
-              <>
-                <Loader2 className="animate-spin" />
-                Rendering… {Math.round(renderProgress * 100)}%
-              </>
-            ) : (
-              <>
-                <PlayCircle />
-                Render full
-              </>
-            )}
-          </Button>
+          {project.variants && project.variants.length > 0 ? (
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                onClick={() => triggerRender('all')}
+                disabled={renderStatus === 'running' || project.segments.length === 0}
+                title="Render every declared variant to output-<id>.mp4"
+              >
+                {renderStatus === 'running' && renderingVariantId == null ? (
+                  <>
+                    <Loader2 className="animate-spin" />
+                    All… {Math.round(renderProgress * 100)}%
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle />
+                    Render all
+                  </>
+                )}
+              </Button>
+              <select
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v) triggerRender(v)
+                  e.currentTarget.value = ''
+                }}
+                disabled={renderStatus === 'running' || project.segments.length === 0}
+                className="h-8 rounded-md border border-input bg-transparent px-2 text-xs font-medium [color-scheme:dark]"
+                aria-label="Render single variant"
+                title="Render one variant"
+              >
+                <option value="" className="bg-background text-foreground">
+                  Render one…
+                </option>
+                {project.variants.map((v) => (
+                  <option key={v.id} value={v.id} className="bg-background text-foreground">
+                    {v.id} · {v.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => triggerRender()}
+              disabled={renderStatus === 'running' || project.segments.length === 0}
+            >
+              {renderStatus === 'running' ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Rendering… {Math.round(renderProgress * 100)}%
+                </>
+              ) : (
+                <>
+                  <PlayCircle />
+                  Render full
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </header>
 
@@ -345,11 +474,22 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </aside>
 
         <section className="min-h-0 overflow-hidden">
-          <PlayerPane
-            project={project}
-            selectedSegmentId={selectedId}
-            onSelectSegment={setSelectedId}
-          />
+          <div className="flex h-full w-full flex-col items-center gap-3 overflow-y-auto bg-black/40 p-4">
+            <PlayerPane
+              project={project}
+              selectedSegmentId={selectedId}
+              onSelectSegment={setSelectedId}
+              previewVariantId={previewVariantId}
+            />
+            <VariantsPanel
+              project={project}
+              activeVariantId={previewVariantId}
+              onSelectVariant={setPreviewVariantId}
+              onRenderVariant={(variantId) => triggerRender(variantId)}
+              renderingVariantId={renderingVariantId}
+              outputs={outputsByVariant}
+            />
+          </div>
         </section>
 
         <aside className="overflow-y-auto border-l p-4">
@@ -359,6 +499,9 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               language={project.language}
               aspect={project.aspect}
               onChange={(patch) => updateSegment(selected.id, patch)}
+              onApplyStyle={(args) =>
+                applyStyle({ ...args, segmentId: selected.id, sceneKind: String(selected.scene) })
+              }
             />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -376,11 +519,13 @@ function SegmentEditor({
   language,
   aspect,
   onChange,
+  onApplyStyle,
 }: {
   segment: Segment
   language: Project['language']
   aspect: Project['aspect']
   onChange: (patch: Partial<Segment>) => void
+  onApplyStyle: (input: { styleId: string; scope: 'segment' | 'all' | 'sceneKind' }) => void
 }) {
   const [synthStatus, setSynthStatus] = useState<'idle' | 'running' | 'error'>('idle')
   const [synthError, setSynthError] = useState<string | null>(null)
@@ -420,6 +565,13 @@ function SegmentEditor({
       setSynthError(err instanceof Error ? err.message : String(err))
     }
   }
+
+  // Resolve the text style currently applied to this segment so the
+  // inspector can show which SFX cues will play. Empty textStyleId =
+  // segment inherits from the active variant's mapping at render time;
+  // we can't preview that here without picking a variant, so we just
+  // show the literal style id.
+  const resolvedStyle = findTextStyle(segment.textStyleId, [])
 
   return (
     <div className="space-y-4">
@@ -522,6 +674,63 @@ function SegmentEditor({
             if (Number.isFinite(v)) onChange({ voice: { ...segment.voice, speed: v } })
           }}
         />
+      </div>
+
+      <div>
+        <Label>Text style</Label>
+        <div className="mt-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <code className="flex-1 truncate rounded-md border bg-muted px-2 py-1.5 font-mono text-xs">
+              {segment.textStyleId ?? 'inherited from variant'}
+            </code>
+            <StylePicker
+              currentStyleId={segment.textStyleId}
+              sampleText={segment.text || 'Aa'}
+              sceneKind={String(segment.scene)}
+              onApply={onApplyStyle}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Type />
+                  Change
+                </Button>
+              }
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Leaving this empty lets the variant default for {String(segment.scene)} segments win.
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <Label>Sound effect</Label>
+        {resolvedStyle?.sfx ? (
+          <div className="mt-1 space-y-1 rounded-md border bg-muted/40 px-2 py-1.5 text-xs">
+            {resolvedStyle.sfx.enterSoundId ? (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Enter</span>
+                <code className="font-mono">{resolvedStyle.sfx.enterSoundId}</code>
+              </div>
+            ) : (
+              <div className="text-muted-foreground">No enter cue</div>
+            )}
+            {resolvedStyle.sfx.perWordSoundId ? (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Per word</span>
+                <code className="font-mono">{resolvedStyle.sfx.perWordSoundId}</code>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {segment.textStyleId
+              ? 'This style has no SFX cues.'
+              : 'SFX is set by the resolved text style — pick one above to hear cues.'}
+          </p>
+        )}
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          SFX bound to the picked style. Adjust master volume in the header.
+        </p>
       </div>
 
       <div>
