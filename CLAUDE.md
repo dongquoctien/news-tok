@@ -61,6 +61,16 @@ All MCP tools are exposed under the `mcp__news-tok__*` namespace:
 - `createProject({ source, language, aspect })` — creates `data/projects/<id>/`
   with an empty storyboard. Returns `{ projectId, path }`.
 - `listProjects()` — returns existing projects.
+- `getStoryboard({ projectId })` — returns the parsed storyboard for one
+  project. Use this before `updateStoryboard` so you mutate a copy of the
+  current shape, not a stale draft.
+- `updateStoryboard({ projectId, project })` — write a fully-formed
+  project JSON to disk. The tool validates against `ProjectSchema`,
+  strips emoji from `title` + every `segment.text`, and stretches each
+  `segment.durationSec` to fit narration + 0.4s buffer. Prefer this
+  over raw `Write` / `Edit` on `storyboard.json` so the file never
+  lands in an invalid state. Returns the persisted project plus the
+  list of duration adjustments the helper applied.
 - `extractArticle({ url })` — fetches a URL and returns clean article text.
 - `searchImage({ query, orientation?, provider? })` — returns a local cached
   image path. `provider` is one of `pexels` (default, reliable), `unsplash`
@@ -209,9 +219,18 @@ per segment.
 
 ## Common task: edit an existing segment
 
-- **Parameter change** (text, voice ID, duration, swap image): Read
-  `storyboard.json`, Edit the relevant segment, then call
-  `renderSegment({ projectId, segmentId })`.
+Prefer MCP tools over raw `Read+Edit+Write` on `storyboard.json` — the
+file is validated against `ProjectSchema` on the way through, so a
+typo or missing field can't land on disk and break the renderer mid-way.
+
+- **Parameter change** (text, voice ID, duration, swap image): call
+  `getStoryboard({ projectId })`, mutate the returned project object in
+  memory (only the field you need), then call
+  `updateStoryboard({ projectId, project })`. Finally re-render with
+  `renderSegment({ projectId, segmentId })` or
+  `renderProject({ projectId })`. The update tool sanitises (strip
+  emoji, fit narration durations) before writing, so you don't need to
+  apply those manually.
 - **New visual effect or custom layout**: see "Custom scene" below.
 
 ## Custom scene
