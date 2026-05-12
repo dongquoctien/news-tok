@@ -1,5 +1,6 @@
 import type { TextStyle } from '@news-tok/shared/schema'
 import type { WordBoundary } from '@news-tok/shared/schema'
+import { resolveFontFamily } from '../../scenes/fonts.js'
 
 /**
  * Common props every text-motion primitive accepts. The primitive owns
@@ -16,7 +17,7 @@ export type TextPrimitiveProps = {
 /** Style fragment shared by every primitive: typography only. */
 export function typographyStyle(style: TextStyle, fontPx: number): React.CSSProperties {
   const css: React.CSSProperties = {
-    fontFamily: style.fontFamily,
+    fontFamily: resolveFontFamily(style.fontFamily),
     fontSize: fontPx,
     fontWeight: style.fontWeight,
     letterSpacing: style.letterSpacing,

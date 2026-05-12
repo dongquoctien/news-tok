@@ -82,6 +82,12 @@ export const TextMotionSchema = z.enum([
   'wordHighlight',
   'gradientWipe',
   'slotMachine',
+  // CSS-keyframe ports, frame-driven (Remotion-safe equivalents).
+  'blurReveal',
+  'glitch',
+  'wordReveal3d',
+  'waveBounce',
+  'maskWipe',
 ])
 export type TextMotion = z.infer<typeof TextMotionSchema>
 

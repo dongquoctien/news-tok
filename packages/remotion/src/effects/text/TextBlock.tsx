@@ -11,6 +11,11 @@ import { WordPopText } from './WordPopText.js'
 import { WordHighlightText } from './WordHighlightText.js'
 import { GradientWipeText } from './GradientWipeText.js'
 import { SlotMachineText } from './SlotMachineText.js'
+import { BlurRevealText } from './BlurRevealText.js'
+import { GlitchText } from './GlitchText.js'
+import { WordReveal3dText } from './WordReveal3dText.js'
+import { WaveBounceText } from './WaveBounceText.js'
+import { MaskWipeText } from './MaskWipeText.js'
 
 type PrimitiveProps = {
   text: string
@@ -29,6 +34,11 @@ const PRIMITIVES: Record<TextStyle['enter'], (p: PrimitiveProps) => React.JSX.El
   wordHighlight: WordHighlightText,
   gradientWipe: GradientWipeText,
   slotMachine: SlotMachineText,
+  blurReveal: BlurRevealText,
+  glitch: GlitchText,
+  wordReveal3d: WordReveal3dText,
+  waveBounce: WaveBounceText,
+  maskWipe: MaskWipeText,
 }
 
 function plateStyle(style: TextStyle, padBasePx: number): CSSProperties | null {
@@ -110,4 +120,9 @@ export {
   WordHighlightText,
   GradientWipeText,
   SlotMachineText,
+  BlurRevealText,
+  GlitchText,
+  WordReveal3dText,
+  WaveBounceText,
+  MaskWipeText,
 }
