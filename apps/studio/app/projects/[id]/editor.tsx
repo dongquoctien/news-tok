@@ -88,17 +88,39 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   }, [])
 
   /**
-   * Apply a textStyleId to a single segment, every segment in the project, or
-   * every segment of a given scene kind. Called from the style picker dialog.
+   * Apply a textStyleId. Scope decides where the override is written:
+   *
+   *   - 'segmentInVariant' — writes to variant.textStyleBySegmentId[segId],
+   *     so only this segment under this variant is affected. Other
+   *     variants previewing the same segment keep their own look.
+   *   - 'segment'          — writes to segment.textStyleId, applies across
+   *                          every variant for this segment.
+   *   - 'sceneKind'        — writes to segment.textStyleId for every
+   *                          segment with the same scene kind.
+   *   - 'all'              — writes to segment.textStyleId for every segment.
    */
   const applyStyle = useCallback(
     (input: {
       styleId: string
-      scope: 'segment' | 'all' | 'sceneKind'
+      scope: 'segmentInVariant' | 'segment' | 'sceneKind' | 'all'
       segmentId: string
       sceneKind?: string
+      variantId?: string | null
     }) => {
       setProject((p) => {
+        if (input.scope === 'segmentInVariant' && input.variantId) {
+          const variants = (p.variants ?? []).map((v) => {
+            if (v.id !== input.variantId) return v
+            return {
+              ...v,
+              textStyleBySegmentId: {
+                ...(v.textStyleBySegmentId ?? {}),
+                [input.segmentId]: input.styleId,
+              },
+            }
+          })
+          return { ...p, variants, updatedAt: new Date().toISOString() }
+        }
         const next = p.segments.map((s) => {
           if (input.scope === 'segment') {
             return s.id === input.segmentId ? { ...s, textStyleId: input.styleId } : s
@@ -106,7 +128,10 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           if (input.scope === 'sceneKind') {
             return s.scene === input.sceneKind ? { ...s, textStyleId: input.styleId } : s
           }
-          return { ...s, textStyleId: input.styleId }
+          if (input.scope === 'all') {
+            return { ...s, textStyleId: input.styleId }
+          }
+          return s
         })
         return { ...p, segments: next, updatedAt: new Date().toISOString() }
       })
@@ -498,9 +523,16 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               segment={selected}
               language={project.language}
               aspect={project.aspect}
+              activeVariantId={previewVariantId}
+              variants={project.variants ?? []}
               onChange={(patch) => updateSegment(selected.id, patch)}
               onApplyStyle={(args) =>
-                applyStyle({ ...args, segmentId: selected.id, sceneKind: String(selected.scene) })
+                applyStyle({
+                  ...args,
+                  segmentId: selected.id,
+                  sceneKind: String(selected.scene),
+                  variantId: previewVariantId,
+                })
               }
             />
           ) : (
@@ -518,14 +550,21 @@ function SegmentEditor({
   segment,
   language,
   aspect,
+  activeVariantId,
+  variants,
   onChange,
   onApplyStyle,
 }: {
   segment: Segment
   language: Project['language']
   aspect: Project['aspect']
+  activeVariantId: string | null
+  variants: Project['variants']
   onChange: (patch: Partial<Segment>) => void
-  onApplyStyle: (input: { styleId: string; scope: 'segment' | 'all' | 'sceneKind' }) => void
+  onApplyStyle: (input: {
+    styleId: string
+    scope: 'segmentInVariant' | 'segment' | 'sceneKind' | 'all'
+  }) => void
 }) {
   const [synthStatus, setSynthStatus] = useState<'idle' | 'running' | 'error'>('idle')
   const [synthError, setSynthError] = useState<string | null>(null)
@@ -566,12 +605,27 @@ function SegmentEditor({
     }
   }
 
-  // Resolve the text style currently applied to this segment so the
-  // inspector can show which SFX cues will play. Empty textStyleId =
-  // segment inherits from the active variant's mapping at render time;
-  // we can't preview that here without picking a variant, so we just
-  // show the literal style id.
-  const resolvedStyle = findTextStyle(segment.textStyleId, [])
+  // Resolve the text style currently applied to this segment using the
+  // same priority the renderer uses:
+  //   variant.textStyleBySegmentId[segId]
+  //   → segment.textStyleId
+  //   → variant.textStyleBySceneKind[scene]
+  //   → none (renderer falls back to 'classic')
+  const activeVariant = variants?.find((v) => v.id === activeVariantId)
+  const perVariantStyleId = activeVariant?.textStyleBySegmentId?.[segment.id]
+  const variantSceneStyleId = activeVariant?.textStyleBySceneKind?.[String(segment.scene)]
+  const resolvedStyleId =
+    perVariantStyleId ?? segment.textStyleId ?? variantSceneStyleId ?? undefined
+  const resolvedStyle = findTextStyle(resolvedStyleId, [])
+  // Whether the currently-applied style is variant-specific (vs. global).
+  const styleScope: 'variant' | 'segment' | 'sceneKind' | 'default' =
+    perVariantStyleId
+      ? 'variant'
+      : segment.textStyleId
+        ? 'segment'
+        : variantSceneStyleId
+          ? 'sceneKind'
+          : 'default'
 
   return (
     <div className="space-y-4">
@@ -681,12 +735,13 @@ function SegmentEditor({
         <div className="mt-1 space-y-2">
           <div className="flex items-center gap-2">
             <code className="flex-1 truncate rounded-md border bg-muted px-2 py-1.5 font-mono text-xs">
-              {segment.textStyleId ?? 'inherited from variant'}
+              {resolvedStyleId ?? 'inherited from variant'}
             </code>
             <StylePicker
-              currentStyleId={segment.textStyleId}
+              currentStyleId={resolvedStyleId}
               sampleText={segment.text || 'Aa'}
               sceneKind={String(segment.scene)}
+              activeVariantId={activeVariantId}
               onApply={onApplyStyle}
               trigger={
                 <Button variant="outline" size="sm">
@@ -697,7 +752,13 @@ function SegmentEditor({
             />
           </div>
           <p className="text-[10px] text-muted-foreground">
-            Leaving this empty lets the variant default for {String(segment.scene)} segments win.
+            {styleScope === 'variant'
+              ? `Pinned in variant ${activeVariantId} only. Other variants render this segment with their own style.`
+              : styleScope === 'segment'
+                ? 'Pinned on this segment across every variant.'
+                : styleScope === 'sceneKind'
+                  ? `Inherited from variant ${activeVariantId ?? '(default)'} for ${String(segment.scene)}.`
+                  : `No override — variant default for ${String(segment.scene)} segments wins.`}
           </p>
         </div>
       </div>

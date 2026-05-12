@@ -54,14 +54,22 @@ const FALLBACK_STYLE: TextStyle =
 
 /**
  * Resolve which text style applies to a segment under the active variant.
- * Priority: segment.textStyleId → variant.textStyleBySceneKind[scene]
- * → DEFAULT_TEXT_STYLE_ID.
+ * Priority (most specific wins):
+ *   1. variant.textStyleBySegmentId[segment.id] — per-variant per-segment override
+ *   2. segment.textStyleId — project-wide segment override
+ *   3. variant.textStyleBySceneKind[scene] — variant default for this scene kind
+ *   4. DEFAULT_TEXT_STYLE_ID
  */
 function resolveStyle(
   segment: Segment,
   variant: Variant | undefined,
   userStyles: TextStyle[]
 ): TextStyle {
+  if (variant) {
+    const perSegmentId = variant.textStyleBySegmentId?.[segment.id]
+    const perSegment = findTextStyle(perSegmentId, userStyles)
+    if (perSegment) return perSegment
+  }
   const direct = findTextStyle(segment.textStyleId, userStyles)
   if (direct) return direct
   if (variant) {
