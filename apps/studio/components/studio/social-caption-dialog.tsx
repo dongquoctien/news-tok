@@ -83,7 +83,10 @@ function CaptionCard({
   }
 
   return (
-    <div className="rounded-md border bg-secondary/20 p-3">
+    <div className="flex h-full flex-col rounded-md border bg-secondary/20 p-3">
+      {/* Header row: platform badge left, Copy button right.
+          Char count moved to its own line below to avoid the three-element
+          squeeze that wraps the count vertically in narrow columns. */}
       <div className="flex items-center justify-between gap-2">
         <span
           className={cn(
@@ -93,40 +96,45 @@ function CaptionCard({
         >
           {meta.label}
         </span>
-        <div className="flex items-center gap-2">
-          <span
-            className={cn(
-              'text-[10px] tabular-nums',
-              overBudget
-                ? 'text-destructive'
-                : overTarget
-                  ? 'text-amber-400'
-                  : 'text-muted-foreground'
-            )}
-            title={
-              overBudget
-                ? `Vượt budget ${meta.charBudget} chars — platform sẽ cắt`
-                : overTarget
-                  ? `Vượt sweet spot ${meta.targetMax} chars — caption sẽ kém hiệu quả`
-                  : `Sweet spot ≤ ${meta.targetMax} chars`
-            }
-          >
-            {charCount} / {meta.targetMax}
-            {overTarget ? ' ⚠' : ''}
-          </span>
-          <Button size="sm" variant={copied ? 'default' : 'outline'} onClick={onCopy}>
-            {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-            {copied ? 'Copied' : 'Copy'}
-          </Button>
-        </div>
+        <Button size="sm" variant={copied ? 'default' : 'outline'} onClick={onCopy}>
+          {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
+          {copied ? 'Copied' : 'Copy'}
+        </Button>
       </div>
+
+      {/* Char count + sweet-spot indicator on its own line. */}
+      <div
+        className={cn(
+          'mt-2 flex items-center justify-between gap-2 text-[10px] tabular-nums',
+          overBudget
+            ? 'text-destructive'
+            : overTarget
+              ? 'text-amber-400'
+              : 'text-muted-foreground'
+        )}
+        title={
+          overBudget
+            ? `Vượt budget ${meta.charBudget} chars — platform sẽ cắt`
+            : overTarget
+              ? `Vượt sweet spot ${meta.targetMax} chars — caption sẽ kém hiệu quả`
+              : `Sweet spot ≤ ${meta.targetMax} chars`
+        }
+      >
+        <span>
+          {charCount} / {meta.targetMax} chars{overTarget ? ' ⚠' : ''}
+        </span>
+        <span className="text-muted-foreground/70">sweet spot</span>
+      </div>
+
       <Textarea
         readOnly
         value={text}
-        className="mt-2 min-h-[180px] resize-y font-mono text-xs leading-relaxed"
+        className="mt-2 min-h-[200px] flex-1 resize-y font-mono text-xs leading-relaxed"
         onFocus={(e) => e.currentTarget.select()}
       />
-      <p className="mt-1 text-[10px] text-muted-foreground">{meta.tip}</p>
+      <p className="mt-2 text-[10px] leading-snug text-muted-foreground/80">
+        {meta.tip}
+      </p>
     </div>
   )
 }
@@ -182,7 +190,7 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-5xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="size-5" />
@@ -211,33 +219,41 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
               const m = PLATFORMS[c.platform]
               return c.charCount > m.targetMax
             }) ? (
-              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
-                <Sparkles className="mt-0.5 size-4 shrink-0" />
-                <div>
-                  <strong>Baseline đang hơi dài.</strong> Caption template
-                  liệt kê thẳng từ storyboard — có thể vượt sweet spot mỗi
-                  platform.{' '}
-                  <span className="text-amber-300/80">
-                    Quay lại Claude CLI và yêu cầu "cải thiện caption ngắn
-                    gọn hơn" — orchestrator sẽ rewrite theo style từng
-                    platform (xem CLAUDE.md §"prep video for social
-                    upload").
-                  </span>
-                </div>
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+                <Sparkles className="mt-0.5 size-3.5 shrink-0" />
+                <p className="leading-relaxed">
+                  Baseline hơi dài. Quay lại Claude CLI và yêu cầu{' '}
+                  <em className="not-italic font-medium text-amber-100">
+                    "cải thiện caption ngắn gọn hơn"
+                  </em>{' '}
+                  — orchestrator sẽ rewrite theo style từng platform.
+                </p>
               </div>
             ) : null}
 
-            <div className="flex flex-wrap items-center gap-2 rounded-md border bg-secondary/20 p-3">
-              <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                Topic
-              </span>
-              <code className="rounded bg-secondary px-2 py-0.5 text-xs font-mono">
-                {data.topic}
-              </code>
-              <span className="ml-2 text-xs uppercase tracking-wide text-muted-foreground">
-                Hashtags
-              </span>
-              <div className="flex flex-1 flex-wrap items-center gap-1">
+            {/* Topic + hashtag metadata block — stacked vertically so the
+                12 chips can wrap without crushing the Copy button. */}
+            <div className="space-y-2 rounded-md border bg-secondary/20 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Topic
+                  </span>
+                  <code className="rounded bg-secondary px-2 py-0.5 text-xs font-mono">
+                    {data.topic}
+                  </code>
+                </div>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={copyHashtags}
+                  className="shrink-0"
+                >
+                  <Copy className="size-3.5" />
+                  Copy hashtags
+                </Button>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
                 {data.hashtags.map((h) => (
                   <span
                     key={h}
@@ -247,12 +263,8 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
                   </span>
                 ))}
               </div>
-              <Button size="sm" variant="outline" onClick={copyHashtags}>
-                <Copy className="size-3.5" />
-                Copy hashtags
-              </Button>
             </div>
-            <div className="grid max-h-[60vh] grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-3">
+            <div className="grid auto-rows-fr grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-3">
               {data.captions.map((c) => (
                 <CaptionCard
                   key={c.platform}
