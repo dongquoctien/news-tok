@@ -25,6 +25,7 @@ import {
   type Segment,
 } from '@news-tok/shared/schema'
 import { PlayerPane } from '@/components/studio/player-pane'
+import { VariantsPanel } from '@/components/studio/variants-panel'
 import { VoicePicker } from '@/components/studio/voice-picker'
 import { ImagePicker } from '@/components/studio/image-picker'
 import { MusicPicker } from '@/components/studio/music-picker'
@@ -57,6 +58,12 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   const [renderProgress, setRenderProgress] = useState(0)
   const [renderError, setRenderError] = useState<string | null>(null)
   const [lastSavedSig, setLastSavedSig] = useState<string>(() => projectSignature(initial))
+  /** Which variant the in-browser preview is showing (null = default). */
+  const [previewVariantId, setPreviewVariantId] = useState<string | null>(null)
+  /** Which variant is currently rendering, if any. */
+  const [renderingVariantId, setRenderingVariantId] = useState<string | null>(null)
+  /** variantId → output mp4 absolute path from the latest render. */
+  const [outputsByVariant, setOutputsByVariant] = useState<Record<string, string>>({})
 
   const currentSig = useMemo(() => projectSignature(project), [project])
   const isDirty = currentSig !== lastSavedSig
@@ -129,23 +136,30 @@ export function ProjectEditor({ initial }: { initial: Project }) {
     }
   }, [project])
 
-  const triggerRender = useCallback(async () => {
-    setRenderStatus('running')
-    setRenderProgress(0)
-    setRenderError(null)
-    try {
-      const res = await fetch(`/api/projects/${project.id}/render?scope=full`, {
-        method: 'POST',
-      })
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(body.error ?? `HTTP ${res.status}`)
+  const triggerRender = useCallback(
+    async (variant?: string) => {
+      setRenderStatus('running')
+      setRenderProgress(0)
+      setRenderError(null)
+      setRenderingVariantId(variant && variant !== 'all' ? variant : null)
+      try {
+        const qs = new URLSearchParams({ scope: 'full' })
+        if (variant) qs.set('variant', variant)
+        const res = await fetch(`/api/projects/${project.id}/render?${qs}`, {
+          method: 'POST',
+        })
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+      } catch (err) {
+        setRenderStatus('failed')
+        setRenderError(err instanceof Error ? err.message : String(err))
+        setRenderingVariantId(null)
       }
-    } catch (err) {
-      setRenderStatus('failed')
-      setRenderError(err instanceof Error ? err.message : String(err))
-    }
-  }, [project.id])
+    },
+    [project.id]
+  )
 
   useEffect(() => {
     if (!isDirty) return
@@ -169,14 +183,32 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           status: RenderStatus
           progress: number
           error?: string
+          outputPath?: string
+          outputPaths?: string[]
         }
         setRenderProgress(job.progress)
         if (job.status === 'completed') {
           setRenderStatus('completed')
+          // Map outputPaths back onto variant ids by parsing the file name.
+          // The render pipeline writes `output-<variantId>.mp4`; legacy
+          // single-renders write `output.mp4` which we file under '*'.
+          if (job.outputPaths && job.outputPaths.length > 0) {
+            setOutputsByVariant((prev) => {
+              const next = { ...prev }
+              for (const p of job.outputPaths!) {
+                const match = /output-([A-Za-z0-9_-]+)\.mp4$/.exec(p)
+                if (match) next[match[1]!] = p
+                else next['*'] = p
+              }
+              return next
+            })
+          }
+          setRenderingVariantId(null)
           setTimeout(() => setRenderStatus('idle'), 3000)
         } else if (job.status === 'failed') {
           setRenderStatus('failed')
           setRenderError(job.error ?? 'render failed')
+          setRenderingVariantId(null)
         }
       } catch {
         // Network blip — try again on next tick.
@@ -285,23 +317,67 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   ? 'Save*'
                   : 'Saved'}
           </Button>
-          <Button
-            size="sm"
-            onClick={triggerRender}
-            disabled={renderStatus === 'running' || project.segments.length === 0}
-          >
-            {renderStatus === 'running' ? (
-              <>
-                <Loader2 className="animate-spin" />
-                Rendering… {Math.round(renderProgress * 100)}%
-              </>
-            ) : (
-              <>
-                <PlayCircle />
-                Render full
-              </>
-            )}
-          </Button>
+          {project.variants && project.variants.length > 0 ? (
+            <div className="flex items-center gap-1">
+              <Button
+                size="sm"
+                onClick={() => triggerRender('all')}
+                disabled={renderStatus === 'running' || project.segments.length === 0}
+                title="Render every declared variant to output-<id>.mp4"
+              >
+                {renderStatus === 'running' && renderingVariantId == null ? (
+                  <>
+                    <Loader2 className="animate-spin" />
+                    All… {Math.round(renderProgress * 100)}%
+                  </>
+                ) : (
+                  <>
+                    <PlayCircle />
+                    Render all
+                  </>
+                )}
+              </Button>
+              <select
+                value=""
+                onChange={(e) => {
+                  const v = e.target.value
+                  if (v) triggerRender(v)
+                  e.currentTarget.value = ''
+                }}
+                disabled={renderStatus === 'running' || project.segments.length === 0}
+                className="h-8 rounded-md border border-input bg-transparent px-2 text-xs font-medium [color-scheme:dark]"
+                aria-label="Render single variant"
+                title="Render one variant"
+              >
+                <option value="" className="bg-background text-foreground">
+                  Render one…
+                </option>
+                {project.variants.map((v) => (
+                  <option key={v.id} value={v.id} className="bg-background text-foreground">
+                    {v.id} · {v.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <Button
+              size="sm"
+              onClick={() => triggerRender()}
+              disabled={renderStatus === 'running' || project.segments.length === 0}
+            >
+              {renderStatus === 'running' ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Rendering… {Math.round(renderProgress * 100)}%
+                </>
+              ) : (
+                <>
+                  <PlayCircle />
+                  Render full
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </header>
 
@@ -374,11 +450,22 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </aside>
 
         <section className="min-h-0 overflow-hidden">
-          <PlayerPane
-            project={project}
-            selectedSegmentId={selectedId}
-            onSelectSegment={setSelectedId}
-          />
+          <div className="flex h-full w-full flex-col items-center gap-3 overflow-y-auto bg-black/40 p-4">
+            <PlayerPane
+              project={project}
+              selectedSegmentId={selectedId}
+              onSelectSegment={setSelectedId}
+              previewVariantId={previewVariantId}
+            />
+            <VariantsPanel
+              project={project}
+              activeVariantId={previewVariantId}
+              onSelectVariant={setPreviewVariantId}
+              onRenderVariant={(variantId) => triggerRender(variantId)}
+              renderingVariantId={renderingVariantId}
+              outputs={outputsByVariant}
+            />
+          </div>
         </section>
 
         <aside className="overflow-y-auto border-l p-4">
