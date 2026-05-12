@@ -100,18 +100,23 @@ function ChannelRow({
   const meta = CHANNEL_META[channel]
   const enabled = value !== undefined
   return (
-    <div className="rounded-md border bg-secondary/20 p-3">
+    <div className="flex h-full flex-col rounded-md border bg-secondary/20 p-3">
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <Label className="text-sm">{meta.label}</Label>
-          <p className="mt-0.5 text-[10px] text-muted-foreground">{meta.hint}</p>
+          {/* min-h pins the hint block to two lines so the action below
+              lands at the same y across all four channel cards, even
+              when one hint is shorter than the others. */}
+          <p className="mt-0.5 min-h-[2.5rem] text-[10px] leading-snug text-muted-foreground">
+            {meta.hint}
+          </p>
         </div>
         {enabled ? (
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="size-6"
+            className="size-6 shrink-0"
             onClick={() => onChange(undefined)}
             title="Reset to style default"
           >
@@ -152,7 +157,10 @@ function ChannelRow({
           type="button"
           variant="outline"
           size="sm"
-          className="mt-2 w-full"
+          // mt-auto pushes the action to the bottom of the flex column
+          // so disabled-state cards align with whatever's below in the
+          // active-state cards (swatch grid + hex input).
+          className="mt-auto w-full"
           onClick={() => onChange(SWATCHES[0]!.hex)}
         >
           Override this channel
@@ -227,7 +235,7 @@ export function ColorPicker({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid auto-rows-fr grid-cols-2 gap-3">
           {(['primary', 'accent', 'stroke', 'idle'] as const).map((c) => (
             <ChannelRow
               key={c}
