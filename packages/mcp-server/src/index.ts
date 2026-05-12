@@ -25,11 +25,13 @@ import {
   unsplash,
 } from '@news-tok/media'
 import {
+  deleteProject as deleteProjectFiles,
   projectStoryboardPath,
   renderProjectMedia,
   renderSegmentMedia,
   writeStoryboard,
 } from '@news-tok/render'
+import { generateSocialCaptions } from '@news-tok/shared/social'
 import { createProject, listProjects } from './projects.js'
 import { researchProjectAesthetic } from './research.js'
 
@@ -184,6 +186,30 @@ async function main() {
         const final = ProjectSchema.parse(fitted)
         await writeStoryboard(projectId, final)
         return ok({ project: final, adjustments })
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'deleteProject',
+    {
+      title: 'Permanently delete a project directory',
+      description:
+        "Recursively remove data/projects/<id>/ — storyboard, scenes, per-segment mp4s, and any rendered output. This is irreversible. The caller must pass `confirm: true` so a stray invocation cannot wipe out a real project; without it the tool returns an error. Use only for test or abandoned projects; for archiving prefer leaving the folder untouched.",
+      inputSchema: {
+        projectId: z.string().min(1),
+        confirm: z.literal(true).describe('Must be exactly `true` — guards against accidental deletion.'),
+      },
+    },
+    async ({ projectId, confirm }) => {
+      try {
+        if (confirm !== true) {
+          return fail(new Error('deleteProject requires `confirm: true`'))
+        }
+        await deleteProjectFiles(projectId)
+        return ok({ deleted: projectId })
       } catch (err) {
         return fail(err)
       }
@@ -388,6 +414,60 @@ async function main() {
           userStyles: userStyles as Parameters<typeof researchProjectAesthetic>[0]['userStyles'],
           proposeNewStyles,
         })
+        return ok(result)
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'generateSocialCaption',
+    {
+      title: 'Draft social-media captions + hashtags from a storyboard',
+      description:
+        "Pulls title + segment.text from data/projects/<id>/storyboard.json and produces three caption variants the user can paste straight into a social post: one tuned for TikTok (hook + 2 bullets + tight tag tail), one for Facebook (narrative with numbered keypoints + CTA), one for Instagram (emoji-led hook + arrow-bulleted keypoints + dense hashtag block). Hashtags are topic-aware: the tool auto-classifies the project via the same keyword classifier as researchProjectAesthetic (override by passing `topic`), unions a topic-specific pool with keywords extracted from the title and a few evergreen high-reach tags, deduped and capped at 12. 100% local — no LLM call.",
+      inputSchema: {
+        projectId: z.string().min(1),
+        topic: z
+          .enum([
+            'crime',
+            'finance',
+            'tech',
+            'health',
+            'sports',
+            'entertainment',
+            'lifestyle',
+            'travel',
+            'food',
+            'nature',
+            'politics',
+            'education',
+            'generic',
+          ])
+          .optional(),
+      },
+    },
+    async ({ projectId, topic }) => {
+      try {
+        const path = projectStoryboardPath(projectId)
+        if (!existsSync(path)) {
+          return fail(new Error(`No storyboard at ${path}`))
+        }
+        const raw = await readFile(path, 'utf8')
+        const parsed = ProjectSchema.safeParse(JSON.parse(raw))
+        if (!parsed.success) {
+          return fail(
+            new Error(
+              `Invalid storyboard: ${parsed.error.issues
+                .map((i) => `${i.path.join('.')}: ${i.message}`)
+                .join('; ')}`
+            )
+          )
+        }
+        const project = parsed.data
+        // generateSocialCaptions auto-classifies when topic is undefined.
+        const result = generateSocialCaptions({ project, topic })
         return ok(result)
       } catch (err) {
         return fail(err)

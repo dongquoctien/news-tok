@@ -1,11 +1,19 @@
 import Link from 'next/link'
-import { FolderOpen, Terminal } from 'lucide-react'
+import { Clapperboard, FolderOpen, Terminal } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 export default function HomePage() {
   return (
     <main className="flex min-h-screen flex-col items-center justify-center gap-8 p-12 text-center">
-      <h1 className="text-4xl font-semibold tracking-tight">news-tok Studio</h1>
+      <h1 className="flex items-center justify-center gap-3 text-5xl font-semibold tracking-tight">
+        <Clapperboard
+          aria-hidden
+          className="news-tok-brand-icon size-12 text-primary"
+          strokeWidth={2.25}
+        />
+        <span className="news-tok-brand">news-tok</span>
+        <span className="text-foreground/80">Studio</span>
+      </h1>
       <p className="max-w-xl text-muted-foreground">
         Local editor for short video projects. Projects are created via the Claude CLI from your
         terminal, then opened here to preview and fine-tune.

@@ -102,3 +102,63 @@ body {
 *::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* Home page brand wordmark — animated primary-colored gradient with a
+   soft glow halo. Respects prefers-reduced-motion. */
+.news-tok-brand {
+  position: relative;
+  display: inline-block;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  background-image: linear-gradient(
+    100deg,
+    var(--primary) 0%,
+    oklch(0.78 0.18 310) 35%,
+    var(--primary) 65%,
+    oklch(0.72 0.2 260) 100%
+  );
+  background-size: 220% 100%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 18px oklch(0.65 0.18 280 / 0.45));
+  animation: news-tok-shimmer 6s ease-in-out infinite;
+}
+
+@keyframes news-tok-shimmer {
+  0%,
+  100% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+}
+
+.news-tok-brand-icon {
+  filter: drop-shadow(0 0 14px oklch(0.65 0.18 280 / 0.55));
+  transform-origin: 30% 70%;
+  animation: news-tok-clap 5s ease-in-out infinite;
+}
+
+@keyframes news-tok-clap {
+  0%,
+  88%,
+  100% {
+    transform: rotate(0deg);
+  }
+  92% {
+    transform: rotate(-12deg);
+  }
+  96% {
+    transform: rotate(2deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .news-tok-brand,
+  .news-tok-brand-icon {
+    animation: none;
+  }
+}

@@ -71,6 +71,18 @@ All MCP tools are exposed under the `mcp__news-tok__*` namespace:
   over raw `Write` / `Edit` on `storyboard.json` so the file never
   lands in an invalid state. Returns the persisted project plus the
   list of duration adjustments the helper applied.
+- `deleteProject({ projectId, confirm: true })` — irreversibly removes
+  `data/projects/<id>/` (storyboard, scenes, segment mp4s, rendered
+  output). The `confirm: true` literal is required so a stray call
+  cannot wipe out a real project. Use only for test or abandoned
+  projects.
+- `generateSocialCaption({ projectId, topic? })` — draft three
+  ready-to-paste captions (TikTok / Facebook / Instagram) plus a
+  topic-aware hashtag block from the project storyboard. Topic is
+  auto-classified by the same keyword rule as
+  `researchProjectAesthetic`; pass `topic` to pin it. Pure local
+  function, no LLM call. Use right after a successful render when the
+  user is about to post the video.
 - `extractArticle({ url })` — fetches a URL and returns clean article text.
 - `searchImage({ query, orientation?, provider? })` — returns a local cached
   image path. `provider` is one of `pexels` (default, reliable), `unsplash`
@@ -232,6 +244,25 @@ typo or missing field can't land on disk and break the renderer mid-way.
   emoji, fit narration durations) before writing, so you don't need to
   apply those manually.
 - **New visual effect or custom layout**: see "Custom scene" below.
+
+## Common task: prep video for social upload
+
+After `renderProject` succeeds, the user usually wants to post the mp4
+on TikTok / Facebook / Instagram. Each platform expects a different
+caption shape:
+
+1. Call `generateSocialCaption({ projectId })`. It auto-classifies the
+   topic and returns three platform variants plus a topic-aware
+   hashtag block. Override `topic` if the article straddles two
+   categories (e.g. "tech" article about a politician should be
+   `politics`).
+2. Show the user all three variants in your response so they can copy
+   whichever fits their post. Mention the character count next to each
+   — Instagram and Facebook cap captions around 2200 chars; TikTok
+   stops at 2200 too but rewards much shorter copy.
+3. The hashtag pool is intentionally trimmed to 12. If the user wants
+   more, append niche tags from their own community — don't pad the
+   tool's output with low-quality fillers.
 
 ## Custom scene
 

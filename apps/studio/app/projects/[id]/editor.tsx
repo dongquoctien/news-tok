@@ -17,6 +17,7 @@ import {
   PlayCircle,
   RefreshCw,
   Save,
+  Share2,
   Type,
   Volume2,
 } from 'lucide-react'
@@ -37,6 +38,7 @@ import { MusicPicker } from '@/components/studio/music-picker'
 import { StylePicker } from '@/components/studio/style-picker'
 import { FontPicker } from '@/components/studio/font-picker'
 import { ColorPicker } from '@/components/studio/color-picker'
+import { SocialCaptionDialog } from '@/components/studio/social-caption-dialog'
 import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -469,6 +471,20 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   ? 'Save*'
                   : 'Saved'}
           </Button>
+          <SocialCaptionDialog
+            projectId={project.id}
+            trigger={
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={project.segments.length === 0}
+                title="Tạo description + hashtag cho TikTok / Facebook / Instagram"
+              >
+                <Share2 />
+                Caption
+              </Button>
+            }
+          />
           {project.variants && project.variants.length > 0 ? (
             <div className="flex items-center gap-1">
               <Button
