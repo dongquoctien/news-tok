@@ -5,10 +5,16 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod'
 import {
   AspectSchema,
+  ColorOverrideSchema,
   LanguageSchema,
   ProjectSchema,
+  type Project,
 } from '@news-tok/shared/schema'
-import { recommendSegmentDurationSec } from '@news-tok/shared/sanitize'
+import {
+  fitSegmentDurations,
+  recommendSegmentDurationSec,
+  stripEmoji,
+} from '@news-tok/shared/sanitize'
 import {
   archive,
   crawler,
@@ -21,9 +27,12 @@ import {
   unsplash,
 } from '@news-tok/media'
 import {
+  deleteProject as deleteProjectFiles,
   projectStoryboardPath,
+  readStoryboard,
   renderProjectMedia,
   renderSegmentMedia,
+  writeStoryboard,
 } from '@news-tok/render'
 import { createProject, listProjects } from './projects.js'
 import { researchProjectAesthetic } from './research.js'
@@ -39,6 +48,46 @@ function fail(err: unknown) {
     content: [{ type: 'text' as const, text: `Error: ${msg}` }],
     isError: true,
   }
+}
+
+/**
+ * Run the same sanitisation Studio applies on PATCH: strip emoji from
+ * title + every segment.text, stretch durations to fit narration, bump
+ * updatedAt. Centralised so every mutation tool ends up with the same
+ * invariants without us repeating the chain in each handler.
+ */
+function sanitizeAndFit(project: Project): Project {
+  const stripped: Project = {
+    ...project,
+    title: stripEmoji(project.title),
+    segments: project.segments.map((s) => ({ ...s, text: stripEmoji(s.text) })),
+    updatedAt: new Date().toISOString(),
+  }
+  return fitSegmentDurations(stripped).project
+}
+
+/**
+ * Read + parse + mutate + write atomically. The mutator works on a
+ * defensively-cloned project so callers can mutate freely. Sanitisation
+ * and the schema re-parse on write guarantee no invalid storyboard
+ * lands on disk — even if a tool handler has a bug.
+ */
+async function mutateStoryboard(
+  projectId: string,
+  mutate: (p: Project) => Project | void
+): Promise<Project> {
+  const current = await readStoryboard(projectId)
+  // Deep-clone via JSON round-trip — cheap for our storyboard size and
+  // guarantees the mutator can't accidentally retain references to the
+  // on-disk shape we just read.
+  const draft = JSON.parse(JSON.stringify(current)) as Project
+  const result = mutate(draft) ?? draft
+  const next = sanitizeAndFit(result)
+  // Re-parse so the on-disk file is always schema-clean, even if the
+  // mutator introduced fields the schema would reject.
+  const parsed = ProjectSchema.parse(next)
+  await writeStoryboard(projectId, parsed)
+  return parsed
 }
 
 async function main() {
@@ -126,6 +175,220 @@ async function main() {
           )
         }
         return ok(parsed.data)
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'updateStoryboard',
+    {
+      title: 'Persist a full project storyboard',
+      description:
+        'Write a fully-formed project JSON to data/projects/<id>/storyboard.json. The tool runs Studio-equivalent sanitisation (strip emoji from title + every segment.text, stretch durations to fit narration) and validates the result against ProjectSchema before writing, so a malformed payload is rejected up front. Prefer this over raw file edits when you have the whole project in hand — applyTextStyle / applyFont / applyColor are cheaper when you only need to flip one field.',
+      inputSchema: {
+        projectId: z.string().min(1),
+        project: z.unknown(),
+      },
+    },
+    async ({ projectId, project }) => {
+      try {
+        const parsed = ProjectSchema.safeParse(project)
+        if (!parsed.success) {
+          return fail(
+            new Error(
+              `Invalid project payload: ${parsed.error.issues
+                .map((i) => `${i.path.join('.')}: ${i.message}`)
+                .join('; ')}`
+            )
+          )
+        }
+        if (parsed.data.id !== projectId) {
+          return fail(
+            new Error(`Project id mismatch: payload=${parsed.data.id} vs projectId=${projectId}`)
+          )
+        }
+        const next = await mutateStoryboard(projectId, () => parsed.data)
+        return ok({ project: next })
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'deleteProject',
+    {
+      title: 'Delete a project directory',
+      description:
+        'Recursively remove data/projects/<id>/ — storyboard, custom scenes, per-segment mp4s, and any rendered output. This action is irreversible; only call it for test or abandoned projects.',
+      inputSchema: { projectId: z.string().min(1) },
+    },
+    async ({ projectId }) => {
+      try {
+        await deleteProjectFiles(projectId)
+        return ok({ deleted: projectId })
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'applyTextStyle',
+    {
+      title: 'Apply a text style to one or many segments',
+      description:
+        'Write a textStyleId override following the same priority Studio uses. Scope decides where the override is recorded: "segmentInVariant" writes variant.textStyleBySegmentId so only one segment under one variant is affected; "segment" writes segment.textStyleId across every variant; "sceneKind" writes segment.textStyleId for every segment with the same scene kind; "all" writes it on every segment in the project. Returns the updated project.',
+      inputSchema: {
+        projectId: z.string().min(1),
+        styleId: z.string().min(1),
+        scope: z.enum(['segmentInVariant', 'segment', 'sceneKind', 'all']),
+        segmentId: z.string().optional(),
+        sceneKind: z.string().optional(),
+        variantId: z.string().optional(),
+      },
+    },
+    async ({ projectId, styleId, scope, segmentId, sceneKind, variantId }) => {
+      try {
+        if ((scope === 'segmentInVariant' || scope === 'segment') && !segmentId) {
+          return fail(new Error(`scope=${scope} requires segmentId`))
+        }
+        if (scope === 'segmentInVariant' && !variantId) {
+          return fail(new Error('scope=segmentInVariant requires variantId'))
+        }
+        if (scope === 'sceneKind' && !sceneKind) {
+          return fail(new Error('scope=sceneKind requires sceneKind'))
+        }
+        const next = await mutateStoryboard(projectId, (p) => {
+          if (scope === 'segmentInVariant') {
+            p.variants = (p.variants ?? []).map((v) => {
+              if (v.id !== variantId) return v
+              return {
+                ...v,
+                textStyleBySegmentId: {
+                  ...(v.textStyleBySegmentId ?? {}),
+                  [segmentId!]: styleId,
+                },
+              }
+            })
+            return p
+          }
+          p.segments = p.segments.map((s) => {
+            if (scope === 'segment') {
+              return s.id === segmentId ? { ...s, textStyleId: styleId } : s
+            }
+            if (scope === 'sceneKind') {
+              return s.scene === sceneKind ? { ...s, textStyleId: styleId } : s
+            }
+            return { ...s, textStyleId: styleId }
+          })
+          return p
+        })
+        return ok({ project: next })
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'applyFont',
+    {
+      title: 'Apply a font id to one or many segments',
+      description:
+        'Override the typeface independently of the text style. Scope: "segmentInVariant" writes variant.fontOverrideBySegmentId, "segment" writes segment.fontOverride, "all" writes it on every segment. The fontId must be one of ALLOWED_FONT_IDS in packages/shared/src/text-styles.ts (beVietnamPro, inter, montserrat, anton, bebasNeue, playfairDisplay, jetBrainsMono, lexend, manrope, oswald, archivoBlack, nunito).',
+      inputSchema: {
+        projectId: z.string().min(1),
+        fontId: z.string().min(1),
+        scope: z.enum(['segmentInVariant', 'segment', 'all']),
+        segmentId: z.string().optional(),
+        variantId: z.string().optional(),
+      },
+    },
+    async ({ projectId, fontId, scope, segmentId, variantId }) => {
+      try {
+        if ((scope === 'segmentInVariant' || scope === 'segment') && !segmentId) {
+          return fail(new Error(`scope=${scope} requires segmentId`))
+        }
+        if (scope === 'segmentInVariant' && !variantId) {
+          return fail(new Error('scope=segmentInVariant requires variantId'))
+        }
+        const next = await mutateStoryboard(projectId, (p) => {
+          if (scope === 'segmentInVariant') {
+            p.variants = (p.variants ?? []).map((v) => {
+              if (v.id !== variantId) return v
+              return {
+                ...v,
+                fontOverrideBySegmentId: {
+                  ...(v.fontOverrideBySegmentId ?? {}),
+                  [segmentId!]: fontId,
+                },
+              }
+            })
+            return p
+          }
+          p.segments = p.segments.map((s) => {
+            if (scope === 'segment') {
+              return s.id === segmentId ? { ...s, fontOverride: fontId } : s
+            }
+            return { ...s, fontOverride: fontId }
+          })
+          return p
+        })
+        return ok({ project: next })
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'applyColor',
+    {
+      title: 'Apply colour overrides to one or many segments',
+      description:
+        'Override one or more colour channels (primary / accent / stroke / idle) on top of the text style. Every channel is optional — skip a channel to keep the style preset value. Scope: "segmentInVariant" writes variant.colorOverrideBySegmentId, "segment" writes segment.colorOverride, "all" writes it on every segment. Each colour is a CSS string (#hex or rgba(...)).',
+      inputSchema: {
+        projectId: z.string().min(1),
+        colorOverride: ColorOverrideSchema,
+        scope: z.enum(['segmentInVariant', 'segment', 'all']),
+        segmentId: z.string().optional(),
+        variantId: z.string().optional(),
+      },
+    },
+    async ({ projectId, colorOverride, scope, segmentId, variantId }) => {
+      try {
+        if ((scope === 'segmentInVariant' || scope === 'segment') && !segmentId) {
+          return fail(new Error(`scope=${scope} requires segmentId`))
+        }
+        if (scope === 'segmentInVariant' && !variantId) {
+          return fail(new Error('scope=segmentInVariant requires variantId'))
+        }
+        const next = await mutateStoryboard(projectId, (p) => {
+          if (scope === 'segmentInVariant') {
+            p.variants = (p.variants ?? []).map((v) => {
+              if (v.id !== variantId) return v
+              return {
+                ...v,
+                colorOverrideBySegmentId: {
+                  ...(v.colorOverrideBySegmentId ?? {}),
+                  [segmentId!]: colorOverride,
+                },
+              }
+            })
+            return p
+          }
+          p.segments = p.segments.map((s) => {
+            if (scope === 'segment') {
+              return s.id === segmentId ? { ...s, colorOverride } : s
+            }
+            return { ...s, colorOverride }
+          })
+          return p
+        })
+        return ok({ project: next })
       } catch (err) {
         return fail(err)
       }

@@ -61,6 +61,34 @@ All MCP tools are exposed under the `mcp__news-tok__*` namespace:
 - `createProject({ source, language, aspect })` — creates `data/projects/<id>/`
   with an empty storyboard. Returns `{ projectId, path }`.
 - `listProjects()` — returns existing projects.
+- `getStoryboard({ projectId })` — returns the parsed storyboard.
+- `updateStoryboard({ projectId, project })` — writes a fully-formed
+  project JSON to disk. Sanitises (strips emoji + fits narration) and
+  validates against `ProjectSchema` before write. Prefer this over raw
+  `Write` on `storyboard.json` so the file never lands in an invalid
+  state.
+- `applyTextStyle({ projectId, styleId, scope, segmentId?, sceneKind?,
+  variantId? })` — flip one text style id with the same scopes Studio
+  exposes: `'segmentInVariant'` writes
+  `variant.textStyleBySegmentId[segId]` (other variants keep their look);
+  `'segment'` writes `segment.textStyleId` (every variant for this
+  segment); `'sceneKind'` writes it on every segment with the same
+  scene kind; `'all'` writes it on every segment. Returns the updated
+  project.
+- `applyFont({ projectId, fontId, scope, segmentId?, variantId? })` —
+  override the typeface independently of the text style. `fontId` must
+  be one of the 12 ALLOWED_FONT_IDS in
+  `packages/shared/src/text-styles.ts` (`beVietnamPro`, `inter`,
+  `montserrat`, `anton`, `bebasNeue`, `playfairDisplay`,
+  `jetBrainsMono`, `lexend`, `manrope`, `oswald`, `archivoBlack`,
+  `nunito`).
+- `applyColor({ projectId, colorOverride, scope, segmentId?,
+  variantId? })` — override one or more colour channels (`primary`,
+  `accent`, `stroke`, `idle`) on top of the text style. Every channel
+  is optional; skip a channel to keep the preset's value. Each colour
+  is a CSS string (`#hex` or `rgba(...)`).
+- `deleteProject({ projectId })` — irreversibly removes
+  `data/projects/<id>/`. Only call for test or abandoned projects.
 - `extractArticle({ url })` — fetches a URL and returns clean article text.
 - `searchImage({ query, orientation?, provider? })` — returns a local cached
   image path. `provider` is one of `pexels` (default, reliable), `unsplash`
@@ -209,9 +237,24 @@ per segment.
 
 ## Common task: edit an existing segment
 
-- **Parameter change** (text, voice ID, duration, swap image): Read
-  `storyboard.json`, Edit the relevant segment, then call
+Prefer MCP tools over raw `Read+Edit+Write` on `storyboard.json` —
+they validate against `ProjectSchema` and fit narration durations on
+the way through, so the file never lands in an invalid state.
+
+- **Text / voice / duration / image swap**: `getStoryboard` → mutate
+  the project object → `updateStoryboard({ projectId, project })` →
   `renderSegment({ projectId, segmentId })`.
+- **Text style change** (apply preset): `applyTextStyle({ projectId,
+  styleId, scope, segmentId?, sceneKind?, variantId? })`. Scope picks
+  whether the override pins to one segment in one variant, one segment
+  across all variants, every segment of a scene kind, or the whole
+  project.
+- **Font swap**: `applyFont({ projectId, fontId, scope, segmentId?,
+  variantId? })`. Independent of text style — lets you keep a preset
+  but try a different typeface.
+- **Colour tweak**: `applyColor({ projectId, colorOverride: { primary?,
+  accent?, stroke?, idle? }, scope, segmentId?, variantId? })`. Override
+  only the channels you want — others fall through to the text style.
 - **New visual effect or custom layout**: see "Custom scene" below.
 
 ## Custom scene
