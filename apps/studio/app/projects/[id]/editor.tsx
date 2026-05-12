@@ -16,6 +16,7 @@ import {
   PlayCircle,
   RefreshCw,
   Save,
+  Type,
 } from 'lucide-react'
 import {
   DEFAULT_VOICES,
@@ -27,6 +28,7 @@ import { PlayerPane } from '@/components/studio/player-pane'
 import { VoicePicker } from '@/components/studio/voice-picker'
 import { ImagePicker } from '@/components/studio/image-picker'
 import { MusicPicker } from '@/components/studio/music-picker'
+import { StylePicker } from '@/components/studio/style-picker'
 import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -75,6 +77,33 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   const updateProject = useCallback((patch: Partial<Project>) => {
     setProject((p) => ({ ...p, ...patch, updatedAt: new Date().toISOString() }))
   }, [])
+
+  /**
+   * Apply a textStyleId to a single segment, every segment in the project, or
+   * every segment of a given scene kind. Called from the style picker dialog.
+   */
+  const applyStyle = useCallback(
+    (input: {
+      styleId: string
+      scope: 'segment' | 'all' | 'sceneKind'
+      segmentId: string
+      sceneKind?: string
+    }) => {
+      setProject((p) => {
+        const next = p.segments.map((s) => {
+          if (input.scope === 'segment') {
+            return s.id === input.segmentId ? { ...s, textStyleId: input.styleId } : s
+          }
+          if (input.scope === 'sceneKind') {
+            return s.scene === input.sceneKind ? { ...s, textStyleId: input.styleId } : s
+          }
+          return { ...s, textStyleId: input.styleId }
+        })
+        return { ...p, segments: next, updatedAt: new Date().toISOString() }
+      })
+    },
+    []
+  )
 
   const save = useCallback(async () => {
     setSaveStatus('saving')
@@ -359,6 +388,9 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               language={project.language}
               aspect={project.aspect}
               onChange={(patch) => updateSegment(selected.id, patch)}
+              onApplyStyle={(args) =>
+                applyStyle({ ...args, segmentId: selected.id, sceneKind: String(selected.scene) })
+              }
             />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -376,11 +408,13 @@ function SegmentEditor({
   language,
   aspect,
   onChange,
+  onApplyStyle,
 }: {
   segment: Segment
   language: Project['language']
   aspect: Project['aspect']
   onChange: (patch: Partial<Segment>) => void
+  onApplyStyle: (input: { styleId: string; scope: 'segment' | 'all' | 'sceneKind' }) => void
 }) {
   const [synthStatus, setSynthStatus] = useState<'idle' | 'running' | 'error'>('idle')
   const [synthError, setSynthError] = useState<string | null>(null)
@@ -522,6 +556,32 @@ function SegmentEditor({
             if (Number.isFinite(v)) onChange({ voice: { ...segment.voice, speed: v } })
           }}
         />
+      </div>
+
+      <div>
+        <Label>Text style</Label>
+        <div className="mt-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <code className="flex-1 truncate rounded-md border bg-muted px-2 py-1.5 font-mono text-xs">
+              {segment.textStyleId ?? 'inherited from variant'}
+            </code>
+            <StylePicker
+              currentStyleId={segment.textStyleId}
+              sampleText={segment.text || 'Aa'}
+              sceneKind={String(segment.scene)}
+              onApply={onApplyStyle}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Type />
+                  Change
+                </Button>
+              }
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Leaving this empty lets the variant default for {String(segment.scene)} segments win.
+          </p>
+        </div>
       </div>
 
       <div>
