@@ -204,6 +204,21 @@ const TOPIC_PROFILES: Record<Exclude<Topic, 'generic'>, TopicProfile> = {
   },
 }
 
+/**
+ * Match a keyword against the haystack using word boundaries so short tokens
+ * like 'eth' don't bleed into 'something' or 'method'. Tokens with spaces
+ * fall back to substring match (e.g. 'wall street', 'thủ tướng').
+ */
+function keywordHit(haystack: string, keyword: string): boolean {
+  if (keyword.includes(' ')) return haystack.includes(keyword)
+  // \b doesn't help for Vietnamese diacritics, so we hand-build the boundary:
+  // a keyword hits if it sits between non-letter characters (or string edges).
+  // This works for both ASCII and Vietnamese tokens.
+  const escaped = keyword.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const re = new RegExp(`(^|[^\\p{L}])${escaped}([^\\p{L}]|$)`, 'iu')
+  return re.test(haystack)
+}
+
 function classifyTopic(haystack: string, language: Language): { topic: Topic; hits: number } {
   let best: Topic = 'generic'
   let bestHits = 0
@@ -211,7 +226,7 @@ function classifyTopic(haystack: string, language: Language): { topic: Topic; hi
     const keywords = language === 'vi' ? profile.vi : profile.en
     let hits = 0
     for (const k of keywords) {
-      if (haystack.includes(k)) hits++
+      if (keywordHit(haystack, k)) hits++
     }
     if (hits > bestHits) {
       bestHits = hits
