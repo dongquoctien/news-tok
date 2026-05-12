@@ -10,15 +10,34 @@ Each file must be:
 Total bank target: under 200 KB combined. Files are committed to the
 repo so renders are deterministic and offline.
 
-Each entry in `sfx.ts` records the upstream source URL and licence
-(`mixkit` / `pixabay-cc0` / `archive-pd` / `freesound-cc0`), so anyone
-can re-fetch and re-trim a clip with `ffmpeg`:
+## Filling the bank
+
+Run the bundled fetch script from the repo root:
 
 ```bash
-ffmpeg -i <download.mp3> -ac 1 -ar 44100 -b:a 24k \
-       -af "loudnorm=I=-16:TP=-1.0:LRA=11" \
-       -t 1.0 packages/shared/sfx/<id>.mp3
+pnpm tsx packages/shared/sfx/fetch.ts
 ```
 
-The renderer treats a missing file as silence (it logs a warning rather
-than failing), so the bank can be filled in incrementally.
+It reads `manifest.json` next to this file, downloads each entry's
+URL, then `ffmpeg`-trims to the listed duration, mono, mp3 24 kbps,
+with `loudnorm=I=-16:TP=-1.0:LRA=11`. Files that 404 are skipped —
+the renderer treats missing entries as silence, so the bank can be
+filled incrementally.
+
+## Replacing or adding a clip
+
+1. Edit `manifest.json` and point the entry to your URL, **or**
+2. Drop a hand-trimmed `.mp3` into this directory using the exact id
+   from `sfx.ts` as the filename (e.g. `boing.mp3`).
+
+The renderer only cares that the filename matches the SFX id; it does
+not re-read the manifest at runtime.
+
+## Source URLs
+
+Each entry in `sfx.ts` records the upstream source URL and licence
+(`mixkit` / `pixabay-cc0` / `archive-pd` / `freesound-cc0`).
+`manifest.json` contains best-effort direct-download links for each
+clip. Mixkit asset URLs are stable; Internet Archive direct URLs are
+stable; Pixabay and Freesound require accounts so we suggest you
+download those manually and drop them in.

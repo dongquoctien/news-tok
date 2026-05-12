@@ -71,3 +71,34 @@ body {
   color: var(--foreground);
   min-height: 100vh;
 }
+
+/* Thin dark scrollbars to match the Studio palette. Firefox uses the
+   standard properties; Chromium/Safari read the ::-webkit-* rules.
+   Applies everywhere in Studio — Remotion scenes are unaffected
+   because they live in a different bundle without this stylesheet. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--muted-foreground);
+}
+
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}

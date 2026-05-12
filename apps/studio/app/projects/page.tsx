@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowLeft, Film, Layers, Languages, CheckCircle2, Terminal } from 'lucide-react'
+import { ArrowLeft, Film, Layers, Languages, CheckCircle2, Terminal, Sparkles } from 'lucide-react'
 import { listProjects } from '@news-tok/render'
 import {
   Card,
@@ -69,7 +69,7 @@ export default async function ProjectsListPage() {
                   </CardTitle>
                   <CardDescription>{relativeTime(p.updatedAt)}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                <CardContent className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
                   <span className="inline-flex items-center gap-1">
                     <Film className="size-4" />
                     {p.aspect}
@@ -82,12 +82,28 @@ export default async function ProjectsListPage() {
                     <Languages className="size-4" />
                     {p.language}
                   </span>
-                  {p.hasOutput ? (
+                  {p.outputVariantIds.length > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-emerald-400">
+                      <CheckCircle2 className="size-4" />
+                      {p.outputVariantIds.length}
+                      {p.declaredVariantIds.length > 0
+                        ? `/${p.declaredVariantIds.length}`
+                        : ''}{' '}
+                      rendered
+                    </span>
+                  ) : p.hasOutput ? (
                     <span className="inline-flex items-center gap-1 text-emerald-400">
                       <CheckCircle2 className="size-4" />
                       rendered
                     </span>
-                  ) : null}
+                  ) : p.declaredVariantIds.length > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-muted-foreground/80">
+                      <Sparkles className="size-4" />
+                      {p.declaredVariantIds.length} variants
+                    </span>
+                  ) : (
+                    <span />
+                  )}
                 </CardContent>
               </Link>
               <div className="absolute right-3 top-3">

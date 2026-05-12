@@ -45,6 +45,29 @@ function rateString(speed: number | undefined): string | undefined {
   return `${pct >= 0 ? '+' : ''}${pct}%`
 }
 
+/**
+ * Escape characters that would otherwise break the SSML payload Edge TTS
+ * sends to its backend. msedge-tts wraps the input into an XML template
+ * (`<speak>...</speak>`) without escaping, so any of `& < > " '` from
+ * the article body can produce a malformed request that closes the
+ * WebSocket with no useful error. Also normalises smart quotes to plain
+ * ASCII so the SSML stays well-formed.
+ */
+function sanitizeSsmlText(text: string): string {
+  return text
+    // Smart quotes → ASCII to avoid SSML/XML encoding surprises.
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/[“”„‟]/g, '"')
+    .replace(/…/g, '...')
+    .replace(/[–—]/g, '-')
+    // XML entity escapes — ampersand first so we don't double-escape.
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;')
+}
+
 function parseWordBoundaries(meta: EdgeMetadataFile): WordBoundary[] {
   const out: WordBoundary[] = []
   for (const m of meta.Metadata ?? []) {
@@ -89,6 +112,7 @@ export async function synthesize(opts: SynthesizeOptions): Promise<SynthesizeRes
   await mkdir(resolvePath(mp3Path, '..'), { recursive: true })
 
   const rate = rateString(opts.speed)
+  const safeText = sanitizeSsmlText(opts.text)
   const tmpDir = await mkdtemp(resolvePath(tmpdir(), 'news-tok-tts-'))
   try {
     let audioFilePath: string
@@ -99,7 +123,7 @@ export async function synthesize(opts: SynthesizeOptions): Promise<SynthesizeRes
     // "No metadata received". Retry without boundaries so synthesis at least
     // succeeds.
     try {
-      const out = await runToFile(opts.voiceId, opts.text, rate, tmpDir, true)
+      const out = await callWithRetry(opts.voiceId, safeText, rate, tmpDir, true)
       audioFilePath = out.audioFilePath
       if (out.metadataFilePath) {
         const meta = JSON.parse(await readFile(out.metadataFilePath, 'utf8')) as EdgeMetadataFile
@@ -108,7 +132,7 @@ export async function synthesize(opts: SynthesizeOptions): Promise<SynthesizeRes
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
       if (!/no metadata/i.test(message)) throw err
-      const out = await runToFile(opts.voiceId, opts.text, rate, tmpDir, false)
+      const out = await callWithRetry(opts.voiceId, safeText, rate, tmpDir, false)
       audioFilePath = out.audioFilePath
     }
 
@@ -141,7 +165,47 @@ async function runToFile(
   try {
     return await tts.toFile(tmpDir, text, rate ? { rate } : undefined)
   } finally {
-    tts.close()
+    try {
+      tts.close()
+    } catch {
+      // tts.close() can throw if the socket already closed underneath us;
+      // swallow so the synth path keeps owning the user-visible error.
+    }
+  }
+}
+
+const TRANSIENT_PATTERNS = [
+  /websocket/i,
+  /econnreset/i,
+  /etimedout/i,
+  /socket hang up/i,
+  /connection closed/i,
+  /no audio data/i,
+]
+
+/**
+ * Wrap runToFile with a single retry on transient WebSocket errors.
+ * Edge TTS occasionally closes the socket mid-handshake; a fresh attempt
+ * almost always succeeds. Non-transient failures (auth, malformed SSML,
+ * "No metadata received") bubble immediately so the caller can fall back
+ * to the no-boundary path.
+ */
+async function callWithRetry(
+  voiceId: string,
+  text: string,
+  rate: string | undefined,
+  tmpDir: string,
+  wordBoundaryEnabled: boolean
+): Promise<{ audioFilePath: string; metadataFilePath: string | null }> {
+  try {
+    return await runToFile(voiceId, text, rate, tmpDir, wordBoundaryEnabled)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (!TRANSIENT_PATTERNS.some((re) => re.test(message))) throw err
+    // Brief backoff so we don't slam the endpoint when it's already
+    // closing connections.
+    await new Promise((r) => setTimeout(r, 400))
+    return runToFile(voiceId, text, rate, tmpDir, wordBoundaryEnabled)
   }
 }
 
