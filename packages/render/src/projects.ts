@@ -24,6 +24,13 @@ export type ProjectSummary = {
   outputVariantIds: string[]
   /** Variant ids declared on the storyboard, regardless of render state. */
   declaredVariantIds: string[]
+  /**
+   * Pre-lowercased haystack of the project's textual content
+   * (title + every segment.text). Lets the Studio projects grid
+   * substring-search across narration copy without shipping the
+   * full storyboard to the client.
+   */
+  searchHaystack: string
   createdAt: string
   updatedAt: string
 }
@@ -50,6 +57,7 @@ async function summarize(project: Project): Promise<ProjectSummary> {
   const outputVariantIds = await scanOutputs(project.id)
   const declaredVariantIds = (project.variants ?? []).map((v) => v.id)
   const legacyOutput = existsSync(resolve(projectDir(project.id), 'output.mp4'))
+  const haystackParts = [project.title, ...project.segments.map((s) => s.text)]
   return {
     projectId: project.id,
     title: project.title,
@@ -59,6 +67,7 @@ async function summarize(project: Project): Promise<ProjectSummary> {
     hasOutput: legacyOutput || outputVariantIds.length > 0,
     outputVariantIds,
     declaredVariantIds,
+    searchHaystack: haystackParts.join(' \n ').toLowerCase(),
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   }

@@ -11,7 +11,8 @@
     "./ui-tokens": "./src/ui-tokens.ts",
     "./sanitize": "./src/sanitize.ts",
     "./text-styles": "./src/text-styles.ts",
-    "./sfx": "./src/sfx.ts"
+    "./sfx": "./src/sfx.ts",
+    "./social": "./src/social.ts"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json --noEmit",
