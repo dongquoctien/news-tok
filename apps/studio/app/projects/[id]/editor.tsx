@@ -33,6 +33,7 @@ import { VoicePicker } from '@/components/studio/voice-picker'
 import { ImagePicker } from '@/components/studio/image-picker'
 import { MusicPicker } from '@/components/studio/music-picker'
 import { StylePicker } from '@/components/studio/style-picker'
+import { FontPicker } from '@/components/studio/font-picker'
 import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -146,6 +147,47 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           }
           if (input.scope === 'all') {
             return { ...s, textStyleId: input.styleId }
+          }
+          return s
+        })
+        return { ...p, segments: next, updatedAt: new Date().toISOString() }
+      })
+    },
+    []
+  )
+
+  /**
+   * Apply a fontOverride id. Mirrors `applyStyle` scopes but writes to
+   * `variant.fontOverrideBySegmentId` / `segment.fontOverride` rather
+   * than the text-style fields, so font and style stay independent.
+   */
+  const applyFont = useCallback(
+    (input: {
+      fontId: string
+      scope: 'segmentInVariant' | 'segment' | 'all'
+      segmentId: string
+      variantId?: string | null
+    }) => {
+      setProject((p) => {
+        if (input.scope === 'segmentInVariant' && input.variantId) {
+          const variants = (p.variants ?? []).map((v) => {
+            if (v.id !== input.variantId) return v
+            return {
+              ...v,
+              fontOverrideBySegmentId: {
+                ...(v.fontOverrideBySegmentId ?? {}),
+                [input.segmentId]: input.fontId,
+              },
+            }
+          })
+          return { ...p, variants, updatedAt: new Date().toISOString() }
+        }
+        const next = p.segments.map((s) => {
+          if (input.scope === 'segment') {
+            return s.id === input.segmentId ? { ...s, fontOverride: input.fontId } : s
+          }
+          if (input.scope === 'all') {
+            return { ...s, fontOverride: input.fontId }
           }
           return s
         })
@@ -550,6 +592,13 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   variantId: previewVariantId,
                 })
               }
+              onApplyFont={(args) =>
+                applyFont({
+                  ...args,
+                  segmentId: selected.id,
+                  variantId: previewVariantId,
+                })
+              }
             />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -570,6 +619,7 @@ function SegmentEditor({
   variants,
   onChange,
   onApplyStyle,
+  onApplyFont,
 }: {
   segment: Segment
   language: Project['language']
@@ -580,6 +630,10 @@ function SegmentEditor({
   onApplyStyle: (input: {
     styleId: string
     scope: 'segmentInVariant' | 'segment' | 'sceneKind' | 'all'
+  }) => void
+  onApplyFont: (input: {
+    fontId: string
+    scope: 'segmentInVariant' | 'segment' | 'all'
   }) => void
 }) {
   const [synthStatus, setSynthStatus] = useState<'idle' | 'running' | 'error'>('idle')
@@ -648,6 +702,17 @@ function SegmentEditor({
   // when the gap is meaningful.
   const narrationSec = segment.audio?.narration?.durationSec ?? 0
   const durationTooShort = narrationSec > 0 && segment.durationSec < narrationSec + 0.2
+
+  // Font override resolution mirrors style resolution: variant per-segment
+  // override → segment override → style.fontFamily fallback.
+  const perVariantFontId = activeVariant?.fontOverrideBySegmentId?.[segment.id]
+  const resolvedFontId =
+    perVariantFontId ?? segment.fontOverride ?? resolvedStyle?.fontFamily ?? undefined
+  const fontScope: 'variant' | 'segment' | 'style' = perVariantFontId
+    ? 'variant'
+    : segment.fontOverride
+      ? 'segment'
+      : 'style'
 
   return (
     <div className="space-y-4">
@@ -815,6 +880,36 @@ function SegmentEditor({
                 : styleScope === 'sceneKind'
                   ? `Inherited from variant ${activeVariantId ?? '(default)'} for ${String(segment.scene)}.`
                   : `No override — variant default for ${String(segment.scene)} segments wins.`}
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <Label>Font</Label>
+        <div className="mt-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <code className="flex-1 truncate rounded-md border bg-muted px-2 py-1.5 font-mono text-xs">
+              {resolvedFontId ?? '—'}
+            </code>
+            <FontPicker
+              currentFontId={resolvedFontId}
+              sampleText={segment.text || 'Aa'}
+              activeVariantId={activeVariantId}
+              onApply={onApplyFont}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Type />
+                  Change
+                </Button>
+              }
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            {fontScope === 'variant'
+              ? `Pinned in variant ${activeVariantId} only. Other variants keep the style's default font.`
+              : fontScope === 'segment'
+                ? 'Pinned on this segment across every variant.'
+                : 'Inherits the font baked into the text style.'}
           </p>
         </div>
       </div>

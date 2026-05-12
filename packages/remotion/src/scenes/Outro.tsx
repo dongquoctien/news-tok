@@ -11,7 +11,7 @@ import { useResponsive } from './sizing.js'
 
 const CLASSIC = findTextStyle('cinematic', []) ?? findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
-export const Outro = ({ segment, textStyle }: SceneProps) => {
+export const Outro = ({ segment, textStyle, fontOverride }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 12 })
   const r = useResponsive()
   const bg = segment.visuals.background
@@ -45,7 +45,12 @@ export const Outro = ({ segment, textStyle }: SceneProps) => {
           />
         </AbsoluteFill>
       </Fade>
-      <TextBlock text={segment.text} style={style} wordBoundaries={segment.wordBoundaries} />
+      <TextBlock
+        text={segment.text}
+        style={style}
+        wordBoundaries={segment.wordBoundaries}
+        fontOverride={fontOverride}
+      />
       {narration ? <Audio src={narration.path} /> : null}
     </AbsoluteFill>
   )

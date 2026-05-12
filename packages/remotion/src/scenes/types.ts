@@ -9,6 +9,12 @@ export type SceneProps = {
    * scenes pass this to <TextBlock>. Custom scenes may ignore it.
    */
   textStyle?: TextStyle
+  /**
+   * Resolved font id override for this segment under the current variant.
+   * Computed once by the composition (variant override → segment override
+   * → style.fontFamily). Built-in scenes forward this to <TextBlock>.
+   */
+  fontOverride?: string
 }
 
 export type SceneComponent = ComponentType<SceneProps>
