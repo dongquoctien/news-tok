@@ -13,7 +13,10 @@ export type JobRecord = {
   progress: number
   startedAt: string
   endedAt?: string
+  /** Primary output (segment mp4 or first variant mp4); kept for back-compat. */
   outputPath?: string
+  /** Full list of output mp4s when rendering multiple variants. */
+  outputPaths?: string[]
   error?: string
 }
 

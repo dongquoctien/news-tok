@@ -291,13 +291,16 @@ async function main() {
     {
       title: 'Render the full project video',
       description:
-        'Render the entire project composition to data/projects/<id>/output.mp4. Use as the final step after the storyboard and all per-segment assets are ready.',
-      inputSchema: { projectId: z.string().min(1) },
+        'Render the project. With no `variants` arg, behaves as before and writes data/projects/<id>/output.mp4. Pass `variants: ["A"]` to render a single variant, `variants: ["A","B","C"]` to render specific ones, or `variants: "all"` to render every variant declared on the project. Each variant produces data/projects/<id>/output-<variantId>.mp4 and the response returns the list of output paths.',
+      inputSchema: {
+        projectId: z.string().min(1),
+        variants: z.union([z.array(z.string()), z.literal('all')]).optional(),
+      },
     },
-    async ({ projectId }) => {
+    async ({ projectId, variants }) => {
       try {
-        const outPath = await renderProjectMedia(projectId)
-        return ok({ outputPath: outPath })
+        const outPaths = await renderProjectMedia(projectId, { variants })
+        return ok({ outputPaths: outPaths })
       } catch (err) {
         return fail(err)
       }
