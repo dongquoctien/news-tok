@@ -30,18 +30,55 @@ import type { Language } from '@news-tok/shared/schema'
 //   archivoBlack   block-bold display, intrinsic stroke (no faux-stroke)
 //   nunito         rounded friendly sans for playful / educational
 
-const be = loadBeVietnamPro('normal', { weights: ['400', '600', '700', '800'] })
-const inter = loadInter('normal', { weights: ['400', '600', '700', '800', '900'] })
-const montserrat = loadMontserrat('normal', { weights: ['400', '700', '800', '900'] })
-const anton = loadAnton('normal', { weights: ['400'] })
-const bebas = loadBebasNeue('normal', { weights: ['400'] })
-const playfair = loadPlayfairDisplay('normal', { weights: ['400', '700', '900'] })
-const jet = loadJetBrainsMono('normal', { weights: ['400', '600', '700'] })
-const lexend = loadLexend('normal', { weights: ['400', '500', '700', '800'] })
-const manrope = loadManrope('normal', { weights: ['400', '600', '700', '800'] })
-const oswald = loadOswald('normal', { weights: ['400', '600', '700'] })
-const archivoBlack = loadArchivoBlack('normal', { weights: ['400'] })
-const nunito = loadNunito('normal', { weights: ['400', '700', '800', '900'] })
+// Restrict each font to the subsets the renderer actually uses (Latin +
+// Vietnamese). Without this, Remotion's @google-fonts loader pulls every
+// available subset (cyrillic, greek, devanagari…) and fires 30+ network
+// requests per font — slow first paint, noisy console.
+const VI_SUBSETS = ['latin', 'latin-ext', 'vietnamese'] as const
+const LATIN_SUBSETS = ['latin', 'latin-ext'] as const
+
+const be = loadBeVietnamPro('normal', {
+  weights: ['400', '600', '700', '800'],
+  subsets: [...VI_SUBSETS],
+})
+const inter = loadInter('normal', {
+  weights: ['400', '600', '700', '800', '900'],
+  subsets: [...VI_SUBSETS],
+})
+const montserrat = loadMontserrat('normal', {
+  weights: ['400', '700', '800', '900'],
+  subsets: [...VI_SUBSETS],
+})
+const anton = loadAnton('normal', { weights: ['400'], subsets: [...VI_SUBSETS] })
+const bebas = loadBebasNeue('normal', { weights: ['400'], subsets: [...LATIN_SUBSETS] })
+const playfair = loadPlayfairDisplay('normal', {
+  weights: ['400', '700', '900'],
+  subsets: [...VI_SUBSETS],
+})
+const jet = loadJetBrainsMono('normal', {
+  weights: ['400', '600', '700'],
+  subsets: [...VI_SUBSETS],
+})
+const lexend = loadLexend('normal', {
+  weights: ['400', '500', '700', '800'],
+  subsets: [...VI_SUBSETS],
+})
+const manrope = loadManrope('normal', {
+  weights: ['400', '600', '700', '800'],
+  subsets: [...VI_SUBSETS],
+})
+const oswald = loadOswald('normal', {
+  weights: ['400', '600', '700'],
+  subsets: [...VI_SUBSETS],
+})
+const archivoBlack = loadArchivoBlack('normal', {
+  weights: ['400'],
+  subsets: [...LATIN_SUBSETS],
+})
+const nunito = loadNunito('normal', {
+  weights: ['400', '700', '800', '900'],
+  subsets: [...VI_SUBSETS],
+})
 
 export const FONT_FAMILIES = {
   beVietnamPro: be.fontFamily,

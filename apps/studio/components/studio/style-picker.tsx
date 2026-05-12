@@ -216,7 +216,7 @@ export function StylePicker({
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-3xl">
+      <DialogContent className="max-w-4xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Type className="size-5" />
@@ -266,7 +266,7 @@ export function StylePicker({
           </div>
         )}
 
-        <DialogFooter className="gap-2">
+        <DialogFooter className="flex-wrap gap-2 sm:flex-wrap sm:space-x-0">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
@@ -276,7 +276,7 @@ export function StylePicker({
               onClick={() => apply('segmentInVariant')}
               title={`Pin to this segment in variant ${activeVariantId} only — other variants keep their look`}
             >
-              This segment · variant {activeVariantId}
+              Segment · variant {activeVariantId}
             </Button>
           ) : null}
           <Button
@@ -285,7 +285,7 @@ export function StylePicker({
             onClick={() => apply('segment')}
             title="Apply to this segment across every variant"
           >
-            This segment · all variants
+            Segment · all variants
           </Button>
           {sceneKind ? (
             <Button

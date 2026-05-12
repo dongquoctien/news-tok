@@ -262,17 +262,17 @@ export function ProjectEditor({ initial }: { initial: Project }) {
 
   return (
     <div className="flex h-screen flex-col">
-      <header className="flex items-center gap-4 border-b px-6 py-3">
+      <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b px-6 py-3">
         <Link
           href="/projects"
-          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+          className="inline-flex shrink-0 items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" />
           Projects
         </Link>
-        <div className="min-w-0 flex-1">
+        <div className="min-w-0 flex-1 basis-[16rem]">
           <h1 className="truncate text-base font-semibold">{project.title}</h1>
-          <p className="text-xs text-muted-foreground">
+          <p className="truncate whitespace-nowrap text-xs text-muted-foreground">
             <span className="inline-flex items-center gap-1">
               <Film className="size-3" />
               {project.aspect}
@@ -289,7 +289,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             </span>
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <select
             value={project.exportPreset}
             onChange={(e) =>
