@@ -128,7 +128,22 @@ per segment.
 
 1. Call `createProject({ source: { type: 'url', value: <url> }, language, aspect })`.
 2. Call `extractArticle({ url })` to get the body text.
-3. **Confirm story structure with the user** before drafting segments. Use
+3. **Research the project aesthetic** with the brand-new MCP tool
+   `researchProjectAesthetic({ articleTitle, articleText, language })`. It
+   classifies the article topic (crime / finance / tech / health / sports /
+   entertainment / lifestyle / travel / food / nature / politics /
+   education / generic) by keyword and returns a strong three-variant set
+   plus a music mood string. Use the result to seed
+   `project.variants` and the later `searchMusic` call.
+   - If the tool returns `confidence < 0.34` (no keyword hits), call it
+     again with `proposeNewStyles: true` so it mints one or two tailored
+     `TextStyle` JSONs from the topic palette. Append them to
+     `project.userTextStyles` and rewire the variants to point at the
+     new ids — this is the slow path when the built-in 28 presets do not
+     fit the article.
+   - Confirm the picks via `AskUserQuestion` (show topic + variant
+     labels + music mood). Honor any user override.
+4. **Confirm story structure with the user** before drafting segments. Use
    `AskUserQuestion` and recommend the full three-part structure:
    - **Mở bài (title, 1 segment, ~5s)** — headline / hook
    - **Thân bài (keypoint, 2–5 segments, 5–8s mỗi đoạn)** — the article's
@@ -148,14 +163,12 @@ per segment.
    `synthesizeVoice({ text, voiceId })`. Update the segment's `visuals` and
    `audio.narration` with the returned paths.
 7. Call `searchMusic({ mood, durationSec })` for the project background
-   music and set `bgMusic`. **Pick `mood` from the article's tone**, not a
-   hard-coded default — e.g. `'tense'` / `'dramatic'` for crime, fraud,
-   conflict; `'uplifting'` / `'inspiring'` for product launches and
-   features; `'calm'` for explainers; `'cinematic'` for big-picture
-   reporting; `'news'` for hard-news bulletins. Pass `durationSec` =
-   project total — the Remotion composition loops the track when it is
-   shorter and fades out the last ~1.2s when it is longer, so an exact
-   match is not required.
+   music and set `bgMusic`. **Use the `musicMood` returned by
+   `researchProjectAesthetic` in step 3**. If that mood produces no
+   results, fall back to the entries in `musicMoodFallbacks`. Pass
+   `durationSec` = project total — the Remotion composition loops the
+   track when it is shorter and fades out the last ~1.2s when it is
+   longer, so an exact match is not required.
 8. **Ask how many variants to render** before calling `renderProject`. Use
    `AskUserQuestion` with these options (default-first):
    - **1 video (recommended)** — render only variant `A` (Classic).
