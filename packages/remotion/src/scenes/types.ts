@@ -1,4 +1,4 @@
-import type { Segment, Project, TextStyle } from '@news-tok/shared/schema'
+import type { ColorOverride, Segment, Project, TextStyle } from '@news-tok/shared/schema'
 import type { ComponentType } from 'react'
 
 export type SceneProps = {
@@ -15,6 +15,12 @@ export type SceneProps = {
    * → style.fontFamily). Built-in scenes forward this to <TextBlock>.
    */
   fontOverride?: string
+  /**
+   * Resolved color overrides for this segment under the current variant
+   * (variant override > segment override). Built-in scenes forward this
+   * to <TextBlock>; the renderer applies it inside typographyStyle().
+   */
+  colorOverride?: ColorOverride
 }
 
 export type SceneComponent = ComponentType<SceneProps>

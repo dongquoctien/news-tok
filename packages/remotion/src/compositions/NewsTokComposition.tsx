@@ -1,5 +1,5 @@
 import { AbsoluteFill, Audio, Sequence, interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
-import type { Project, SceneKind, Segment, TextStyle, Variant } from '@news-tok/shared/schema'
+import type { ColorOverride, Project, SceneKind, Segment, TextStyle, Variant } from '@news-tok/shared/schema'
 import { BUILT_IN_TEXT_STYLES, findTextStyle, DEFAULT_TEXT_STYLE_ID } from '@news-tok/shared/text-styles'
 import { resolveScene } from '../scenes/registry.js'
 import { MissingScene } from '../scenes/MissingScene.js'
@@ -100,6 +100,23 @@ function resolveFontOverride(
   return undefined
 }
 
+/**
+ * Resolve color overrides for a segment under the active variant. Same
+ * priority idea as the font / style resolvers but with merging: a
+ * variant override only replaces the fields it specifies, so a user can
+ * set just `accent` on one variant and leave `primary` / `stroke` from
+ * the segment-level override intact.
+ */
+function resolveColorOverride(
+  segment: Segment,
+  variant: Variant | undefined
+): ColorOverride | undefined {
+  const variantOv = variant?.colorOverrideBySegmentId?.[segment.id]
+  const segOv = segment.colorOverride
+  if (!variantOv && !segOv) return undefined
+  return { ...(segOv ?? {}), ...(variantOv ?? {}) }
+}
+
 /** Emit short SFX cues for a single segment based on its text style. */
 function SegmentSfx({
   segment,
@@ -194,6 +211,7 @@ export const NewsTokComposition = ({
           subtitlesEnabled && segment.wordBoundaries && segment.wordBoundaries.length > 0
         const style = resolveStyle(segment, activeVariant, userStyles)
         const fontOverride = resolveFontOverride(segment, activeVariant)
+        const colorOverride = resolveColorOverride(segment, activeVariant)
         return (
           <Sequence key={segment.id} from={from} durationInFrames={durationInFrames} name={segment.id}>
             {Scene ? (
@@ -202,6 +220,7 @@ export const NewsTokComposition = ({
                 project={storyboard}
                 textStyle={style}
                 fontOverride={fontOverride}
+                colorOverride={colorOverride}
               />
             ) : (
               <MissingScene segment={segment} project={storyboard} />

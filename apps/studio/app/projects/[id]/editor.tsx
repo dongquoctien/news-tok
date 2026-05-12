@@ -13,6 +13,7 @@ import {
   Loader2,
   Mic,
   Music,
+  Palette,
   PlayCircle,
   RefreshCw,
   Save,
@@ -22,6 +23,7 @@ import {
 import {
   DEFAULT_VOICES,
   type AssetRef,
+  type ColorOverride,
   type Project,
   type Segment,
 } from '@news-tok/shared/schema'
@@ -34,6 +36,7 @@ import { ImagePicker } from '@/components/studio/image-picker'
 import { MusicPicker } from '@/components/studio/music-picker'
 import { StylePicker } from '@/components/studio/style-picker'
 import { FontPicker } from '@/components/studio/font-picker'
+import { ColorPicker } from '@/components/studio/color-picker'
 import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -147,6 +150,48 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           }
           if (input.scope === 'all') {
             return { ...s, textStyleId: input.styleId }
+          }
+          return s
+        })
+        return { ...p, segments: next, updatedAt: new Date().toISOString() }
+      })
+    },
+    []
+  )
+
+  /**
+   * Apply a ColorOverride. Mirrors `applyFont` scopes but writes to
+   * `variant.colorOverrideBySegmentId` / `segment.colorOverride` so a
+   * user can swap accent / primary / stroke / idle colours per segment
+   * (or pin them per-variant) without forking the entire text style.
+   */
+  const applyColor = useCallback(
+    (input: {
+      colorOverride: ColorOverride
+      scope: 'segmentInVariant' | 'segment' | 'all'
+      segmentId: string
+      variantId?: string | null
+    }) => {
+      setProject((p) => {
+        if (input.scope === 'segmentInVariant' && input.variantId) {
+          const variants = (p.variants ?? []).map((v) => {
+            if (v.id !== input.variantId) return v
+            return {
+              ...v,
+              colorOverrideBySegmentId: {
+                ...(v.colorOverrideBySegmentId ?? {}),
+                [input.segmentId]: input.colorOverride,
+              },
+            }
+          })
+          return { ...p, variants, updatedAt: new Date().toISOString() }
+        }
+        const next = p.segments.map((s) => {
+          if (input.scope === 'segment') {
+            return s.id === input.segmentId ? { ...s, colorOverride: input.colorOverride } : s
+          }
+          if (input.scope === 'all') {
+            return { ...s, colorOverride: input.colorOverride }
           }
           return s
         })
@@ -599,6 +644,13 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   variantId: previewVariantId,
                 })
               }
+              onApplyColor={(args) =>
+                applyColor({
+                  ...args,
+                  segmentId: selected.id,
+                  variantId: previewVariantId,
+                })
+              }
             />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -620,6 +672,7 @@ function SegmentEditor({
   onChange,
   onApplyStyle,
   onApplyFont,
+  onApplyColor,
 }: {
   segment: Segment
   language: Project['language']
@@ -633,6 +686,10 @@ function SegmentEditor({
   }) => void
   onApplyFont: (input: {
     fontId: string
+    scope: 'segmentInVariant' | 'segment' | 'all'
+  }) => void
+  onApplyColor: (input: {
+    colorOverride: ColorOverride
     scope: 'segmentInVariant' | 'segment' | 'all'
   }) => void
 }) {
@@ -713,6 +770,23 @@ function SegmentEditor({
     : segment.fontOverride
       ? 'segment'
       : 'style'
+
+  // Color override resolution: variant > segment, merged shallowly so a
+  // variant-level tweak on `accent` still inherits the segment-level
+  // `primary` (mirrors what the composition's resolveColorOverride does).
+  const perVariantColor = activeVariant?.colorOverrideBySegmentId?.[segment.id]
+  const segColor = segment.colorOverride
+  const resolvedColor: ColorOverride | undefined =
+    !perVariantColor && !segColor ? undefined : { ...(segColor ?? {}), ...(perVariantColor ?? {}) }
+  const colorScope: 'variant' | 'segment' | 'default' = perVariantColor
+    ? 'variant'
+    : segColor
+      ? 'segment'
+      : 'default'
+  const colorChannels: Array<keyof ColorOverride> = ['primary', 'accent', 'stroke', 'idle']
+  const activeChannels = resolvedColor
+    ? colorChannels.filter((c) => typeof resolvedColor[c] === 'string')
+    : []
 
   return (
     <div className="space-y-4">
@@ -910,6 +984,50 @@ function SegmentEditor({
               : fontScope === 'segment'
                 ? 'Pinned on this segment across every variant.'
                 : 'Inherits the font baked into the text style.'}
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <Label>Colour</Label>
+        <div className="mt-1 space-y-2">
+          <div className="flex items-center gap-2">
+            {activeChannels.length > 0 ? (
+              <div className="flex flex-1 flex-wrap items-center gap-2 rounded-md border bg-muted px-2 py-1.5">
+                {activeChannels.map((c) => (
+                  <div key={c} className="flex items-center gap-1 text-xs">
+                    <span
+                      className="size-3.5 rounded-sm border"
+                      style={{ background: resolvedColor?.[c] }}
+                      aria-hidden
+                    />
+                    <span className="text-muted-foreground">{c}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <code className="flex-1 truncate rounded-md border bg-muted px-2 py-1.5 font-mono text-xs">
+                inherits style colours
+              </code>
+            )}
+            <ColorPicker
+              current={resolvedColor}
+              activeVariantId={activeVariantId}
+              onApply={onApplyColor}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Palette />
+                  Change
+                </Button>
+              }
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            {colorScope === 'variant'
+              ? `Pinned in variant ${activeVariantId} only.`
+              : colorScope === 'segment'
+                ? 'Pinned on this segment across every variant.'
+                : 'No overrides — text style colours win.'}
           </p>
         </div>
       </div>

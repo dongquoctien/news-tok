@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 import { AbsoluteFill } from 'remotion'
-import type { TextStyle, WordBoundary } from '@news-tok/shared/schema'
+import type { ColorOverride, TextStyle, WordBoundary } from '@news-tok/shared/schema'
 import { useResponsive } from '../../scenes/sizing.js'
 import { FadeInText } from './FadeInText.js'
 import { SlideUpText } from './SlideUpText.js'
@@ -24,11 +24,17 @@ type PrimitiveProps = {
   style: TextStyle
   wordBoundaries?: WordBoundary[]
   fontOverride?: string
+  colorOverride?: ColorOverride
 }
 
 const PRIMITIVES: Record<TextStyle['enter'], (p: PrimitiveProps) => React.JSX.Element> = {
-  none: ({ text, style, fontOverride }) => (
-    <FadeInText text={text} style={{ ...style, enterDurationSec: 0 }} fontOverride={fontOverride} />
+  none: ({ text, style, fontOverride, colorOverride }) => (
+    <FadeInText
+      text={text}
+      style={{ ...style, enterDurationSec: 0 }}
+      fontOverride={fontOverride}
+      colorOverride={colorOverride}
+    />
   ),
   fade: FadeInText,
   slideUp: SlideUpText,
@@ -103,11 +109,13 @@ export function TextBlock({
   style,
   wordBoundaries,
   fontOverride,
+  colorOverride,
 }: {
   text: string
   style: TextStyle
   wordBoundaries?: WordBoundary[]
   fontOverride?: string
+  colorOverride?: ColorOverride
 }) {
   const r = useResponsive()
   const Primitive = PRIMITIVES[style.enter] ?? FadeInText
@@ -118,6 +126,7 @@ export function TextBlock({
       style={style}
       wordBoundaries={wordBoundaries}
       fontOverride={fontOverride}
+      colorOverride={colorOverride}
     />
   )
   return (

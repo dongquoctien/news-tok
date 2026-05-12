@@ -7,7 +7,7 @@ import { useResponsive } from '../../scenes/sizing.js'
  * Each word kicks in 3 frames after the previous one. Once the last word
  * has popped, it stays visible for the rest of the segment.
  */
-export const WordPopText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
+export const WordPopText = ({ text, style, fontOverride, colorOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -16,7 +16,7 @@ export const WordPopText = ({ text, style, fontOverride }: TextPrimitiveProps) =
   return (
     <div
       style={{
-        ...typographyStyle(style, style.fontSize * r.font, fontOverride),
+        ...typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride),
         // Container can wrap; words flow naturally.
         display: 'block',
       }}

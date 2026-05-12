@@ -2,7 +2,7 @@ import { spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
 
-export const ScaleInText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
+export const ScaleInText = ({ text, style, fontOverride, colorOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -14,7 +14,7 @@ export const ScaleInText = ({ text, style, fontOverride }: TextPrimitiveProps) =
   return (
     <div
       style={{
-        ...typographyStyle(style, style.fontSize * r.font, fontOverride),
+        ...typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride),
         opacity: s,
         transform: `scale(${scale})`,
         transformOrigin: 'center center',

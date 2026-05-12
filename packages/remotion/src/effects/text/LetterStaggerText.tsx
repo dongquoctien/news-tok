@@ -14,12 +14,17 @@ import { useResponsive } from '../../scenes/sizing.js'
  * Spaces are preserved as inline-block but skip the animation (they
  * collapse otherwise when wrapped in span).
  */
-export const LetterStaggerText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
+export const LetterStaggerText = ({
+  text,
+  style,
+  fontOverride,
+  colorOverride,
+}: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
   const stepFrames = Math.max(1, Math.round((style.staggerStep ?? 0.04) * fps))
-  const base = typographyStyle(style, style.fontSize * r.font, fontOverride)
+  const base = typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride)
 
   return (
     <div style={{ ...base, display: 'block' }}>

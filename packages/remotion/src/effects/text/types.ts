@@ -1,5 +1,4 @@
-import type { TextStyle } from '@news-tok/shared/schema'
-import type { WordBoundary } from '@news-tok/shared/schema'
+import type { ColorOverride, TextStyle, WordBoundary } from '@news-tok/shared/schema'
 import { resolveFontFamily } from '../../scenes/fonts.js'
 
 /**
@@ -18,13 +17,21 @@ export type TextPrimitiveProps = {
    * segment / style chain so primitives don't repeat the lookup.
    */
   fontOverride?: string
+  /**
+   * Resolved per-segment color overrides (variant override > segment
+   * override). Each field, when present, replaces the matching TextStyle
+   * field at render time. Karaoke primitives also read `accent` / `idle`
+   * directly so they don't have to thread through typographyStyle.
+   */
+  colorOverride?: ColorOverride
 }
 
 /** Style fragment shared by every primitive: typography only. */
 export function typographyStyle(
   style: TextStyle,
   fontPx: number,
-  fontOverride?: string
+  fontOverride?: string,
+  colorOverride?: ColorOverride
 ): React.CSSProperties {
   const css: React.CSSProperties = {
     fontFamily: resolveFontFamily(fontOverride ?? style.fontFamily),
@@ -32,7 +39,7 @@ export function typographyStyle(
     fontWeight: style.fontWeight,
     letterSpacing: style.letterSpacing,
     lineHeight: style.lineHeight,
-    color: style.color,
+    color: colorOverride?.primary ?? style.color,
     textAlign: style.align,
     margin: 0,
   }
@@ -44,7 +51,8 @@ export function typographyStyle(
     css.WebkitTextFillColor = 'transparent'
   }
   if (style.textStroke) {
-    css.WebkitTextStroke = `${style.textStroke.widthPx}px ${style.textStroke.color}`
+    const strokeColor = colorOverride?.stroke ?? style.textStroke.color
+    css.WebkitTextStroke = `${style.textStroke.widthPx}px ${strokeColor}`
   }
   if (style.textShadow) {
     const main = `${style.textShadow.offsetX}px ${style.textShadow.offsetY}px ${style.textShadow.blur}px ${style.textShadow.color}`
