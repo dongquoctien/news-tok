@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { ArrowLeft, Film, Layers, Languages, CheckCircle2, Terminal } from 'lucide-react'
+import { ArrowLeft, Film, Layers, Languages, CheckCircle2, Terminal, Sparkles } from 'lucide-react'
 import { listProjects } from '@news-tok/render'
 import {
   Card,
@@ -9,6 +9,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { ProjectActions } from '@/components/studio/project-actions'
+import { ThumbCell } from '@/components/studio/thumb-cell'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -69,24 +70,69 @@ export default async function ProjectsListPage() {
                   </CardTitle>
                   <CardDescription>{relativeTime(p.updatedAt)}</CardDescription>
                 </CardHeader>
-                <CardContent className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Film className="size-4" />
-                    {p.aspect}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Layers className="size-4" />
-                    {p.segmentCount} segs
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Languages className="size-4" />
-                    {p.language}
-                  </span>
-                  {p.hasOutput ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-400">
-                      <CheckCircle2 className="size-4" />
-                      rendered
+                <CardContent className="space-y-3 text-sm text-muted-foreground">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="inline-flex items-center gap-1">
+                      <Film className="size-4" />
+                      {p.aspect}
                     </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Layers className="size-4" />
+                      {p.segmentCount} segs
+                    </span>
+                    <span className="inline-flex items-center gap-1">
+                      <Languages className="size-4" />
+                      {p.language}
+                    </span>
+                    {p.outputVariantIds.length > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-400">
+                        <CheckCircle2 className="size-4" />
+                        {p.outputVariantIds.length}
+                        {p.declaredVariantIds.length > 0
+                          ? `/${p.declaredVariantIds.length}`
+                          : ''}{' '}
+                        rendered
+                      </span>
+                    ) : p.hasOutput ? (
+                      <span className="inline-flex items-center gap-1 text-emerald-400">
+                        <CheckCircle2 className="size-4" />
+                        rendered
+                      </span>
+                    ) : null}
+                  </div>
+                  {/* Variant thumbnail strip — only when at least one variant
+                      has been rendered. Each <img> is served by the
+                      /api/projects/[id]/thumb endpoint which lazily extracts
+                      a JPEG via ffmpeg and caches it under .thumbs/. */}
+                  {p.outputVariantIds.length > 0 ? (
+                    <div className="flex flex-wrap gap-1.5">
+                      {p.declaredVariantIds.length > 0
+                        ? p.declaredVariantIds.map((vid) => {
+                            const rendered = p.outputVariantIds.includes(vid)
+                            return (
+                              <ThumbCell
+                                key={vid}
+                                projectId={p.projectId}
+                                variantId={vid}
+                                rendered={rendered}
+                              />
+                            )
+                          })
+                        : p.outputVariantIds.map((vid) => (
+                            <ThumbCell
+                              key={vid}
+                              projectId={p.projectId}
+                              variantId={vid}
+                              rendered
+                            />
+                          ))}
+                    </div>
+                  ) : p.declaredVariantIds.length > 0 ? (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground/80">
+                      <Sparkles className="size-3" />
+                      {p.declaredVariantIds.length} variants declared, none
+                      rendered yet
+                    </div>
                   ) : null}
                 </CardContent>
               </Link>
