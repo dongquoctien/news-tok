@@ -2,7 +2,7 @@ import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
 
-export const FadeInText = ({ text, style }: TextPrimitiveProps) => {
+export const FadeInText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -12,7 +12,7 @@ export const FadeInText = ({ text, style }: TextPrimitiveProps) => {
     extrapolateRight: 'clamp',
   })
   return (
-    <div style={{ ...typographyStyle(style, style.fontSize * r.font), opacity }}>
+    <div style={{ ...typographyStyle(style, style.fontSize * r.font, fontOverride), opacity }}>
       {text}
     </div>
   )

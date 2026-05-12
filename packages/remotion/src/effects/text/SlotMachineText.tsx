@@ -12,7 +12,7 @@ const POOL = [
  * snapping to the real text. The randomness is deterministic (seeded by
  * word index + cycle index) so a re-render gives the same frames.
  */
-export const SlotMachineText = ({ text, style }: TextPrimitiveProps) => {
+export const SlotMachineText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -23,7 +23,7 @@ export const SlotMachineText = ({ text, style }: TextPrimitiveProps) => {
   // Stagger word starts so they settle in sequence.
   const wordStartStride = Math.max(3, Math.round(fps * 0.12))
   return (
-    <div style={typographyStyle(style, style.fontSize * r.font)}>
+    <div style={typographyStyle(style, style.fontSize * r.font, fontOverride)}>
       {words.map((real, i) => {
         const localFrame = frame - i * wordStartStride
         const cycleIndex = Math.floor(localFrame / cycleFramesPerWord)

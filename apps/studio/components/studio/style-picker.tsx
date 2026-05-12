@@ -14,6 +14,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
+import { fontLabel } from '@/lib/font-label'
 
 const FAMILY_LABEL: Record<TextStyle['family'], string> = {
   news: 'News',
@@ -138,6 +139,9 @@ function StyleCard({
         <span className="shrink-0 rounded bg-secondary px-1.5 py-0.5 text-[9px]">
           {FAMILY_LABEL[style.family]}
         </span>
+      </div>
+      <div className="truncate text-[9px] normal-case tracking-normal text-muted-foreground/80">
+        {fontLabel(style.fontFamily)}
       </div>
     </button>
   )

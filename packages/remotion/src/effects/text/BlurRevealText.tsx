@@ -9,7 +9,7 @@ import { useResponsive } from '../../scenes/sizing.js'
  * The motion is ported here using interpolate + the current frame so
  * each rendered frame is deterministic.
  */
-export const BlurRevealText = ({ text, style }: TextPrimitiveProps) => {
+export const BlurRevealText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -24,7 +24,7 @@ export const BlurRevealText = ({ text, style }: TextPrimitiveProps) => {
   return (
     <div
       style={{
-        ...typographyStyle(style, style.fontSize * r.font),
+        ...typographyStyle(style, style.fontSize * r.font, fontOverride),
         opacity: eased,
         filter: `blur(${blur}px)`,
       }}

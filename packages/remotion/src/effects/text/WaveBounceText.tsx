@@ -8,7 +8,7 @@ import { useResponsive } from '../../scenes/sizing.js'
  *   .char:nth-child(n) { animation-delay: calc(n * 80ms) }
  * Driven by frame so the wave never freezes when scrubbed.
  */
-export const WaveBounceText = ({ text, style }: TextPrimitiveProps) => {
+export const WaveBounceText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -20,7 +20,7 @@ export const WaveBounceText = ({ text, style }: TextPrimitiveProps) => {
   return (
     <div
       style={{
-        ...typographyStyle(style, style.fontSize * r.font),
+        ...typographyStyle(style, style.fontSize * r.font, fontOverride),
         whiteSpace: 'pre',
       }}
     >

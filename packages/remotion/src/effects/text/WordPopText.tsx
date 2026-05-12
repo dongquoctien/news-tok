@@ -7,7 +7,7 @@ import { useResponsive } from '../../scenes/sizing.js'
  * Each word kicks in 3 frames after the previous one. Once the last word
  * has popped, it stays visible for the rest of the segment.
  */
-export const WordPopText = ({ text, style }: TextPrimitiveProps) => {
+export const WordPopText = ({ text, style, fontOverride }: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -16,7 +16,7 @@ export const WordPopText = ({ text, style }: TextPrimitiveProps) => {
   return (
     <div
       style={{
-        ...typographyStyle(style, style.fontSize * r.font),
+        ...typographyStyle(style, style.fontSize * r.font, fontOverride),
         // Container can wrap; words flow naturally.
         display: 'block',
       }}
@@ -26,9 +26,12 @@ export const WordPopText = ({ text, style }: TextPrimitiveProps) => {
         const s = spring({
           frame: Math.max(0, frame - delay),
           fps,
-          config: { damping: 10, mass: 0.6 },
+          // Snappier than the default — TikTok-style pop reads better
+          // with a higher stiffness and a clearer overshoot peak.
+          config: { damping: 8, mass: 0.55, stiffness: 180 },
         })
-        const scale = s < 0.7 ? 0.5 + s * (1.05 - 0.5) / 0.7 : 1.05 - (s - 0.7) * 0.05 / 0.3
+        // Overshoot to 1.15 (was 1.05) so the bounce is visible at 30fps.
+        const scale = s < 0.7 ? 0.5 + s * (1.15 - 0.5) / 0.7 : 1.15 - (s - 0.7) * 0.15 / 0.3
         return (
           <span
             key={i}
