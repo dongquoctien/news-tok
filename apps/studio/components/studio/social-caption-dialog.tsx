@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Copy, Loader2, Share2 } from 'lucide-react'
+import { Check, Copy, Loader2, Share2, Sparkles } from 'lucide-react'
 import type { SocialCaptionResult } from '@news-tok/shared/social'
 import { Button } from '@/components/ui/button'
 import {
@@ -22,24 +22,38 @@ type PlatformMeta = {
   tip: string
 }
 
-const PLATFORMS: Record<'tiktok' | 'facebook' | 'instagram', PlatformMeta> = {
+/**
+ * Per-platform sweet spot — the length range that actually performs
+ * well on each platform. `charBudget` is the absolute upper bound
+ * (used as a hard fail threshold); `targetMax` is the recommended
+ * ceiling for organic reach. The dialog warns when the baseline
+ * exceeds `targetMax` and prompts the user to ask Claude CLI to
+ * rewrite it shorter.
+ */
+const PLATFORMS: Record<
+  'tiktok' | 'facebook' | 'instagram',
+  PlatformMeta & { targetMax: number }
+> = {
   tiktok: {
     label: 'TikTok',
     color: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
     charBudget: 2200,
-    tip: 'Hook + 2 dòng + ≤8 hashtag — TikTok rewards short copy.',
+    targetMax: 250,
+    tip: 'Sweet spot 120–250 chars. Hook ngắn + 1 câu drama + ≤6 hashtag.',
   },
   facebook: {
     label: 'Facebook',
     color: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
     charBudget: 63206,
-    tip: 'Kể chuyện dài, CTA bình luận — Facebook đọc kỹ caption.',
+    targetMax: 800,
+    tip: 'Sweet spot 400–800 chars. Kể chuyện, kết bằng câu hỏi mở.',
   },
   instagram: {
     label: 'Instagram',
     color: 'bg-fuchsia-500/20 text-fuchsia-300 border-fuchsia-500/30',
     charBudget: 2200,
-    tip: 'Emoji hook + line break + dense hashtag tail — IG cap 30 tags.',
+    targetMax: 500,
+    tip: 'Sweet spot 250–500 chars. Emoji hook + arrow bullets + hashtag block.',
   },
 }
 
@@ -55,6 +69,7 @@ function CaptionCard({
   const meta = PLATFORMS[platform]
   const [copied, setCopied] = useState(false)
   const overBudget = charCount > meta.charBudget
+  const overTarget = charCount > meta.targetMax
 
   const onCopy = async () => {
     try {
@@ -82,11 +97,22 @@ function CaptionCard({
           <span
             className={cn(
               'text-[10px] tabular-nums',
-              overBudget ? 'text-destructive' : 'text-muted-foreground'
+              overBudget
+                ? 'text-destructive'
+                : overTarget
+                  ? 'text-amber-400'
+                  : 'text-muted-foreground'
             )}
-            title={`Budget ${meta.charBudget} chars`}
+            title={
+              overBudget
+                ? `Vượt budget ${meta.charBudget} chars — platform sẽ cắt`
+                : overTarget
+                  ? `Vượt sweet spot ${meta.targetMax} chars — caption sẽ kém hiệu quả`
+                  : `Sweet spot ≤ ${meta.targetMax} chars`
+            }
           >
-            {charCount} / {meta.charBudget}
+            {charCount} / {meta.targetMax}
+            {overTarget ? ' ⚠' : ''}
           </span>
           <Button size="sm" variant={copied ? 'default' : 'outline'} onClick={onCopy}>
             {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
@@ -177,6 +203,30 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
           <p className="text-sm text-destructive">{error}</p>
         ) : data ? (
           <>
+            {/* AI rewrite hint — surface when any baseline caption exceeds
+                the platform sweet spot. The orchestrator (Claude in CLI)
+                can compress the verbose template output into hook-driven
+                copy; the dialog itself only shows the template baseline. */}
+            {data.captions.some((c) => {
+              const m = PLATFORMS[c.platform]
+              return c.charCount > m.targetMax
+            }) ? (
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-200">
+                <Sparkles className="mt-0.5 size-4 shrink-0" />
+                <div>
+                  <strong>Baseline đang hơi dài.</strong> Caption template
+                  liệt kê thẳng từ storyboard — có thể vượt sweet spot mỗi
+                  platform.{' '}
+                  <span className="text-amber-300/80">
+                    Quay lại Claude CLI và yêu cầu "cải thiện caption ngắn
+                    gọn hơn" — orchestrator sẽ rewrite theo style từng
+                    platform (xem CLAUDE.md §"prep video for social
+                    upload").
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex flex-wrap items-center gap-2 rounded-md border bg-secondary/20 p-3">
               <span className="text-xs uppercase tracking-wide text-muted-foreground">
                 Topic

@@ -249,20 +249,55 @@ typo or missing field can't land on disk and break the renderer mid-way.
 
 After `renderProject` succeeds, the user usually wants to post the mp4
 on TikTok / Facebook / Instagram. Each platform expects a different
-caption shape:
+caption shape — and the template-based `generateSocialCaption` output
+is intentionally a **starting point**, not the final copy. Your job
+as the orchestrator is to take that baseline and rewrite it into
+punchier, audience-tuned captions before showing them to the user.
 
-1. Call `generateSocialCaption({ projectId })`. It auto-classifies the
-   topic and returns three platform variants plus a topic-aware
-   hashtag block. Override `topic` if the article straddles two
-   categories (e.g. "tech" article about a politician should be
-   `politics`).
-2. Show the user all three variants in your response so they can copy
-   whichever fits their post. Mention the character count next to each
-   — Instagram and Facebook cap captions around 2200 chars; TikTok
-   stops at 2200 too but rewards much shorter copy.
-3. The hashtag pool is intentionally trimmed to 12. If the user wants
-   more, append niche tags from their own community — don't pad the
-   tool's output with low-quality fillers.
+### Step 1 — Pull the baseline
+
+Call `generateSocialCaption({ projectId })`. It auto-classifies the
+topic and returns three platform variants plus a topic-aware hashtag
+block. Override `topic` if the article straddles two categories (e.g.
+"tech" article about a politician should be `politics`).
+
+### Step 2 — Rewrite each variant (REQUIRED)
+
+The baseline lists every keypoint verbatim, which makes TikTok/IG
+captions far too long. Rewrite the three variants per platform target
+length:
+
+| Platform | Target length | Style |
+|---|---|---|
+| TikTok | **120–250 chars** | Hook ngắn + 1 câu drama + CTA + ≤6 hashtag |
+| Facebook | 400–800 chars | Storytelling 2–3 đoạn, kết bằng câu hỏi mở để bình luận |
+| Instagram | 250–500 chars | Hook emoji + 2–3 dòng arrow `→` + hashtag dense ở dưới |
+
+Vietnamese audiences respond best to:
+- TikTok: viết tắt khẩu ngữ ("ai mà ngờ", "cú twist", "đỉnh nóc"),
+  câu ngắn, không dấu chấm ở cuối hook
+- Facebook: kể như một status cá nhân, không liệt kê
+- Instagram: emoji đầu dòng, ngắt dòng đẹp, hashtag thành 1 block ở
+  cuối tách bằng dòng trống
+
+Keep the hashtag list intact (or trim to top 8 for TikTok) — the tool
+already picked topic-aware tags. Add niche tags from the article only
+if they obviously beat the generic pool.
+
+### Step 3 — Present all three variants
+
+Show the rewritten captions plus character counts. Don't hide the
+baseline if the user asks for it — they may want to compare. Default
+to recommending **TikTok** first if the project is 9:16, **Facebook**
+if 16:9.
+
+### Why the baseline isn't enough
+
+The tool is template-based on purpose (no LLM call, 100% local,
+deterministic). It lists every keypoint verbatim because it can't
+judge which one is the hook. You can. Use your VN/EN language ability
+to compress 5 keypoints into 2 sentences that hook in the first 50
+chars, then keep the topic-aware hashtags from the tool.
 
 ## Custom scene
 
