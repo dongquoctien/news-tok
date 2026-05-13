@@ -117,7 +117,12 @@ function resolveColorOverride(
   return { ...(segOv ?? {}), ...(variantOv ?? {}) }
 }
 
-/** Emit short SFX cues for a single segment based on its text style. */
+/**
+ * Emit short SFX cues for a single segment. Priority:
+ *   segment.sfxOverride > textStyle.sfx
+ * The override is treated as a full replacement — an empty enterSoundId
+ * silences the cue without falling back to the style's value.
+ */
 function SegmentSfx({
   segment,
   style,
@@ -130,7 +135,7 @@ function SegmentSfx({
   masterVolume: number
 }) {
   const { fps } = useVideoConfig()
-  const sfx = style.sfx
+  const sfx = segment.sfxOverride ?? style.sfx
   if (!sfx) return null
   const cues: React.ReactNode[] = []
   const enterUrl = sfx.enterSoundId ? sfxUrlMap[sfx.enterSoundId] : undefined

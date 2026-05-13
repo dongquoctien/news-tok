@@ -20,6 +20,7 @@ import {
   Save,
   Share2,
   Type,
+  Volume2,
 } from 'lucide-react'
 import {
   DEFAULT_VOICES,
@@ -40,6 +41,7 @@ import { FontPicker } from '@/components/studio/font-picker'
 import { ColorPicker } from '@/components/studio/color-picker'
 import { SocialCaptionDialog } from '@/components/studio/social-caption-dialog'
 import { ProjectSettingsDialog } from '@/components/studio/project-settings-dialog'
+import { SfxPicker } from '@/components/studio/sfx-picker'
 import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
@@ -1047,32 +1049,70 @@ function SegmentEditor({
 
       <div>
         <Label>Sound effect</Label>
-        {resolvedStyle?.sfx ? (
-          <div className="mt-1 space-y-1 rounded-md border bg-muted/40 px-2 py-1.5 text-xs">
-            {resolvedStyle.sfx.enterSoundId ? (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Enter</span>
-                <code className="font-mono">{resolvedStyle.sfx.enterSoundId}</code>
+        <div className="mt-1 space-y-2">
+          {segment.sfxOverride ? (
+            <div className="space-y-1 rounded-md border border-primary/40 bg-primary/5 px-2 py-1.5 text-xs">
+              <div className="flex items-center gap-1 text-[10px] uppercase tracking-wide text-primary">
+                Segment override
               </div>
-            ) : (
-              <div className="text-muted-foreground">No enter cue</div>
-            )}
-            {resolvedStyle.sfx.perWordSoundId ? (
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Per word</span>
-                <code className="font-mono">{resolvedStyle.sfx.perWordSoundId}</code>
+              {segment.sfxOverride.enterSoundId ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Enter</span>
+                  <code className="font-mono">{segment.sfxOverride.enterSoundId}</code>
+                </div>
+              ) : (
+                <div className="text-muted-foreground">No enter cue</div>
+              )}
+              {segment.sfxOverride.perWordSoundId ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Per word</span>
+                  <code className="font-mono">{segment.sfxOverride.perWordSoundId}</code>
+                </div>
+              ) : null}
+            </div>
+          ) : resolvedStyle?.sfx ? (
+            <div className="space-y-1 rounded-md border bg-muted/40 px-2 py-1.5 text-xs">
+              <div className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                From style {resolvedStyle.name}
               </div>
-            ) : null}
-          </div>
-        ) : (
-          <p className="mt-1 text-xs text-muted-foreground">
-            {segment.textStyleId
-              ? 'This style has no SFX cues.'
-              : 'SFX is set by the resolved text style — pick one above to hear cues.'}
-          </p>
-        )}
+              {resolvedStyle.sfx.enterSoundId ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Enter</span>
+                  <code className="font-mono">{resolvedStyle.sfx.enterSoundId}</code>
+                </div>
+              ) : (
+                <div className="text-muted-foreground">No enter cue</div>
+              )}
+              {resolvedStyle.sfx.perWordSoundId ? (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Per word</span>
+                  <code className="font-mono">{resolvedStyle.sfx.perWordSoundId}</code>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              {segment.textStyleId
+                ? 'This style has no SFX cues.'
+                : 'SFX is set by the resolved text style — pick one above to hear cues.'}
+            </p>
+          )}
+          <SfxPicker
+            override={segment.sfxOverride}
+            resolvedFromStyle={resolvedStyle?.sfx ?? undefined}
+            onChange={(next) =>
+              onChange({ sfxOverride: next ?? undefined })
+            }
+            trigger={
+              <Button variant="outline" size="sm" className="w-full">
+                <Volume2 />
+                {segment.sfxOverride ? 'Edit SFX override' : 'Override SFX'}
+              </Button>
+            }
+          />
+        </div>
         <p className="mt-1 text-[10px] text-muted-foreground">
-          SFX bound to the picked style. Adjust master volume in Settings.
+          Segment override wins over the resolved style. Adjust master volume in Settings.
         </p>
       </div>
 
