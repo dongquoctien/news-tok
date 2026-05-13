@@ -36,14 +36,14 @@ const PLATFORMS: Record<
 > = {
   tiktok: {
     label: 'TikTok',
-    color: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
+    color: 'bg-pink-500/20 text-pink-700 border-pink-500/30 dark:text-pink-300',
     charBudget: 2200,
     targetMax: 250,
     tip: 'Sweet spot 120–250 chars. Hook ngắn + 1 câu drama + ≤6 hashtag.',
   },
   facebook: {
     label: 'Facebook',
-    color: 'bg-blue-500/20 text-blue-300 border-blue-500/30',
+    color: 'bg-blue-500/20 text-blue-700 border-blue-500/30 dark:text-blue-300',
     charBudget: 63206,
     targetMax: 800,
     tip: 'Sweet spot 400–800 chars. Kể chuyện, kết bằng câu hỏi mở.',
@@ -219,11 +219,11 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
               const m = PLATFORMS[c.platform]
               return c.charCount > m.targetMax
             }) ? (
-              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+              <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
                 <Sparkles className="mt-0.5 size-3.5 shrink-0" />
                 <p className="leading-relaxed">
                   Baseline hơi dài. Quay lại Claude CLI và yêu cầu{' '}
-                  <em className="not-italic font-medium text-amber-100">
+                  <em className="not-italic font-medium text-amber-900 dark:text-amber-100">
                     "cải thiện caption ngắn gọn hơn"
                   </em>{' '}
                   — orchestrator sẽ rewrite theo style từng platform.

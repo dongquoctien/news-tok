@@ -40,6 +40,7 @@ import { FontPicker } from '@/components/studio/font-picker'
 import { ColorPicker } from '@/components/studio/color-picker'
 import { SocialCaptionDialog } from '@/components/studio/social-caption-dialog'
 import { ProjectSettingsDialog } from '@/components/studio/project-settings-dialog'
+import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -382,6 +383,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
+          <ThemeToggle />
           <Button
             variant="outline"
             size="sm"
@@ -506,7 +508,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                     e.currentTarget.value = ''
                   }}
                   disabled={renderStatus === 'running' || project.segments.length === 0}
-                  className="absolute inset-0 cursor-pointer opacity-0 [color-scheme:dark]"
+                  className="absolute inset-0 cursor-pointer opacity-0 [color-scheme:light_dark]"
                   aria-label="Render single variant"
                 >
                   <option value="" className="bg-background text-foreground" disabled>
@@ -569,7 +571,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
       )}
 
       {renderStatus === 'completed' && (
-        <div className="border-b border-emerald-500/40 bg-emerald-500/10 px-6 py-2 text-xs text-emerald-200">
+        <div className="border-b border-emerald-500/40 bg-emerald-500/10 px-6 py-2 text-xs text-emerald-700 dark:text-emerald-200">
           Render complete · output.mp4 saved.
         </div>
       )}

@@ -140,7 +140,7 @@ export function VariantsPanel({
                         const url = assetUrl(outputPath!)
                         if (url) setOpenedVideoUrl(url)
                       }}
-                      className="inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-300 transition-colors hover:bg-emerald-500/20"
+                      className="inline-flex items-center gap-1 rounded border border-emerald-500/40 bg-emerald-500/10 px-1.5 py-0.5 text-[10px] text-emerald-700 transition-colors hover:bg-emerald-500/20 dark:text-emerald-300"
                       title={`Open ${outputPath}`}
                     >
                       <Film className="size-3" />

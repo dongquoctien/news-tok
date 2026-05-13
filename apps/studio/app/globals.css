@@ -7,9 +7,54 @@
    sourced from packages/shared/src/ui-tokens.ts. */
 @source "../../../packages/remotion/src/**/*.{ts,tsx}";
 
-/* shadcn/ui base tokens — dark theme by default.
-   Mirror packages/shared/src/ui-tokens.ts COLOR constants. */
+/* Make the Tailwind `dark:` variant follow our class-based theme system
+   (set by ThemeProvider on <html>) instead of the OS media query.
+   Without this, `dark:` would activate based on prefers-color-scheme and
+   ignore the user's explicit toggle. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* shadcn/ui base tokens.
+   Mirror packages/shared/src/ui-tokens.ts COLOR constants.
+   Default = light theme; .dark on <html> swaps to dark.
+   Resolution order:
+     1. <html class="dark"> or <html class="light"> — user force
+     2. prefers-color-scheme media query — OS preference
+     3. fallback to light (the :root block below). */
 :root {
+  /* Slightly off-white so cards (pure white) visibly lift off the page.
+     Mirrors the dark theme's "background is one stop darker than card" idea. */
+  --background: oklch(0.97 0.005 280);
+  --foreground: oklch(0.18 0.01 280);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.18 0.01 280);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.18 0.01 280);
+  --primary: oklch(0.55 0.18 280);
+  --primary-foreground: oklch(0.99 0 0);
+  /* Secondary used at /20 to /60 alpha as subtle "tinted card" surfaces
+     across the app. On light theme it must be dark enough that ~30% alpha
+     against a near-white page is still distinguishable. */
+  --secondary: oklch(0.88 0.012 280);
+  --secondary-foreground: oklch(0.22 0.01 280);
+  --muted: oklch(0.94 0.008 280);
+  --muted-foreground: oklch(0.45 0.01 280);
+  --accent: oklch(0.55 0.18 280);
+  --accent-foreground: oklch(0.99 0 0);
+  --destructive: oklch(0.55 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --border: oklch(0.88 0.008 280);
+  --input: oklch(0.88 0.008 280);
+  --ring: oklch(0.55 0.18 280);
+  --radius: 0.5rem;
+
+  /* Brand glow strength — softer on light to avoid bloom. */
+  --brand-glow-strength: 0.18;
+}
+
+/* Dark tokens — applied when <html> has class="dark" OR when the
+   OS prefers dark AND the user hasn't forced a theme (no .light class). */
+.dark,
+:root.dark {
   --background: oklch(0.13 0.01 280);
   --foreground: oklch(0.96 0 0);
   --card: oklch(0.16 0.01 280);
@@ -29,7 +74,32 @@
   --border: oklch(0.24 0.01 280);
   --input: oklch(0.24 0.01 280);
   --ring: oklch(0.65 0.18 280);
-  --radius: 0.5rem;
+  --brand-glow-strength: 0.45;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not(.light) {
+    --background: oklch(0.13 0.01 280);
+    --foreground: oklch(0.96 0 0);
+    --card: oklch(0.16 0.01 280);
+    --card-foreground: oklch(0.96 0 0);
+    --popover: oklch(0.16 0.01 280);
+    --popover-foreground: oklch(0.96 0 0);
+    --primary: oklch(0.65 0.18 280);
+    --primary-foreground: oklch(0.98 0 0);
+    --secondary: oklch(0.22 0.01 280);
+    --secondary-foreground: oklch(0.96 0 0);
+    --muted: oklch(0.2 0.01 280);
+    --muted-foreground: oklch(0.65 0.01 280);
+    --accent: oklch(0.65 0.18 280);
+    --accent-foreground: oklch(0.98 0 0);
+    --destructive: oklch(0.6 0.22 25);
+    --destructive-foreground: oklch(0.98 0 0);
+    --border: oklch(0.24 0.01 280);
+    --input: oklch(0.24 0.01 280);
+    --ring: oklch(0.65 0.18 280);
+    --brand-glow-strength: 0.45;
+  }
 }
 
 @theme inline {
@@ -122,7 +192,7 @@ body {
   -webkit-background-clip: text;
   color: transparent;
   -webkit-text-fill-color: transparent;
-  filter: drop-shadow(0 0 18px oklch(0.65 0.18 280 / 0.45));
+  filter: drop-shadow(0 0 18px oklch(0.65 0.18 280 / var(--brand-glow-strength)));
   animation: news-tok-shimmer 6s ease-in-out infinite;
 }
 
@@ -137,7 +207,7 @@ body {
 }
 
 .news-tok-brand-icon {
-  filter: drop-shadow(0 0 14px oklch(0.65 0.18 280 / 0.55));
+  filter: drop-shadow(0 0 14px oklch(0.65 0.18 280 / var(--brand-glow-strength)));
   transform-origin: 30% 70%;
   animation: news-tok-clap 5s ease-in-out infinite;
 }
