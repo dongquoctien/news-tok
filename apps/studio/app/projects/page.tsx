@@ -8,6 +8,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { ProjectsGrid } from '@/components/studio/projects-grid'
+import { ThemeToggle } from '@/components/theme/theme-toggle'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs'
@@ -17,13 +18,16 @@ export default async function ProjectsListPage() {
 
   return (
     <main className="mx-auto max-w-5xl p-8">
-      <Link
-        href="/"
-        className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
-      >
-        <ArrowLeft className="size-4" />
-        Home
-      </Link>
+      <div className="mb-6 flex items-center justify-between">
+        <Link
+          href="/"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" />
+          Home
+        </Link>
+        <ThemeToggle />
+      </div>
       <div className="mb-6 flex items-baseline justify-between">
         <h2 className="text-2xl font-semibold">Projects</h2>
         <span className="text-sm text-muted-foreground">{projects.length} total</span>
