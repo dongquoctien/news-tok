@@ -666,6 +666,11 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   variantId: previewVariantId,
                 })
               }
+              projectId={project.id}
+              customSfx={project.customSfx ?? []}
+              onCustomSfxChange={(next) =>
+                updateProject({ customSfx: next })
+              }
             />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -688,6 +693,9 @@ function SegmentEditor({
   onApplyStyle,
   onApplyFont,
   onApplyColor,
+  projectId,
+  customSfx,
+  onCustomSfxChange,
 }: {
   segment: Segment
   language: Project['language']
@@ -707,6 +715,9 @@ function SegmentEditor({
     colorOverride: ColorOverride
     scope: 'segmentInVariant' | 'segment' | 'all'
   }) => void
+  projectId: string
+  customSfx: Project['customSfx']
+  onCustomSfxChange: (next: Project['customSfx']) => void
 }) {
   const [synthStatus, setSynthStatus] = useState<'idle' | 'running' | 'error'>('idle')
   const [synthError, setSynthError] = useState<string | null>(null)
@@ -1098,11 +1109,14 @@ function SegmentEditor({
             </p>
           )}
           <SfxPicker
+            projectId={projectId}
+            customSfx={customSfx ?? []}
             override={segment.sfxOverride}
             resolvedFromStyle={resolvedStyle?.sfx ?? undefined}
             onChange={(next) =>
               onChange({ sfxOverride: next ?? undefined })
             }
+            onCustomSfxChange={onCustomSfxChange}
             trigger={
               <Button variant="outline" size="sm" className="w-full">
                 <Volume2 />

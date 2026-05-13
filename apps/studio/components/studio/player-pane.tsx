@@ -11,8 +11,9 @@ import { cn } from '@/lib/utils'
 // Studio's <Player> bundles the same composition the headless renderer
 // uses, but it doesn't run the SFX staging pipeline. Wire every bank
 // entry to /api/sfx/<id> directly so the in-browser preview plays the
-// same cues the final mp4 will.
-const SFX_URL_MAP: Record<string, string> = Object.fromEntries(
+// same cues the final mp4 will. Custom SFX entries are merged in below
+// (they live under /api/projects/<id>/sfx/<slug>).
+const BUILT_IN_SFX_URL_MAP: Record<string, string> = Object.fromEntries(
   BUILT_IN_SFX.map((entry) => [entry.id, `/api/sfx/${entry.id}`])
 )
 
@@ -69,6 +70,13 @@ export function PlayerPane({
   const totalSec = project.segments.reduce((sum, s) => sum + s.durationSec, 0)
   const durationInFrames = Math.max(1, Math.round(totalSec * preset.fps))
   const playerProject = useMemo(() => rewriteProject(project), [project])
+  const sfxUrlMap = useMemo(() => {
+    const map: Record<string, string> = { ...BUILT_IN_SFX_URL_MAP }
+    for (const entry of project.customSfx ?? []) {
+      map[entry.id] = `/api/projects/${encodeURIComponent(project.id)}/sfx/${encodeURIComponent(entry.id)}`
+    }
+    return map
+  }, [project.id, project.customSfx])
   const playerRef = useRef<PlayerRef>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
   const timeLabelRef = useRef<HTMLSpanElement>(null)
@@ -133,7 +141,7 @@ export function PlayerPane({
           inputProps={{
             storyboard: playerProject,
             variantId: previewVariantId ?? undefined,
-            sfxUrlMap: SFX_URL_MAP,
+            sfxUrlMap,
           }}
           durationInFrames={durationInFrames}
           fps={preset.fps}

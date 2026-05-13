@@ -302,6 +302,30 @@ export const SubtitleConfigSchema = z.object({
   /** Position relative to bottom (0..1 of video height). */
   bottomPct: z.number().min(0).max(1).default(0.18),
 })
+
+/**
+ * One user-uploaded SFX cue, scoped to a single project (lives in
+ * `data/projects/<id>/sfx/`). Mirrors `SfxEntry` from sfx.ts but stays
+ * a separate runtime-validated schema because users author it, whereas
+ * the built-in bank is committed code.
+ */
+export const CustomSfxEntrySchema = z.object({
+  /** Slug used in storyboard refs and on disk. Must start with `user-`. */
+  id: z.string().regex(/^user-[a-z0-9-]+$/i),
+  /** Human label shown in the picker. */
+  label: z.string().min(1).max(60),
+  /** Duration in seconds, read from the uploaded mp3 at upload time. */
+  durationSec: z.number().positive().max(5),
+  /** Absolute path to the staged mp3 under data/projects/<id>/sfx/. */
+  path: z.string(),
+  /** Multiplied into the segment's volume slider. */
+  defaultGain: z.number().min(0).max(1).default(1),
+  /** Original filename for nicer error messages. */
+  originalName: z.string().optional(),
+  /** ISO timestamp when the upload landed on disk. */
+  uploadedAt: z.string().datetime(),
+})
+export type CustomSfxEntry = z.infer<typeof CustomSfxEntrySchema>
 export type SubtitleConfig = z.infer<typeof SubtitleConfigSchema>
 
 export const ProjectSchema = z.object({
@@ -331,6 +355,14 @@ export const ProjectSchema = z.object({
   variants: z.array(VariantSchema).default([]),
   /** Inline user-authored text styles, merged with built-ins at render time. */
   userTextStyles: z.array(TextStyleSchema).default([]),
+  /**
+   * User-uploaded SFX files. Each entry's `path` points at
+   * `data/projects/<id>/sfx/<slug>.mp3` (absolute). Use the
+   * `user-` prefix on `id` to avoid collisions with `BUILT_IN_SFX`.
+   * The render staging step copies these into the publicDir alongside
+   * the built-in bank so compositions can play either freely.
+   */
+  customSfx: z.array(CustomSfxEntrySchema).default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 })
