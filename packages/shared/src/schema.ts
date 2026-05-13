@@ -288,7 +288,7 @@ export const ExportPresetSchema = z.enum(['tiktok', 'youtube-shorts', 'reels', '
 export type ExportPreset = z.infer<typeof ExportPresetSchema>
 
 export const SubtitleConfigSchema = z.object({
-  enabled: z.boolean().default(false),
+  enabled: z.boolean().default(true),
   /** Position relative to bottom (0..1 of video height). */
   bottomPct: z.number().min(0).max(1).default(0.18),
 })
@@ -305,7 +305,7 @@ export const ProjectSchema = z.object({
   bgMusicVolume: z.number().min(0).max(1).default(0.2),
   /** Master volume for text-transition SFX (multiplied into each cue). */
   sfxVolume: z.number().min(0).max(1).default(0.7),
-  subtitles: SubtitleConfigSchema.default({ enabled: false, bottomPct: 0.18 }),
+  subtitles: SubtitleConfigSchema.default({ enabled: true, bottomPct: 0.18 }),
   exportPreset: ExportPresetSchema.default('standard'),
   /**
    * Render variants. Empty array preserves the legacy single-render behavior
