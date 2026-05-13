@@ -17,8 +17,12 @@ import type { TextStyle } from './schema.js'
  * render time, so user-authored styles should stick to the whitelist.
  */
 
-/** Logical font ids the renderer guarantees to load. */
+/** Logical font ids the renderer guarantees to load. The first 12 are
+ * the original M7 pool; the 20 below were added in M10 to give the
+ * builder a meaningful font picker without leaving the deterministic
+ * Google Fonts whitelist. */
 export const ALLOWED_FONT_IDS = [
+  // M7 pool
   'beVietnamPro',
   'inter',
   'montserrat',
@@ -31,6 +35,27 @@ export const ALLOWED_FONT_IDS = [
   'oswald',
   'archivoBlack',
   'nunito',
+  // M10 expansion
+  'bangers',
+  'barlow',
+  'dmSans',
+  'kanit',
+  'merriweather',
+  'openSans',
+  'outfit',
+  'plusJakartaSans',
+  'poppins',
+  'prompt',
+  'quicksand',
+  'raleway',
+  'roboto',
+  'robotoCondensed',
+  'rubik',
+  'sourceSans3',
+  'spaceGrotesk',
+  'spaceMono',
+  'tikTokSans',
+  'workSans',
 ] as const
 
 export type AllowedFontId = (typeof ALLOWED_FONT_IDS)[number]

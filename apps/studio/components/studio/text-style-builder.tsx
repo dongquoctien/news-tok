@@ -1,9 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { ChevronDown, Loader2, Plus, Type } from 'lucide-react'
 import {
-  ALLOWED_FONT_IDS,
+  ChevronDown,
+  Loader2,
+  Pipette,
+  RotateCcw,
+  Sparkles,
+  Type,
+} from 'lucide-react'
+import {
+  BUILT_IN_TEXT_STYLES,
   type AllowedFontId,
 } from '@news-tok/shared/text-styles'
 import type { TextMotion, TextStyle } from '@news-tok/shared/schema'
@@ -11,18 +18,30 @@ import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
 import { fontLabel } from '@/lib/font-label'
 import { plateCss, previewFontStack, textCss } from '@/lib/text-style-preview'
+import { PREVIEW_KEYFRAMES, previewAnimationStyle } from '@/lib/text-style-anim'
 import { cn } from '@/lib/utils'
+import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
+import { FontPickerDialog } from './font-picker-dialog'
+import type { Aspect } from '@news-tok/shared/schema'
 
-/** Family options mirror the schema enum. */
+// --- Constants -----------------------------------------------------------
+
+const TABS = ['identity', 'typography', 'layout', 'decorators', 'motion'] as const
+type Tab = (typeof TABS)[number]
+
+const TAB_LABELS: Record<Tab, string> = {
+  identity: 'Identity',
+  typography: 'Typography',
+  layout: 'Layout',
+  decorators: 'Decorators',
+  motion: 'Motion',
+}
+
 const FAMILIES: { id: TextStyle['family']; label: string }[] = [
   { id: 'news', label: 'News' },
   { id: 'social', label: 'Social' },
@@ -31,11 +50,6 @@ const FAMILIES: { id: TextStyle['family']; label: string }[] = [
   { id: 'playful', label: 'Playful' },
 ]
 
-const ALIGNS: TextStyle['align'][] = ['left', 'center', 'right']
-const ANCHORS: TextStyle['anchor'][] = ['top', 'middle', 'bottom']
-
-/** Subset of motions exposed in the builder. Power users can hand-edit
- * storyboard.json to reach the rest (glitch / waveBounce / etc.). */
 const ENTER_MOTIONS: TextMotion[] = [
   'none',
   'fade',
@@ -47,15 +61,24 @@ const ENTER_MOTIONS: TextMotion[] = [
   'wordHighlight',
   'karaoke',
   'letterStagger',
+  // animate.css-flavoured ports
+  'bounceIn',
+  'rubberBand',
+  'flipInX',
+  'lightSpeedIn',
+  'rollIn',
+  'tada',
+  'jello',
 ]
 
 const EXIT_MOTIONS: TextStyle['exit'][] = ['fade', 'slideDown', 'none']
-
 const KARAOKE_MODES: NonNullable<TextStyle['karaokeMode']>[] = ['fill', 'pop', 'underline']
 
-/** Default draft used when the user hits "Create new". Picks a sane
- * starting point so the live preview renders something the moment the
- * dialog opens. */
+const RECENT_COLORS_KEY = 'news-tok.recent-colors'
+const RECENT_COLORS_MAX = 8
+
+// --- Defaults / helpers --------------------------------------------------
+
 function emptyDraft(language: 'vi' | 'en'): TextStyle {
   return {
     id: `user-${Date.now().toString(36)}`,
@@ -80,11 +103,6 @@ function emptyDraft(language: 'vi' | 'en'): TextStyle {
   }
 }
 
-/**
- * Slugify a user-provided name into a deterministic id suffix so two
- * styles with the same name can't collide. Result is always prefixed
- * `user-` to keep it out of the built-in namespace.
- */
 function slugify(input: string): string {
   return (
     input
@@ -95,51 +113,115 @@ function slugify(input: string): string {
   )
 }
 
+/**
+ * Clone a built-in style into a user-owned draft. The new draft keeps the
+ * preset's typography + decorators + motion but drops the preset id /
+ * name so the user has to give it their own label before saving.
+ */
+function cloneFromPreset(preset: TextStyle, language: 'vi' | 'en'): TextStyle {
+  return {
+    ...preset,
+    id: `user-${slugify(preset.name)}-${Date.now().toString(36).slice(-4)}`,
+    name: `${preset.name} (custom)`,
+    source: 'user',
+    fontFamily: preset.fontFamily ?? (language === 'vi' ? 'beVietnamPro' : 'inter'),
+  }
+}
+
+// --- Recent colors -------------------------------------------------------
+
+function loadRecentColors(): string[] {
+  if (typeof window === 'undefined') return []
+  try {
+    const raw = window.localStorage.getItem(RECENT_COLORS_KEY)
+    if (!raw) return []
+    const parsed = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return []
+    return parsed.filter((c): c is string => typeof c === 'string').slice(0, RECENT_COLORS_MAX)
+  } catch {
+    return []
+  }
+}
+
+function pushRecentColor(color: string): string[] {
+  const current = loadRecentColors()
+  // Dedup by case-insensitive value so #FFF and #fff don't double-count.
+  const filtered = current.filter((c) => c.toLowerCase() !== color.toLowerCase())
+  const next = [color, ...filtered].slice(0, RECENT_COLORS_MAX)
+  try {
+    window.localStorage.setItem(RECENT_COLORS_KEY, JSON.stringify(next))
+  } catch {
+    // localStorage full or disabled — silently drop. Recent colors are
+    // a nice-to-have, not load-bearing.
+  }
+  return next
+}
+
+// --- Component -----------------------------------------------------------
+
 export type TextStyleBuilderProps = {
   projectId: string
-  /** Pass the style to edit, or `null` to start a fresh draft. */
   initial: TextStyle | null
   language: 'vi' | 'en'
-  /** Called after a successful POST so the parent can refresh. */
+  /** Project aspect — drives which device frame the right-pane preview
+   *  uses (phone for 9:16, laptop for 16:9, square for 1:1). */
+  aspect?: Aspect
+  /** Optional segment background image path so the live preview renders
+   *  over the actual scene instead of an abstract card. */
+  previewBackground?: string
+  /** Optional sample text — falls back to the draft name. */
+  previewText?: string
   onSaved: (style: TextStyle) => void
   trigger: React.ReactNode
 }
 
 /**
- * Descript-style accordion dialog for authoring a user TextStyle.
- *
- * Five sections (Identity, Typography, Layout, Decorators, Motion);
- * Identity stays open by default, the rest collapse so the form fits
- * a single dialog without scrolling on common viewports.
- *
- * Live preview at the top stays in sync with the draft via direct
- * styled DOM (no Player round-trip) — that's both faster than mounting
- * `<Player>` in the dialog and avoids re-bundling Remotion every
- * keystroke.
+ * Tabbed sidebar builder for authoring a user TextStyle. Replaces the
+ * earlier accordion modal so:
+ *   - The active tab is always visible — no scroll-and-expand dance.
+ *   - The sheet opens as a right-anchored 440px sidebar so the user can
+ *     still see the segment timeline + Player preview while editing.
+ *   - The big preview at the top sits over the current segment's
+ *     background image, not an abstract grey card.
+ *   - Each tab has a reset button so blowing up Decorators doesn't lose
+ *     Typography work.
+ *   - Identity → "Start from preset" lets users fork a built-in style
+ *     instead of starting from a blank `My style` default.
+ *   - Motion tab plays a short CSS animation matching the chosen enter
+ *     transition so the user sees what they're picking.
  */
 export function TextStyleBuilder({
   projectId,
   initial,
   language,
+  aspect = '9:16',
+  previewBackground,
+  previewText,
   onSaved,
   trigger,
 }: TextStyleBuilderProps) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<TextStyle>(() => initial ?? emptyDraft(language))
+  const [tab, setTab] = useState<Tab>('typography')
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const isEdit = !!initial
 
+  // Snapshot of the section state that "Reset" should restore. We freeze
+  // it on dialog open so reset always goes back to the moment the user
+  // opened the builder, not the latest unsaved state of another section.
+  const initialDraft = useMemo(
+    () => initial ?? emptyDraft(language),
+    [initial, language]
+  )
+
   useEffect(() => {
     if (!open) return
     setDraft(initial ?? emptyDraft(language))
+    setTab('typography')
     setError(null)
   }, [open, initial, language])
 
-  // When the user retypes the name on a brand-new draft, re-derive the
-  // id so the storage key matches what the user typed. Skip this for
-  // edits — the user might rename a style and we mustn't break refs
-  // already pointing at the old id.
   const onName = (name: string) => {
     setDraft((d) => {
       const nextId = isEdit ? d.id : `user-${slugify(name)}-${Date.now().toString(36).slice(-4)}`
@@ -148,6 +230,54 @@ export function TextStyleBuilder({
   }
 
   const patch = (p: Partial<TextStyle>) => setDraft((d) => ({ ...d, ...p }))
+
+  /** Restore just one section's fields to the snapshot the dialog opened with. */
+  const resetSection = (which: Tab) => {
+    setDraft((d) => {
+      const base = initialDraft
+      switch (which) {
+        case 'identity':
+          return { ...d, name: base.name, family: base.family, scope: base.scope }
+        case 'typography':
+          return {
+            ...d,
+            fontFamily: base.fontFamily,
+            fontSize: base.fontSize,
+            fontWeight: base.fontWeight,
+            letterSpacing: base.letterSpacing,
+            lineHeight: base.lineHeight,
+            color: base.color,
+          }
+        case 'layout':
+          return {
+            ...d,
+            align: base.align,
+            anchor: base.anchor,
+            marginPct: base.marginPct,
+          }
+        case 'decorators':
+          return {
+            ...d,
+            background: base.background,
+            textStroke: base.textStroke,
+            textShadow: base.textShadow,
+            gradientFill: base.gradientFill,
+          }
+        case 'motion':
+          return {
+            ...d,
+            enter: base.enter,
+            exit: base.exit,
+            enterDurationSec: base.enterDurationSec,
+            exitDurationSec: base.exitDurationSec,
+            karaokeMode: base.karaokeMode,
+            karaokeAccentColor: base.karaokeAccentColor,
+            karaokeIdleColor: base.karaokeIdleColor,
+            staggerStep: base.staggerStep,
+          }
+      }
+    })
+  }
 
   const save = async () => {
     setError(null)
@@ -174,115 +304,258 @@ export function TextStyleBuilder({
     }
   }
 
+  const split = splitRatioFor(aspect)
+  // Animate the preview on every tab so users see motion the moment
+  // they pick it — gating on `tab === 'motion'` was confusing: people
+  // try a new motion, switch to Layout to nudge anchor, and think the
+  // motion silently broke.
+  const animate = true
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Type className="size-5" />
-            {isEdit ? 'Edit text style' : 'Create text style'}
-          </DialogTitle>
-          <DialogDescription>
-            All knobs preview live above. The id is generated from the
-            name when creating; existing ids are preserved when editing
-            so segments still resolve.
-          </DialogDescription>
-        </DialogHeader>
-
-        <Preview draft={draft} />
-
-        <div className="space-y-2">
-          <Section title="Identity" defaultOpen>
-            <IdentitySection draft={draft} onName={onName} onPatch={patch} />
-          </Section>
-          <Section title="Typography">
-            <TypographySection draft={draft} onPatch={patch} />
-          </Section>
-          <Section title="Layout">
-            <LayoutSection draft={draft} onPatch={patch} />
-          </Section>
-          <Section title="Decorators">
-            <DecoratorsSection draft={draft} onPatch={patch} />
-          </Section>
-          <Section title="Motion">
-            <MotionSection draft={draft} onPatch={patch} />
-          </Section>
+      {/* Centered split-pane dialog. Form on the left (tabs + fields),
+          DeviceMockupPreview on the right showing the draft over the
+          segment background. */}
+      <DialogContent className="grid max-h-[92vh] w-full max-w-5xl grid-rows-[auto_1fr_auto] gap-0 overflow-hidden p-0">
+        {/* Header — Radix DialogContent already renders its own close X
+            in the top-right; don't add a second one. */}
+        <div className="flex items-center gap-2 border-b px-4 py-3 pr-12">
+          <Type className="size-5" />
+          <div>
+            <h2 className="text-sm font-semibold leading-none tracking-tight">
+              {isEdit ? 'Edit text style' : 'Create text style'}
+            </h2>
+            <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Id: <code className="font-mono normal-case">{draft.id}</code>
+            </p>
+          </div>
         </div>
 
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
+        {/* Split body */}
+        <div
+          className="grid min-h-0 overflow-hidden"
+          style={{ gridTemplateColumns: `${split.left} ${split.right}` }}
+        >
+          {/* Left: tabs + form */}
+          <div className="flex min-h-0 flex-col overflow-hidden border-r">
+            <TabBar tab={tab} onChange={setTab} />
+            <div className="flex-1 space-y-3 overflow-y-auto px-4 py-3">
+              <div className="flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => resetSection(tab)}
+                  title={`Reset ${TAB_LABELS[tab]} to the values this section had when the builder opened`}
+                >
+                  <RotateCcw />
+                  Reset {TAB_LABELS[tab].toLowerCase()}
+                </Button>
+              </div>
+              {tab === 'identity' ? (
+                <IdentityTab
+                  draft={draft}
+                  language={language}
+                  isEdit={isEdit}
+                  onName={onName}
+                  onPatch={patch}
+                  onReplaceDraft={(next) => setDraft(next)}
+                />
+              ) : null}
+              {tab === 'typography' ? (
+                <TypographyTab
+                  draft={draft}
+                  onPatch={patch}
+                  aspect={aspect}
+                  previewBackground={previewBackground}
+                  previewText={previewText}
+                />
+              ) : null}
+              {tab === 'layout' ? <LayoutTab draft={draft} onPatch={patch} /> : null}
+              {tab === 'decorators' ? (
+                <DecoratorsTab draft={draft} onPatch={patch} />
+              ) : null}
+              {tab === 'motion' ? <MotionTab draft={draft} onPatch={patch} /> : null}
+            </div>
+          </div>
 
-        <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <div className="text-xs text-muted-foreground">
-            Id: <code className="font-mono">{draft.id}</code>
+          {/* Right: sticky device mockup preview */}
+          <div className="flex min-h-0 items-center justify-center overflow-y-auto bg-secondary/20 p-4">
+            <DeviceMockupPreview
+              aspect={aspect}
+              background={previewBackground}
+              label="Preview"
+            >
+              <BuilderPreviewText
+                draft={draft}
+                animate={animate}
+                text={previewText ?? draft.name}
+              />
+            </DeviceMockupPreview>
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={save} disabled={saving || !draft.name.trim()}>
-              {saving ? <Loader2 className="animate-spin" /> : <Plus />}
-              {isEdit ? 'Update' : 'Save'}
-            </Button>
-          </div>
-        </DialogFooter>
+        </div>
+
+        {/* Footer */}
+        {error ? (
+          <p className="border-t bg-destructive/5 px-4 py-2 text-xs text-destructive">{error}</p>
+        ) : null}
+        <div className="flex items-center justify-end gap-2 border-t bg-background px-4 py-3">
+          <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={save} disabled={saving || !draft.name.trim()}>
+            {saving ? <Loader2 className="animate-spin" /> : null}
+            {isEdit ? 'Update' : 'Create New'}
+          </Button>
+        </div>
       </DialogContent>
     </Dialog>
   )
 }
 
-function Preview({ draft }: { draft: TextStyle }) {
-  return (
-    <div className="flex h-32 items-center justify-center rounded-md border bg-secondary/20 px-4">
-      <div style={plateCss(draft)}>
-        <span style={textCss(draft, 4)}>
-          {draft.name || 'Live preview'}
-        </span>
-      </div>
-    </div>
-  )
-}
+// --- Preview content (rendered inside the DeviceMockupPreview frame) ----
 
-function Section({
-  title,
-  defaultOpen,
-  children,
-}: {
-  title: string
-  defaultOpen?: boolean
-  children: React.ReactNode
-}) {
-  const [openState, setOpenState] = useState(!!defaultOpen)
-  return (
-    <div className="rounded-md border">
-      <button
-        type="button"
-        onClick={() => setOpenState((s) => !s)}
-        className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground hover:text-foreground"
-      >
-        <span>{title}</span>
-        <ChevronDown
-          className={cn('size-4 transition-transform', openState && 'rotate-180')}
-        />
-      </button>
-      {openState ? (
-        <div className="space-y-3 border-t px-3 py-3">{children}</div>
-      ) : null}
-    </div>
-  )
-}
-
-function IdentitySection({
+function BuilderPreviewText({
   draft,
-  onName,
-  onPatch,
+  text,
+  animate,
 }: {
   draft: TextStyle
+  text: string
+  /** Kept for API back-compat; preview always animates now so users
+   *  see motion the moment they pick it, on any tab. */
+  animate?: boolean
+}) {
+  void animate
+  // Take over the FrameContent slot's flex centring so anchor +
+  // marginPct from the Layout tab actually move the text. We render
+  // an absolute container that fills the device frame, then place
+  // the text inside it according to the draft's anchor.
+  const justify =
+    draft.anchor === 'top'
+      ? 'flex-start'
+      : draft.anchor === 'bottom'
+        ? 'flex-end'
+        : 'center'
+  const items =
+    draft.align === 'left'
+      ? 'flex-start'
+      : draft.align === 'right'
+        ? 'flex-end'
+        : 'center'
+  const m = `${draft.marginPct}%`
+  const animStyle = previewAnimationStyle(draft.enter, draft.enterDurationSec)
+
+  return (
+    <>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          padding: m,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: justify,
+          alignItems: items,
+          pointerEvents: 'none',
+        }}
+      >
+        <div style={plateCss(draft)}>
+          <span
+            // Force remount on motion or duration change so the CSS
+            // animation restarts cleanly. Without this, swapping
+            // `bounceIn` → `tada` would keep the previous timer running.
+            key={`${draft.enter}-${draft.enterDurationSec}`}
+            style={{ ...textCss(draft, 5), ...animStyle }}
+          >
+            {text || 'Live preview'}
+          </span>
+        </div>
+      </div>
+      <style>{PREVIEW_KEYFRAMES}</style>
+    </>
+  )
+}
+
+// --- Tab bar -------------------------------------------------------------
+
+function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+  // Selected tab gets a stronger visual: filled primary background,
+  // primary-foreground text, and an underline accent. Previous thin
+  // border-b alone made the "selected" state easy to miss, especially
+  // with `tracking-wide` softening the contrast.
+  return (
+    <div className="flex border-b bg-secondary/10 text-[11px] uppercase tracking-wide">
+      {TABS.map((t) => (
+        <button
+          key={t}
+          type="button"
+          onClick={() => onChange(t)}
+          className={cn(
+            'relative flex-1 px-3 py-2.5 font-semibold transition-colors',
+            t === tab
+              ? 'bg-primary/15 text-primary'
+              : 'text-muted-foreground hover:bg-secondary/40 hover:text-foreground'
+          )}
+        >
+          {TAB_LABELS[t]}
+          {t === tab ? (
+            <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-primary" />
+          ) : null}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// --- Tabs ----------------------------------------------------------------
+
+function IdentityTab({
+  draft,
+  language,
+  isEdit,
+  onName,
+  onPatch,
+  onReplaceDraft,
+}: {
+  draft: TextStyle
+  language: 'vi' | 'en'
+  isEdit: boolean
   onName: (name: string) => void
   onPatch: (p: Partial<TextStyle>) => void
+  onReplaceDraft: (next: TextStyle) => void
 }) {
   return (
     <>
+      {!isEdit ? (
+        <Field label="Start from preset">
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const id = e.target.value
+              if (!id) return
+              const preset = BUILT_IN_TEXT_STYLES.find((s) => s.id === id)
+              if (preset) onReplaceDraft(cloneFromPreset(preset, language))
+              e.currentTarget.value = ''
+            }}
+            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring [color-scheme:light_dark]"
+          >
+            <option value="" className="bg-background text-foreground">
+              — fork a built-in style —
+            </option>
+            {BUILT_IN_TEXT_STYLES.map((s) => (
+              <option key={s.id} value={s.id} className="bg-background text-foreground">
+                {s.name} · {s.family}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            <Sparkles className="mr-1 inline size-3" />
+            Forks the preset's typography + decorators into your draft. You
+            get a unique id and a "(custom)" suffix in the name to start.
+          </p>
+        </Field>
+      ) : null}
       <Field label="Name">
         <input
           type="text"
@@ -315,32 +588,46 @@ function IdentitySection({
   )
 }
 
-function TypographySection({
+function TypographyTab({
   draft,
   onPatch,
+  aspect,
+  previewBackground,
+  previewText,
 }: {
   draft: TextStyle
   onPatch: (p: Partial<TextStyle>) => void
+  aspect: Aspect
+  previewBackground?: string
+  previewText?: string
 }) {
   return (
     <>
       <Field label="Font">
-        <select
+        <FontPickerDialog
           value={draft.fontFamily}
-          onChange={(e) => onPatch({ fontFamily: e.target.value })}
-          className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring [color-scheme:light_dark]"
-        >
-          {ALLOWED_FONT_IDS.map((id) => (
-            <option
-              key={id}
-              value={id}
-              className="bg-background text-foreground"
-              style={{ fontFamily: previewFontStack(id) }}
+          onChange={(id) => onPatch({ fontFamily: id })}
+          context={{
+            aspect,
+            background: previewBackground,
+            style: draft,
+            sampleText: previewText || draft.name || 'Sample text',
+          }}
+          trigger={
+            <button
+              type="button"
+              className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-transparent px-3 text-sm transition-colors hover:bg-secondary/50 focus:outline-none focus:ring-1 focus:ring-ring"
             >
-              {fontLabel(id)}
-            </option>
-          ))}
-        </select>
+              <span
+                className="truncate"
+                style={{ fontFamily: previewFontStack(draft.fontFamily) }}
+              >
+                {fontLabel(draft.fontFamily)}
+              </span>
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            </button>
+          }
+        />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Slider
@@ -380,16 +667,13 @@ function TypographySection({
         />
       </div>
       <Field label="Colour">
-        <ColorInput
-          value={draft.color}
-          onChange={(c) => onPatch({ color: c })}
-        />
+        <ColorInput value={draft.color} onChange={(c) => onPatch({ color: c })} />
       </Field>
     </>
   )
 }
 
-function LayoutSection({
+function LayoutTab({
   draft,
   onPatch,
 }: {
@@ -398,19 +682,16 @@ function LayoutSection({
 }) {
   return (
     <>
-      <Field label="Align">
-        <Radio
-          value={draft.align}
-          options={ALIGNS}
-          onChange={(v) => onPatch({ align: v as TextStyle['align'] })}
+      <Field label="Position">
+        <PositionGrid
+          anchor={draft.anchor}
+          align={draft.align}
+          onChange={(anchor, align) => onPatch({ anchor, align })}
         />
-      </Field>
-      <Field label="Anchor">
-        <Radio
-          value={draft.anchor}
-          options={ANCHORS}
-          onChange={(v) => onPatch({ anchor: v as TextStyle['anchor'] })}
-        />
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Click any cell to anchor the text. Combines vertical anchor
+          (top / middle / bottom) and horizontal align (left / center / right).
+        </p>
       </Field>
       <Slider
         label="Margin (% of canvas)"
@@ -425,7 +706,63 @@ function LayoutSection({
   )
 }
 
-function DecoratorsSection({
+/**
+ * Watermark-style 3×3 grid that drives both `anchor` (row) and `align`
+ * (column) in a single click. The active cell shows a filled dot in
+ * its corner so the user can see, at a glance, where the text will sit.
+ */
+function PositionGrid({
+  anchor,
+  align,
+  onChange,
+}: {
+  anchor: TextStyle['anchor']
+  align: TextStyle['align']
+  onChange: (anchor: TextStyle['anchor'], align: TextStyle['align']) => void
+}) {
+  const rows: TextStyle['anchor'][] = ['top', 'middle', 'bottom']
+  const cols: TextStyle['align'][] = ['left', 'center', 'right']
+  return (
+    <div className="grid grid-cols-3 gap-1 rounded-md border bg-secondary/10 p-1.5">
+      {rows.map((row) =>
+        cols.map((col) => {
+          const active = row === anchor && col === align
+          // Translate row/col into the corresponding flex alignment so
+          // the dot inside the cell sits in the same spot the text
+          // will land on the preview.
+          const justify =
+            col === 'left' ? 'flex-start' : col === 'right' ? 'flex-end' : 'center'
+          const items =
+            row === 'top' ? 'flex-start' : row === 'bottom' ? 'flex-end' : 'center'
+          return (
+            <button
+              key={`${row}-${col}`}
+              type="button"
+              onClick={() => onChange(row, col)}
+              title={`${row} · ${col}`}
+              className={cn(
+                'flex h-10 items-stretch rounded border transition-colors',
+                active
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border hover:border-muted-foreground/40 hover:bg-secondary/40'
+              )}
+              style={{ display: 'flex', justifyContent: justify, alignItems: items, padding: 4 }}
+            >
+              <span
+                className={cn(
+                  'block size-2 rounded-full',
+                  active ? 'bg-primary' : 'bg-muted-foreground/40'
+                )}
+              />
+            </button>
+          )
+        })
+      )}
+    </div>
+  )
+}
+
+function DecoratorsTab({
   draft,
   onPatch,
 }: {
@@ -508,25 +845,42 @@ function DecoratorsSection({
           Outline the text
         </label>
         {draft.textStroke ? (
-          <div className="mt-2 grid grid-cols-2 gap-3">
-            <Slider
-              label="Width"
-              min={1}
-              max={12}
-              step={1}
-              value={draft.textStroke.widthPx}
-              unit="px"
-              onChange={(v) =>
-                onPatch({ textStroke: { ...draft.textStroke!, widthPx: v } })
-              }
-            />
-            <Field label="Stroke colour">
-              <ColorInput
-                value={draft.textStroke.color}
-                onChange={(c) =>
-                  onPatch({ textStroke: { ...draft.textStroke!, color: c } })
+          <div className="mt-2 space-y-2">
+            <div className="grid grid-cols-2 gap-3">
+              <Slider
+                label="Width"
+                min={1}
+                max={12}
+                step={1}
+                value={draft.textStroke.widthPx}
+                unit="px"
+                onChange={(v) => onPatch({ textStroke: { ...draft.textStroke!, widthPx: v } })}
+              />
+              <Field label="Stroke colour">
+                <ColorInput
+                  value={draft.textStroke.color}
+                  onChange={(c) => onPatch({ textStroke: { ...draft.textStroke!, color: c } })}
+                />
+              </Field>
+            </div>
+            <Field label="Stroke side">
+              <Radio
+                value={draft.textStroke.side ?? 'outside'}
+                options={['outside', 'inside', 'center']}
+                onChange={(v) =>
+                  onPatch({
+                    textStroke: {
+                      ...draft.textStroke!,
+                      side: v as NonNullable<TextStyle['textStroke']>['side'],
+                    },
+                  })
                 }
               />
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Outside grows past the glyph (cartoon look). Inside eats
+                into the fill (needs thicker width to stay visible).
+                Center is the browser default.
+              </p>
             </Field>
           </div>
         ) : null}
@@ -564,16 +918,12 @@ function DecoratorsSection({
               step={1}
               value={draft.textShadow.blur}
               unit="px"
-              onChange={(v) =>
-                onPatch({ textShadow: { ...draft.textShadow!, blur: v } })
-              }
+              onChange={(v) => onPatch({ textShadow: { ...draft.textShadow!, blur: v } })}
             />
             <Field label="Shadow colour">
               <ColorInput
                 value={draft.textShadow.color}
-                onChange={(c) =>
-                  onPatch({ textShadow: { ...draft.textShadow!, color: c } })
-                }
+                onChange={(c) => onPatch({ textShadow: { ...draft.textShadow!, color: c } })}
               />
             </Field>
           </div>
@@ -583,7 +933,7 @@ function DecoratorsSection({
   )
 }
 
-function MotionSection({
+function MotionTab({
   draft,
   onPatch,
 }: {
@@ -640,7 +990,6 @@ function MotionSection({
           onChange={(v) => onPatch({ exitDurationSec: v })}
         />
       </div>
-
       {draft.enter === 'karaoke' ? (
         <div className="space-y-2 rounded-md border bg-secondary/20 p-3">
           <Field label="Karaoke mode">
@@ -660,7 +1009,6 @@ function MotionSection({
           </Field>
         </div>
       ) : null}
-
       {draft.enter === 'letterStagger' ? (
         <Slider
           label="Stagger step"
@@ -678,13 +1026,7 @@ function MotionSection({
 
 // --- Small reusable form bits -------------------------------------------
 
-function Field({
-  label,
-  children,
-}: {
-  label: string
-  children: React.ReactNode
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="space-y-1">
       <Label className="text-xs uppercase tracking-wide">{label}</Label>
@@ -710,8 +1052,6 @@ function Slider({
   unit?: string
   onChange: (v: number) => void
 }) {
-  // Round display so users don't see 1.2999999. Step controls how many
-  // decimals matter; 0.1 → 1 decimal, 0.05 → 2 decimals, etc.
   const decimals = step >= 1 ? 0 : step >= 0.1 ? 1 : 2
   return (
     <div className="space-y-1">
@@ -728,7 +1068,7 @@ function Slider({
         />
         <span className="w-14 text-right tabular-nums text-xs text-muted-foreground">
           {value.toFixed(decimals)}
-          {unit ? unit : ''}
+          {unit ?? ''}
         </span>
       </div>
     </div>
@@ -765,31 +1105,85 @@ function Radio<T extends string>({
   )
 }
 
-function ColorInput({
-  value,
-  onChange,
-}: {
-  value: string
-  onChange: (c: string) => void
-}) {
+// --- Color input (eyedropper + recent strip) -----------------------------
+
+declare global {
+  interface Window {
+    EyeDropper?: new () => { open(): Promise<{ sRGBHex: string }> }
+  }
+}
+
+function ColorInput({ value, onChange }: { value: string; onChange: (c: string) => void }) {
+  const [recent, setRecent] = useState<string[]>(() => loadRecentColors())
+  const hasEyeDropper =
+    typeof window !== 'undefined' && typeof window.EyeDropper === 'function'
+
+  const commit = (c: string) => {
+    onChange(c)
+    if (c.startsWith('#') && c.length >= 4) {
+      setRecent(pushRecentColor(c))
+    }
+  }
+
+  const pickViaEyedropper = async () => {
+    if (!window.EyeDropper) return
+    try {
+      const ed = new window.EyeDropper()
+      const { sRGBHex } = await ed.open()
+      commit(sRGBHex)
+    } catch {
+      // User dismissed eyedropper — fine, do nothing.
+    }
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <input
-        type="color"
-        value={value.startsWith('#') ? value : '#ffffff'}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 w-12 cursor-pointer rounded border"
-      />
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="h-9 flex-1 rounded-md border border-input bg-transparent px-2 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
-      />
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <input
+          type="color"
+          value={value.startsWith('#') ? value : '#ffffff'}
+          onChange={(e) => commit(e.target.value)}
+          className="h-9 w-12 cursor-pointer rounded border"
+        />
+        <input
+          type="text"
+          value={value}
+          onChange={(e) => commit(e.target.value)}
+          className="h-9 flex-1 rounded-md border border-input bg-transparent px-2 font-mono text-xs focus:outline-none focus:ring-1 focus:ring-ring"
+        />
+        {hasEyeDropper ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon"
+            onClick={pickViaEyedropper}
+            title="Pick a colour from anywhere on the screen"
+            aria-label="Eyedropper"
+          >
+            <Pipette />
+          </Button>
+        ) : null}
+      </div>
+      {recent.length > 0 ? (
+        <div className="flex items-center gap-1">
+          <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+            Recent
+          </span>
+          {recent.map((c) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => onChange(c)}
+              className="size-5 shrink-0 rounded border border-border transition-transform hover:scale-110"
+              style={{ background: c }}
+              title={c}
+            />
+          ))}
+        </div>
+      ) : null}
     </div>
   )
 }
 
-// Silence the unused-import lint when ALLOWED_FONT_IDS is referenced as type
-// rather than value — keep both available without an extra alias.
+// Keep AllowedFontId reachable for callers that import it through this barrel.
 export type { AllowedFontId }

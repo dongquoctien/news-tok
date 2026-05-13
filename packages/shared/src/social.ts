@@ -220,6 +220,28 @@ function keypointsOf(segments: Project['segments'], max = 4): string[] {
     .filter(Boolean)
 }
 
+/**
+ * Compress a keypoint sentence to a short phrase. Splits on punctuation
+ * and keeps the first clause. If the first clause is still too long, we
+ * fall back to a hard truncate. Result is usually 8-15 Vietnamese words.
+ *
+ * The captions used to glue every full keypoint into the caption body
+ * which made captions read like a transcript. Compressing each line to
+ * its lead clause gives users a baseline that's already in the right
+ * length neighbourhood — orchestrator (Claude) can still rewrite, but
+ * the starting point isn't a wall of text.
+ */
+function compressKeypoint(text: string, maxChars = 70): string {
+  const cleaned = text.trim().replace(/\s+/g, ' ')
+  if (cleaned.length <= maxChars) return cleaned
+  // Try splitting on comma, semicolon, dash, or VN "—". Pick the first
+  // clause if it falls inside our budget; otherwise hard-truncate.
+  const clauses = cleaned.split(/[,;—–\-]\s+/)
+  const first = clauses[0]
+  if (first && first.length <= maxChars) return first
+  return cleaned.slice(0, maxChars - 1).trimEnd() + '…'
+}
+
 /** Optional outro line — closing CTA from the storyboard if present. */
 function outroOf(segments: Project['segments']): string | undefined {
   const out = segments.find((s) => s.scene === 'outro')
@@ -229,15 +251,19 @@ function outroOf(segments: Project['segments']): string | undefined {
 function tiktokCaption(
   hook: string,
   keypoints: string[],
-  outro: string | undefined,
+  _outro: string | undefined,
   hashtags: string[],
   language: Language
 ): string {
-  // TikTok rewards tight, hook-first captions. Three short lines max.
-  const cta = outro ?? (language === 'vi' ? 'Theo dõi để cập nhật.' : 'Follow for more.')
-  const bullets = keypoints.slice(0, 2).map((k) => '• ' + (k.length > 100 ? k.slice(0, 97) + '...' : k))
-  const lines = [hook.toUpperCase(), ...bullets, cta]
-  return lines.join('\n') + '\n\n' + hashtags.slice(0, 8).join(' ')
+  // TikTok sweet spot is 120–250 chars. Hook + ONE punch line + tiny
+  // CTA + ≤6 hashtags. The hook isn't shouted (uppercase felt
+  // shouty); the punch line is the lead clause of the most interesting
+  // keypoint (the second one, since the first is usually setup).
+  const punchSource = keypoints[1] ?? keypoints[0] ?? ''
+  const punch = punchSource ? compressKeypoint(punchSource, 80) : ''
+  const cta = language === 'vi' ? 'Theo dõi để xem thêm 👇' : 'Follow for more 👇'
+  const body = punch ? [hook, punch, cta] : [hook, cta]
+  return body.join('\n') + '\n\n' + hashtags.slice(0, 6).join(' ')
 }
 
 function facebookCaption(
@@ -247,30 +273,41 @@ function facebookCaption(
   hashtags: string[],
   language: Language
 ): string {
-  // Facebook captions can be long; tell a mini-story.
-  const intro = hook
-  const bodyLines = keypoints.map((k, i) => `${i + 1}. ${k}`)
+  // Facebook sweet spot is 400–800 chars. Storytelling 2–3 paragraphs.
+  // Open with the hook as a single line, then compress 2–3 keypoints
+  // into one flowing paragraph (no numbered bullets — feels listicle).
+  // Close with an open-ended question to invite comments.
+  const compressedKps = keypoints.slice(0, 3).map((k) => compressKeypoint(k, 110))
+  const para = compressedKps.join(language === 'vi' ? '. ' : '. ') +
+    (compressedKps.length > 0 ? '.' : '')
   const cta =
     outro ??
     (language === 'vi'
-      ? 'Bạn nghĩ gì? Để lại bình luận bên dưới và đừng quên chia sẻ.'
-      : 'What do you think? Leave a comment and share if you found this useful.')
-  return [intro, '', ...bodyLines, '', cta, '', hashtags.slice(0, 10).join(' ')].join('\n')
+      ? 'Bạn nghĩ sao về tin này? Để lại cảm nhận ở phần bình luận.'
+      : 'What\'s your take? Drop a comment below.')
+  // Layout: hook (paragraph break) story paragraph (paragraph break) cta
+  // (paragraph break) hashtags.
+  return [hook, '', para, '', cta, '', hashtags.slice(0, 8).join(' ')].join('\n')
 }
 
 function instagramCaption(
   hook: string,
   keypoints: string[],
-  outro: string | undefined,
+  _outro: string | undefined,
   hashtags: string[],
   language: Language
 ): string {
-  // Instagram rewards emoji-led hooks + dense hashtag block at the end.
+  // Instagram sweet spot is 250–500 chars. Emoji-led hook, 2–3 short
+  // arrow bullets, dense hashtag block separated by blank dots so it
+  // collapses below the truncation fold. Keep bullets tight — the
+  // baseline used to emit the full keypoint, which blew past the
+  // sweet spot and made captions look spammy.
   const emoji = '✨'
   const intro = `${emoji} ${hook}`
-  const bullets = keypoints.map((k) => `→ ${k}`)
-  const cta = outro ?? (language === 'vi' ? '💬 Bình luận cảm nhận của bạn nhé.' : '💬 Tell us what you think.')
-  return [intro, '', ...bullets, '', cta, '', '.', '.', '.', hashtags.join(' ')].join('\n')
+  const bullets = keypoints.slice(0, 3).map((k) => `→ ${compressKeypoint(k, 60)}`)
+  const cta =
+    language === 'vi' ? '💬 Bình luận cảm nhận của bạn' : '💬 Drop a thought below'
+  return [intro, '', ...bullets, '', cta, '', '.', '.', '.', hashtags.slice(0, 12).join(' ')].join('\n')
 }
 
 export type SocialCaption = {

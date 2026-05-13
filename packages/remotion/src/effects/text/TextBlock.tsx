@@ -18,6 +18,15 @@ import { WaveBounceText } from './WaveBounceText.js'
 import { MaskWipeText } from './MaskWipeText.js'
 import { KaraokeText } from './KaraokeText.js'
 import { LetterStaggerText } from './LetterStaggerText.js'
+import {
+  BounceInText,
+  FlipInXText,
+  JelloText,
+  LightSpeedInText,
+  RollInText,
+  RubberBandText,
+  TadaText,
+} from './AnimateCssText.js'
 
 type PrimitiveProps = {
   text: string
@@ -52,6 +61,13 @@ const PRIMITIVES: Record<TextStyle['enter'], (p: PrimitiveProps) => React.JSX.El
   maskWipe: MaskWipeText,
   karaoke: KaraokeText,
   letterStagger: LetterStaggerText,
+  bounceIn: BounceInText,
+  rubberBand: RubberBandText,
+  flipInX: FlipInXText,
+  lightSpeedIn: LightSpeedInText,
+  rollIn: RollInText,
+  tada: TadaText,
+  jello: JelloText,
 }
 
 function plateStyle(style: TextStyle, padBasePx: number): CSSProperties | null {
@@ -154,4 +170,11 @@ export {
   MaskWipeText,
   KaraokeText,
   LetterStaggerText,
+  BounceInText,
+  RubberBandText,
+  FlipInXText,
+  LightSpeedInText,
+  RollInText,
+  TadaText,
+  JelloText,
 }

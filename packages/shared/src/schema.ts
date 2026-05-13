@@ -93,6 +93,17 @@ export const TextMotionSchema = z.enum([
   // (karaoke) and per-letter intros for title segments (letterStagger).
   'karaoke',
   'letterStagger',
+  // animate.css-flavoured ports — same family of "joyful" motions
+  // but recomputed frame-by-frame so they stay deterministic under
+  // Remotion's seek-anywhere render. Each maps to its own primitive
+  // under packages/remotion/src/effects/text/.
+  'bounceIn',
+  'rubberBand',
+  'flipInX',
+  'lightSpeedIn',
+  'rollIn',
+  'tada',
+  'jello',
 ])
 export type TextMotion = z.infer<typeof TextMotionSchema>
 
@@ -144,7 +155,20 @@ export const TextStyleSchema = z.object({
   color: z.string(),
   // Decorators
   background: TextBackgroundSchema.default({ kind: 'none' }),
-  textStroke: z.object({ widthPx: z.number(), color: z.string() }).optional(),
+  textStroke: z
+    .object({
+      widthPx: z.number(),
+      color: z.string(),
+      // 'outside' (default) — classic webkit-text-stroke, grows beyond the
+      //   glyph outline. Good for cartoony, comic-style headlines.
+      // 'inside' — the stroke is painted INSIDE the glyph, eating into
+      //   the fill. Implemented by inverting the paint order so the
+      //   fill is drawn on top of the stroke; needs a thicker line to
+      //   stay visible.
+      // 'center' — half outside / half inside. CSS's native rendering.
+      side: z.enum(['outside', 'inside', 'center']).optional(),
+    })
+    .optional(),
   textShadow: z
     .object({
       blur: z.number(),

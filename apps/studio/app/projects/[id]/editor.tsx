@@ -29,6 +29,7 @@ import {
   type ColorOverride,
   type Project,
   type Segment,
+  type TextStyle,
 } from '@news-tok/shared/schema'
 import { findTextStyle } from '@news-tok/shared/text-styles'
 import { recommendSegmentDurationSec } from '@news-tok/shared/sanitize'
@@ -113,6 +114,36 @@ export function ProjectEditor({ initial }: { initial: Project }) {
 
   const updateProject = useCallback((patch: Partial<Project>) => {
     setProject((p) => ({ ...p, ...patch, updatedAt: new Date().toISOString() }))
+  }, [])
+
+  /**
+   * Merge a user-authored style into project.userTextStyles after the
+   * builder POSTs it to disk. Without this, the React state lags the
+   * file; a subsequent project Save (PATCH /api/projects/[id]) would
+   * round-trip the stale state back to disk and the style would
+   * "disappear" after F5. Replaces an existing entry when ids match
+   * (Update flow), otherwise appends.
+   */
+  const onUserStyleSaved = useCallback((style: TextStyle) => {
+    setProject((p) => {
+      const existing = p.userTextStyles ?? []
+      const idx = existing.findIndex((s) => s.id === style.id)
+      const next =
+        idx >= 0
+          ? existing.map((s, i) => (i === idx ? style : s))
+          : [...existing, style]
+      const merged: Project = {
+        ...p,
+        userTextStyles: next,
+        updatedAt: new Date().toISOString(),
+      }
+      // Disk is already in sync with `next` (POST wrote it directly),
+      // so mark this state as the saved baseline. Otherwise the
+      // toolbar Save button would light up as "dirty" purely because
+      // the client state grew a new entry that we just rolled in.
+      setLastSavedSig(projectSignature(merged))
+      return merged
+    })
   }, [])
 
   /**
@@ -388,52 +419,9 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <ThemeToggle />
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() =>
-              updateProject({
-                subtitles: {
-                  enabled: !project.subtitles.enabled,
-                  bottomPct: project.subtitles.bottomPct,
-                },
-              })
-            }
-            title={project.subtitles.enabled ? 'Subtitles on — click to hide' : 'Subtitles off — click to show'}
-          >
-            {project.subtitles.enabled ? <Captions /> : <CaptionsOff />}
-            Subs {project.subtitles.enabled ? 'on' : 'off'}
-          </Button>
-          <MusicPicker
-            defaultMood="calm"
-            defaultDurationSec={project.segments.reduce((s, x) => s + x.durationSec, 0) || 30}
-            onSelect={(asset) => updateProject({ bgMusic: asset })}
-            trigger={
-              <Button variant="outline" size="sm">
-                <Music />
-                {project.bgMusic ? 'Music' : 'Add music'}
-              </Button>
-            }
-          />
-          <LogoPicker
-            projectId={project.id}
-            logo={project.logo ?? { kind: 'none' }}
-            onChange={(next) => updateProject({ logo: next })}
-            trigger={
-              <Button
-                variant="outline"
-                size="sm"
-                title={
-                  !project.logo || project.logo.kind === 'none'
-                    ? 'Add a logo or text watermark'
-                    : 'Edit watermark'
-                }
-              >
-                <Stamp />
-                {!project.logo || project.logo.kind === 'none' ? 'Watermark' : 'Watermark on'}
-              </Button>
-            }
-          />
+          {/* Subs / Music / Watermark moved to the right aside's
+              PROJECT section so the header stays focused on
+              navigation + save/render actions. */}
           <ProjectSettingsDialog
             exportPreset={project.exportPreset}
             sfxVolume={project.sfxVolume ?? 0.7}
@@ -657,6 +645,82 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </section>
 
         <aside className="overflow-y-auto border-l p-4">
+          {/* PROJECT scope controls — always visible regardless of
+              segment selection. Inline with the SegmentEditor below
+              (no card chrome) so the aside reads as one continuous
+              column. Icon-only buttons with tooltips keep the row
+              from wrapping in a 280px aside. */}
+          <section className="mb-4 flex items-center justify-between gap-2 pb-3 border-b">
+            <h2 className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Project
+            </h2>
+            <div className="flex items-center gap-1">
+              <Button
+                variant={project.subtitles.enabled ? 'default' : 'outline'}
+                size="icon"
+                onClick={() =>
+                  updateProject({
+                    subtitles: {
+                      enabled: !project.subtitles.enabled,
+                      bottomPct: project.subtitles.bottomPct,
+                    },
+                  })
+                }
+                title={
+                  project.subtitles.enabled
+                    ? 'Subtitles on — click to hide'
+                    : 'Subtitles off — click to show'
+                }
+                aria-label={project.subtitles.enabled ? 'Hide subtitles' : 'Show subtitles'}
+              >
+                {project.subtitles.enabled ? <Captions /> : <CaptionsOff />}
+              </Button>
+              <MusicPicker
+                defaultMood="calm"
+                defaultDurationSec={
+                  project.segments.reduce((s, x) => s + x.durationSec, 0) || 30
+                }
+                onSelect={(asset) => updateProject({ bgMusic: asset })}
+                trigger={
+                  <Button
+                    variant={project.bgMusic ? 'default' : 'outline'}
+                    size="icon"
+                    title={project.bgMusic ? 'Background music attached' : 'Add background music'}
+                    aria-label="Background music"
+                  >
+                    <Music />
+                  </Button>
+                }
+              />
+              <LogoPicker
+                projectId={project.id}
+                logo={project.logo ?? { kind: 'none' }}
+                onChange={(next) => updateProject({ logo: next })}
+                aspect={project.aspect}
+                previewBackground={
+                  project.segments.find((s) => s.visuals.background?.path)?.visuals
+                    .background?.path
+                }
+                trigger={
+                  <Button
+                    variant={
+                      project.logo && project.logo.kind !== 'none' ? 'default' : 'outline'
+                    }
+                    size="icon"
+                    title={
+                      !project.logo || project.logo.kind === 'none'
+                        ? 'Add a logo or text watermark'
+                        : 'Watermark on — click to edit'
+                    }
+                    aria-label="Watermark"
+                  >
+                    <Stamp />
+                  </Button>
+                }
+              />
+            </div>
+          </section>
+
           {selected ? (
             <SegmentEditor
               segment={selected}
@@ -687,6 +751,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   variantId: previewVariantId,
                 })
               }
+              onUserStyleSaved={onUserStyleSaved}
               projectId={project.id}
               customSfx={project.customSfx ?? []}
               onCustomSfxChange={(next) =>
@@ -714,6 +779,7 @@ function SegmentEditor({
   onApplyStyle,
   onApplyFont,
   onApplyColor,
+  onUserStyleSaved,
   projectId,
   customSfx,
   onCustomSfxChange,
@@ -736,6 +802,7 @@ function SegmentEditor({
     colorOverride: ColorOverride
     scope: 'segmentInVariant' | 'segment' | 'all'
   }) => void
+  onUserStyleSaved: (style: TextStyle) => void
   projectId: string
   customSfx: Project['customSfx']
   onCustomSfxChange: (next: Project['customSfx']) => void
@@ -987,6 +1054,9 @@ function SegmentEditor({
               onApply={onApplyStyle}
               projectId={projectId}
               language={language}
+              previewBackground={segment.visuals.background?.path}
+              aspect={aspect}
+              onUserStyleSaved={onUserStyleSaved}
               trigger={
                 <Button variant="outline" size="sm">
                   <Type />
