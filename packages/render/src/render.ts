@@ -17,6 +17,7 @@ import {
 } from './paths.js'
 import { readStoryboard } from './storyboard.js'
 import { collectUsedSfxIds, stageSfxFiles } from './sfx-staging.js'
+import { stageLogoImage } from './logo-staging.js'
 
 /**
  * Convert an absolute path inside data/ into a `/`-prefixed URL that
@@ -112,10 +113,12 @@ export async function renderSegmentMedia(
   // the snapshot has no entry, so the renderer 404s on every cue.
   const sfxIds = collectUsedSfxIds(project)
   const sfxUrlMap = await stageSfxFiles(sfxIds, project)
+  const logoUrl = await stageLogoImage(project)
   const serveUrl = await bundleForProject(projectId)
   const inputProps = {
     storyboard: rewriteProjectAssets(segmentSubProject(project, segment)),
     sfxUrlMap,
+    logoUrl,
   }
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)
@@ -161,6 +164,7 @@ export async function renderProjectMedia(
   // be on disk before bundle, not after. (Same reason as renderSegmentMedia.)
   const sfxIds = collectUsedSfxIds(project)
   const sfxUrlMap = await stageSfxFiles(sfxIds, project)
+  const logoUrl = await stageLogoImage(project)
   const serveUrl = await bundleForProject(projectId)
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)
@@ -189,6 +193,7 @@ export async function renderProjectMedia(
       storyboard: rewrittenStoryboard,
       variantId: variantId ?? undefined,
       sfxUrlMap,
+      logoUrl,
     }
 
     const composition = await selectComposition({

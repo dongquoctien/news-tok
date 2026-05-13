@@ -19,6 +19,7 @@ import {
   RefreshCw,
   Save,
   Share2,
+  Stamp,
   Type,
   Volume2,
 } from 'lucide-react'
@@ -42,6 +43,7 @@ import { ColorPicker } from '@/components/studio/color-picker'
 import { SocialCaptionDialog } from '@/components/studio/social-caption-dialog'
 import { ProjectSettingsDialog } from '@/components/studio/project-settings-dialog'
 import { SfxPicker } from '@/components/studio/sfx-picker'
+import { LogoPicker } from '@/components/studio/logo-picker'
 import { ThemeToggle } from '@/components/theme/theme-toggle'
 import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
@@ -410,6 +412,25 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               <Button variant="outline" size="sm">
                 <Music />
                 {project.bgMusic ? 'Music' : 'Add music'}
+              </Button>
+            }
+          />
+          <LogoPicker
+            projectId={project.id}
+            logo={project.logo ?? { kind: 'none' }}
+            onChange={(next) => updateProject({ logo: next })}
+            trigger={
+              <Button
+                variant="outline"
+                size="sm"
+                title={
+                  !project.logo || project.logo.kind === 'none'
+                    ? 'Add a logo or text watermark'
+                    : 'Edit watermark'
+                }
+              >
+                <Stamp />
+                {!project.logo || project.logo.kind === 'none' ? 'Watermark' : 'Watermark on'}
               </Button>
             }
           />

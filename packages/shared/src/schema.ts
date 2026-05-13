@@ -297,6 +297,68 @@ export type Variant = z.infer<typeof VariantSchema>
 export const ExportPresetSchema = z.enum(['tiktok', 'youtube-shorts', 'reels', 'standard'])
 export type ExportPreset = z.infer<typeof ExportPresetSchema>
 
+// --- Logo / watermark ---------------------------------------------------
+
+/**
+ * Common placement controls shared by the image and text logo variants.
+ * Position is named so the renderer can compute corner-relative offsets
+ * without baking pixel coordinates into the storyboard.
+ */
+const LogoPlacementShape = {
+  position: z
+    .enum(['top-left', 'top-right', 'bottom-left', 'bottom-right'])
+    .default('top-right'),
+  /** Margin from chosen edge, in % of video width (0..15). */
+  marginPct: z.number().min(0).max(15).default(5),
+  /** 0..1, defaults to 0.85 so the mark sits softly above the visuals. */
+  opacity: z.number().min(0).max(1).default(0.85),
+  /** Render the watermark for every segment, or only the bookends. */
+  appliesTo: z.enum(['all', 'intro-outro-only']).default('all'),
+} as const
+
+/**
+ * Project-wide watermark. The discriminated union lets the renderer
+ * narrow on `kind` once and skip the "is image asset present?" check
+ * downstream. `kind: 'none'` keeps the field present-but-inert so the
+ * schema default for project.logo can be a typed value.
+ */
+export const LogoMarkerSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('none') }),
+  z.object({
+    kind: z.literal('image'),
+    /** Absolute path under data/projects/<id>/logo.<ext> after upload. */
+    path: z.string(),
+    /** Original filename for nicer error messages. */
+    originalName: z.string().optional(),
+    /** Native pixel dimensions, used to compute aspect ratio. */
+    width: z.number().int().positive().optional(),
+    height: z.number().int().positive().optional(),
+    /** Logo width in % of video width (5..25). */
+    sizePct: z.number().min(5).max(25).default(13),
+    ...LogoPlacementShape,
+  }),
+  z.object({
+    kind: z.literal('text'),
+    /** Watermark text — e.g. "@username", "© NewsTok 2026". */
+    text: z.string().min(1).max(40),
+    /** Font id, mirrors the ALLOWED_FONT_IDS list used elsewhere. */
+    fontId: z.string().default('inter'),
+    /** Font size in % of video width (1..6). */
+    sizePct: z.number().min(1).max(6).default(2.2),
+    color: z.string().default('#ffffff'),
+    /** Optional dark plate behind the text for legibility over bright bg. */
+    background: z
+      .object({
+        color: z.string().default('rgba(0,0,0,0.45)'),
+        paddingPx: z.number().min(0).max(40).default(10),
+        radiusPx: z.number().min(0).max(20).default(6),
+      })
+      .optional(),
+    ...LogoPlacementShape,
+  }),
+])
+export type LogoMarker = z.infer<typeof LogoMarkerSchema>
+
 export const SubtitleConfigSchema = z.object({
   enabled: z.boolean().default(true),
   /** Position relative to bottom (0..1 of video height). */
@@ -363,6 +425,12 @@ export const ProjectSchema = z.object({
    * the built-in bank so compositions can play either freely.
    */
   customSfx: z.array(CustomSfxEntrySchema).default([]),
+  /**
+   * Project-wide watermark drawn on top of every segment (or only the
+   * intro / outro if `appliesTo` says so). Default is `kind: 'none'`
+   * so existing projects render unchanged.
+   */
+  logo: LogoMarkerSchema.default({ kind: 'none' }),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 })

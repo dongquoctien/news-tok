@@ -139,11 +139,19 @@ export async function duplicateProject(sourceId: string): Promise<{ projectId: s
     ...entry,
     path: entry.path.replace(srcDir, newDir),
   }))
+  // Same rewrite for the image watermark — the logo file was copied as
+  // part of the recursive `cp` above, but the storyboard still points at
+  // the source project's dir.
+  const logo: Project['logo'] =
+    src.logo && src.logo.kind === 'image'
+      ? { ...src.logo, path: src.logo.path.replace(srcDir, newDir) }
+      : src.logo
   const copy: Project = {
     ...src,
     id: newId,
     title: `${src.title} (copy)`,
     customSfx,
+    logo,
     createdAt: now,
     updatedAt: now,
   }

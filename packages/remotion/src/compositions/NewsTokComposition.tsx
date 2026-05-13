@@ -4,6 +4,7 @@ import { BUILT_IN_TEXT_STYLES, findTextStyle, DEFAULT_TEXT_STYLE_ID } from '@new
 import { resolveScene } from '../scenes/registry.js'
 import { MissingScene } from '../scenes/MissingScene.js'
 import { Subtitles } from '../effects/Subtitles.js'
+import { LogoMarker } from '../effects/LogoMarker.js'
 import { fontFor } from '../scenes/fonts.js'
 
 export type NewsTokCompositionProps = {
@@ -16,6 +17,12 @@ export type NewsTokCompositionProps = {
    * dropped — they are treated as silence.
    */
   sfxUrlMap?: Record<string, string>
+  /**
+   * URL for the image watermark, rewritten by the renderer to live under
+   * publicDir or, in Studio's <Player>, a /api/projects/<id>/logo endpoint.
+   * Ignored when `storyboard.logo.kind !== 'image'`.
+   */
+  logoUrl?: string
 }
 
 /**
@@ -170,6 +177,7 @@ export const NewsTokComposition = ({
   storyboard,
   variantId,
   sfxUrlMap = {},
+  logoUrl,
 }: NewsTokCompositionProps) => {
   const { fps } = useVideoConfig()
   const subtitlesEnabled = storyboard.subtitles?.enabled
@@ -217,6 +225,15 @@ export const NewsTokComposition = ({
         const style = resolveStyle(segment, activeVariant, userStyles)
         const fontOverride = resolveFontOverride(segment, activeVariant)
         const colorOverride = resolveColorOverride(segment, activeVariant)
+        // Watermark gating: skip body segments when the spec says
+        // intro-outro-only. `kind === 'none'` is handled inside
+        // <LogoMarker /> so the check stays in one place.
+        const showLogo =
+          storyboard.logo &&
+          storyboard.logo.kind !== 'none' &&
+          (storyboard.logo.appliesTo === 'all' ||
+            segment.scene === 'title' ||
+            segment.scene === 'outro')
         return (
           <Sequence key={segment.id} from={from} durationInFrames={durationInFrames} name={segment.id}>
             {Scene ? (
@@ -243,6 +260,13 @@ export const NewsTokComposition = ({
               sfxUrlMap={sfxUrlMap}
               masterVolume={masterSfxVolume}
             />
+            {showLogo ? (
+              <LogoMarker
+                spec={storyboard.logo}
+                imageUrl={logoUrl}
+                language={storyboard.language}
+              />
+            ) : null}
           </Sequence>
         )
       })}

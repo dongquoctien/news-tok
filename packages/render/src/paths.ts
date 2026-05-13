@@ -16,6 +16,8 @@ export const projectStoryboardPath = (projectId: string) =>
   resolve(projectDir(projectId), 'storyboard.json')
 export const projectSfxDir = (projectId: string) =>
   resolve(projectDir(projectId), 'sfx')
+/** Where the watermark image is staged inside publicDir for Remotion. */
+export const logoStagingDir = () => resolve(dataDir(), 'logo')
 export const bundleCacheRoot = () => resolve(REPO_ROOT, '.remotion-cache')
 export const sfxBankDir = () => resolve(REPO_ROOT, 'packages', 'shared', 'sfx')
 /** Where SFX files are staged inside publicDir for Remotion to serve. */
