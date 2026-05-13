@@ -2,19 +2,19 @@
 
 import { useEffect, useRef, useState } from 'react'
 import { Image as ImageIcon, Loader2, Trash2, Type, Upload } from 'lucide-react'
-import type { LogoMarker } from '@news-tok/shared/schema'
+import type { Aspect, LogoMarker } from '@news-tok/shared/schema'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
-  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import { previewFontStack } from '@/lib/text-style-preview'
 import { cn } from '@/lib/utils'
+import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
 
 type Tab = 'image' | 'text'
 type Position = 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right'
@@ -34,10 +34,11 @@ const DEFAULT_PLACEMENT = {
 }
 
 /**
- * Project-level watermark editor. Two tabs:
- *   - Image: upload + crop-free positioning of a logo file.
- *   - Text: live-edited watermark (e.g. "@username") with optional
- *     dark plate behind the text.
+ * Project-level watermark editor. Split-pane:
+ *   - Left:  Image / Text tabs + placement controls.
+ *   - Right: DeviceMockupPreview showing the watermark in the chosen
+ *            corner over the segment background, so the user sees what
+ *            ships before clicking Apply.
  *
  * The dialog edits a draft and only commits via Apply, so users can
  * preview placement adjustments without dirtying the project until
@@ -48,11 +49,17 @@ export function LogoPicker({
   logo,
   onChange,
   trigger,
+  aspect = '9:16',
+  previewBackground,
 }: {
   projectId: string
   logo: LogoMarker
   onChange: (next: LogoMarker) => void
   trigger: React.ReactNode
+  /** Project aspect — picks the device frame on the right. */
+  aspect?: Aspect
+  /** Optional segment background path so the preview sits over the real scene. */
+  previewBackground?: string
 }) {
   const [open, setOpen] = useState(false)
   const [tab, setTab] = useState<Tab>(logo.kind === 'text' ? 'text' : 'image')
@@ -140,7 +147,7 @@ export function LogoPicker({
     if (draft.kind !== 'text') {
       setDraft({
         kind: 'text',
-        text: draft.kind === 'none' ? '@username' : '@username',
+        text: '@username',
         fontId: 'inter',
         sizePct: 2.2,
         color: '#ffffff',
@@ -168,11 +175,13 @@ export function LogoPicker({
     setOpen(false)
   }
 
+  const split = splitRatioFor(aspect)
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
-        className="max-h-[90vh] max-w-2xl overflow-y-auto"
+        className="grid max-h-[92vh] w-full max-w-5xl grid-rows-[auto_1fr_auto] gap-0 overflow-hidden p-0"
         // Radix auto-focuses the first focusable child, which would land
         // on the Image tab button even when Text is the active tab — making
         // it look like the wrong tab is selected. Defer that initial focus
@@ -190,71 +199,96 @@ export function LogoPicker({
           })
         }}
       >
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+        {/* Header */}
+        <div className="border-b px-4 py-3">
+          <DialogTitle className="flex items-center gap-2 text-base">
             <ImageIcon className="size-5" />
             Watermark
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="mt-1 text-xs">
             Add a logo or text watermark on top of every segment. Default
-            position is top-right — it avoids TikTok's bottom-right share
-            buttons and the subtitle area at the bottom of the frame.
+            position is top-right — avoids TikTok's bottom-right share
+            buttons and the subtitle area.
           </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex gap-1 rounded-md border bg-secondary/20 p-0.5 text-xs">
-          <TabButton active={tab === 'image'} onClick={switchToImage}>
-            <ImageIcon className="size-3.5" />
-            Image
-          </TabButton>
-          <TabButton active={tab === 'text'} onClick={switchToText}>
-            <Type className="size-3.5" />
-            Text
-          </TabButton>
         </div>
 
-        <div className="space-y-4">
-          {tab === 'image' ? (
-            <ImageTab
-              draft={draft}
-              uploading={uploading}
-              inputRef={inputRef}
-              onUpload={upload}
-              onRemove={removeImage}
-              onSize={(v) =>
-                setDraft((d) =>
-                  d.kind === 'image' ? { ...d, sizePct: v } : d
-                )
-              }
-            />
-          ) : (
-            <TextTab
-              draft={draft}
-              onPatch={(patch) =>
-                setDraft((d) => {
-                  const base =
-                    d.kind === 'text'
-                      ? d
-                      : {
-                          kind: 'text' as const,
-                          text: '@username',
-                          fontId: 'inter',
-                          sizePct: 2.2,
-                          color: '#ffffff',
-                          ...DEFAULT_PLACEMENT,
-                        }
-                  return { ...base, ...patch }
-                })
-              }
-            />
-          )}
+        {/* Split body */}
+        <div
+          className="grid min-h-0 overflow-hidden"
+          style={{ gridTemplateColumns: `${split.left} ${split.right}` }}
+        >
+          {/* Left: tabs + form */}
+          <div className="flex min-h-0 flex-col overflow-hidden border-r">
+            <div className="border-b px-3 py-2">
+              <div className="flex gap-1 rounded-md border bg-secondary/20 p-0.5 text-xs">
+                <TabButton active={tab === 'image'} onClick={switchToImage}>
+                  <ImageIcon className="size-3.5" />
+                  Image
+                </TabButton>
+                <TabButton active={tab === 'text'} onClick={switchToText}>
+                  <Type className="size-3.5" />
+                  Text
+                </TabButton>
+              </div>
+            </div>
 
-          <PlacementControls placement={placement} onPatch={setPlacement} />
+            <div className="flex-1 space-y-4 overflow-y-auto px-3 py-3">
+              {tab === 'image' ? (
+                <ImageTab
+                  draft={draft}
+                  uploading={uploading}
+                  inputRef={inputRef}
+                  onUpload={upload}
+                  onRemove={removeImage}
+                  onSize={(v) =>
+                    setDraft((d) =>
+                      d.kind === 'image' ? { ...d, sizePct: v } : d
+                    )
+                  }
+                />
+              ) : (
+                <TextTab
+                  draft={draft}
+                  onPatch={(patch) =>
+                    setDraft((d) => {
+                      const base =
+                        d.kind === 'text'
+                          ? d
+                          : {
+                              kind: 'text' as const,
+                              text: '@username',
+                              fontId: 'inter',
+                              sizePct: 2.2,
+                              color: '#ffffff',
+                              ...DEFAULT_PLACEMENT,
+                            }
+                      return { ...base, ...patch }
+                    })
+                  }
+                />
+              )}
+
+              <PlacementControls placement={placement} onPatch={setPlacement} />
+            </div>
+          </div>
+
+          {/* Right: device mockup with watermark overlay */}
+          <div className="flex min-h-0 items-center justify-center overflow-y-auto bg-secondary/20 p-4">
+            <DeviceMockupPreview
+              aspect={aspect}
+              background={previewBackground}
+              label="Watermark preview"
+            >
+              <WatermarkOverlay draft={draft} />
+            </DeviceMockupPreview>
+          </div>
         </div>
 
-        {error ? <p className="text-xs text-destructive">{error}</p> : null}
-
-        <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+        {/* Footer */}
+        {error ? (
+          <p className="border-t bg-destructive/5 px-4 py-2 text-xs text-destructive">{error}</p>
+        ) : null}
+        <div className="flex items-center justify-between gap-2 border-t bg-background px-4 py-3">
           <div className="text-xs text-muted-foreground">
             {draft.kind === 'none'
               ? 'No watermark'
@@ -273,11 +307,14 @@ export function LogoPicker({
                 Remove
               </Button>
             ) : null}
+            <Button variant="outline" size="sm" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
             <Button size="sm" onClick={apply}>
               Apply
             </Button>
           </div>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   )
@@ -617,3 +654,77 @@ function draftProjectIdFromImage(draft: LogoMarker): string {
   // .../data/projects/<id>/logo.<ext>
   return parts[parts.length - 2] ?? ''
 }
+
+/**
+ * Render the watermark inside the DeviceMockupPreview content slot, in
+ * the corner the user chose. Absolute positioning + the four corner
+ * variants from `placement.position` mirrors how the Remotion scene
+ * places it at render time.
+ */
+function WatermarkOverlay({ draft }: { draft: LogoMarker }) {
+  if (draft.kind === 'none') {
+    return (
+      <span className="text-xs text-white/60">No watermark — preview is blank</span>
+    )
+  }
+  const position = draft.position
+  const marginPct = draft.marginPct
+  const opacity = draft.opacity
+  const isTop = position.startsWith('top')
+  const isLeft = position.endsWith('left')
+  const cornerStyle: React.CSSProperties = {
+    position: 'absolute',
+    [isTop ? 'top' : 'bottom']: `${marginPct}%`,
+    [isLeft ? 'left' : 'right']: `${marginPct}%`,
+    opacity,
+    // Sit above the preview's flex centring container.
+    zIndex: 5,
+  }
+
+  if (draft.kind === 'image') {
+    const src = `/api/projects/${encodeURIComponent(draftProjectIdFromImage(draft))}/logo/file?v=${encodeURIComponent(draft.path)}`
+    // Translate sizePct (% of canvas width, which is the project frame
+    // width) into a fraction of the mockup width. The preview content
+    // slot is `absolute inset-0` so width:`${sizePct}%` reads off that
+    // same box — matching the render output.
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={src}
+        alt={draft.originalName ?? 'watermark'}
+        style={{ ...cornerStyle, width: `${draft.sizePct}%`, height: 'auto' }}
+      />
+    )
+  }
+
+  // Text watermark — size is % of canvas width too. Convert to a font
+  // size by treating the mockup inner width as 100 and scaling roughly
+  // 0.6× so visuals match the rendered output (Remotion uses
+  // canvas-width × sizePct for the font-size).
+  const bgStyle: React.CSSProperties | undefined = draft.background
+    ? {
+        backgroundColor: draft.background.color,
+        padding: draft.background.paddingPx ? `${draft.background.paddingPx * 0.4}px` : undefined,
+        borderRadius: draft.background.radiusPx
+          ? `${draft.background.radiusPx * 0.5}px`
+          : undefined,
+      }
+    : undefined
+  return (
+    <span
+      style={{
+        ...cornerStyle,
+        ...bgStyle,
+        color: draft.color,
+        fontFamily: previewFontStack(draft.fontId),
+        fontWeight: 600,
+        fontSize: `${draft.sizePct * 4}px`,
+        whiteSpace: 'nowrap',
+        textShadow: draft.background ? undefined : '0 1px 2px rgba(0,0,0,0.45)',
+      }}
+    >
+      {draft.text}
+    </span>
+  )
+}
+

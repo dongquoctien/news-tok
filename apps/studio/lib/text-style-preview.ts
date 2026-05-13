@@ -8,6 +8,7 @@ import type { TextStyle } from '@news-tok/shared/schema'
  * a user style that hand-codes `"My Custom"` still renders).
  */
 const FONT_ID_TO_CSS: Record<string, string> = {
+  // M7 pool
   beVietnamPro: '"Be Vietnam Pro", system-ui, sans-serif',
   inter: 'Inter, system-ui, sans-serif',
   montserrat: 'Montserrat, system-ui, sans-serif',
@@ -20,6 +21,27 @@ const FONT_ID_TO_CSS: Record<string, string> = {
   oswald: 'Oswald, "Arial Narrow", sans-serif',
   archivoBlack: '"Archivo Black", system-ui, sans-serif',
   nunito: 'Nunito, system-ui, sans-serif',
+  // M10 expansion
+  bangers: 'Bangers, "Comic Sans MS", cursive',
+  barlow: 'Barlow, system-ui, sans-serif',
+  dmSans: '"DM Sans", system-ui, sans-serif',
+  kanit: 'Kanit, system-ui, sans-serif',
+  merriweather: 'Merriweather, Georgia, serif',
+  openSans: '"Open Sans", system-ui, sans-serif',
+  outfit: 'Outfit, system-ui, sans-serif',
+  plusJakartaSans: '"Plus Jakarta Sans", system-ui, sans-serif',
+  poppins: 'Poppins, system-ui, sans-serif',
+  prompt: 'Prompt, system-ui, sans-serif',
+  quicksand: 'Quicksand, system-ui, sans-serif',
+  raleway: 'Raleway, system-ui, sans-serif',
+  roboto: 'Roboto, system-ui, sans-serif',
+  robotoCondensed: '"Roboto Condensed", "Arial Narrow", sans-serif',
+  rubik: 'Rubik, system-ui, sans-serif',
+  sourceSans3: '"Source Sans 3", system-ui, sans-serif',
+  spaceGrotesk: '"Space Grotesk", system-ui, sans-serif',
+  spaceMono: '"Space Mono", ui-monospace, monospace',
+  tikTokSans: '"TikTok Sans", system-ui, sans-serif',
+  workSans: '"Work Sans", system-ui, sans-serif',
 }
 
 export function previewFontStack(fontFamily: string): string {

@@ -9,14 +9,18 @@ import {
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { fontLabel } from '@/lib/font-label'
+import {
+  plateCss as libPlateCss,
+  textCss as libTextCss,
+} from '@/lib/text-style-preview'
 import { TextStyleBuilder } from './text-style-builder'
+import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
 
 const FAMILY_LABEL: Record<TextStyle['family'], string> = {
   news: 'News',
@@ -117,6 +121,8 @@ function UserAwareCard({
   sampleText,
   projectId,
   language,
+  previewBackground,
+  aspect,
   onEdited,
   onDelete,
 }: {
@@ -126,6 +132,8 @@ function UserAwareCard({
   sampleText: string
   projectId?: string
   language?: 'vi' | 'en'
+  previewBackground?: string
+  aspect?: import('@news-tok/shared/schema').Aspect
   onEdited?: () => void
   onDelete?: () => void
 }) {
@@ -146,6 +154,9 @@ function UserAwareCard({
           projectId={projectId}
           initial={style}
           language={language ?? 'vi'}
+          aspect={aspect}
+          previewBackground={previewBackground}
+          previewText={sampleText}
           onSaved={() => onEdited?.()}
           trigger={
             <button
@@ -237,6 +248,13 @@ export type StylePickerProps = {
   projectId?: string
   /** Project language — drives the default font for new user styles. */
   language?: 'vi' | 'en'
+  /** Optional segment background path. Forwarded to the builder so the
+   *  live preview renders text over the real scene background, not an
+   *  abstract grey card. */
+  previewBackground?: string
+  /** Project aspect — forwarded to the builder + future right-pane
+   *  mockup so the device frame matches the final render. */
+  aspect?: import('@news-tok/shared/schema').Aspect
 }
 
 export function StylePicker({
@@ -248,6 +266,8 @@ export function StylePicker({
   trigger,
   projectId,
   language,
+  previewBackground,
+  aspect,
 }: StylePickerProps) {
   const [open, setOpen] = useState(false)
   const [builtIn, setBuiltIn] = useState<TextStyle[] | null>(null)
@@ -255,6 +275,10 @@ export function StylePicker({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<TextStyle['family'] | 'all' | 'custom'>('all')
   const [picked, setPicked] = useState<string | null>(currentStyleId ?? null)
+  // Hover overrides the picked id for the right-pane preview only — that
+  // way users can scrub through styles to see them on the segment without
+  // clicking, and the apply buttons still target whatever was last clicked.
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [pendingDeleteForce, setPendingDeleteForce] = useState<{
     id: string
     segmentRefs: string[]
@@ -351,94 +375,151 @@ export function StylePicker({
     setOpen(false)
   }
 
+  const previewAspect = aspect ?? '9:16'
+  const split = splitRatioFor(previewAspect)
+  // Right pane previews whichever style the user is currently inspecting.
+  // Hover wins over picked so users can scrub through cards before
+  // committing — once they click, picked sticks until they hover elsewhere.
+  const previewedId = hoveredId ?? picked
+  const previewedStyle =
+    visibleStyles.find((s) => s.id === previewedId) ?? null
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent className="grid max-h-[92vh] w-full max-w-6xl grid-rows-[auto_1fr_auto] gap-0 overflow-hidden p-0">
+        <div className="border-b px-4 py-3">
+          <DialogTitle className="flex items-center gap-2 text-base">
             <Type className="size-5" />
             Pick a text style
           </DialogTitle>
-          <DialogDescription>
-            Each card previews the headline rendered with that style. Click a card,
+          <DialogDescription className="mt-1 text-xs">
+            Hover a card to preview on the right; click to lock the pick,
             then choose how widely to apply it.
           </DialogDescription>
-        </DialogHeader>
-
-        <div className="flex flex-wrap items-center gap-2 text-xs">
-          <span className="text-muted-foreground">Family</span>
-          {(['all', 'news', 'social', 'cinematic', 'retro', 'playful'] as const).map((f) => (
-            <button
-              key={f}
-              onClick={() => setFilter(f)}
-              className={cn(
-                'rounded-md border px-3 py-1 uppercase tracking-wide',
-                f === filter
-                  ? 'border-primary bg-primary/10 text-foreground'
-                  : 'border-transparent text-muted-foreground hover:bg-secondary'
-              )}
-            >
-              {f === 'all' ? 'All' : FAMILY_LABEL[f]}
-            </button>
-          ))}
-          {projectId ? (
-            <>
-              <button
-                onClick={() => setFilter('custom')}
-                className={cn(
-                  'rounded-md border px-3 py-1 uppercase tracking-wide',
-                  filter === 'custom'
-                    ? 'border-primary bg-primary/10 text-foreground'
-                    : 'border-transparent text-muted-foreground hover:bg-secondary'
-                )}
-              >
-                Custom ({userStyles.length})
-              </button>
-              <div className="ml-auto">
-                <TextStyleBuilder
-                  projectId={projectId}
-                  initial={null}
-                  language={language ?? 'vi'}
-                  onSaved={() => refresh()}
-                  trigger={
-                    <Button variant="outline" size="sm">
-                      <Plus />
-                      Create new
-                    </Button>
-                  }
-                />
-              </div>
-            </>
-          ) : null}
         </div>
 
-        {error ? (
-          <p className="text-sm text-destructive">{error}</p>
-        ) : !builtIn ? (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="size-4 animate-spin" /> Loading styles…
-          </div>
-        ) : (
-          <div className="grid max-h-[55vh] grid-cols-3 gap-2 overflow-y-auto pr-1">
-            {visibleStyles.map((s) => (
-              <UserAwareCard
-                key={s.id}
-                style={s}
-                selected={picked === s.id}
-                onSelect={() => setPicked(s.id)}
-                sampleText={sampleText.length > 32 ? sampleText.slice(0, 30) + '…' : sampleText}
-                projectId={projectId}
-                language={language ?? 'vi'}
-                onEdited={() => refresh()}
-                onDelete={() => deleteUserStyle(s.id)}
-              />
-            ))}
-          </div>
-        )}
+        <div
+          className="grid min-h-0 overflow-hidden"
+          style={{ gridTemplateColumns: `${split.left} ${split.right}` }}
+        >
+          {/* LEFT — filters + grid */}
+          <div className="flex min-h-0 flex-col overflow-hidden border-r">
+            <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 text-xs">
+              <span className="text-muted-foreground">Family</span>
+              {(['all', 'news', 'social', 'cinematic', 'retro', 'playful'] as const).map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={cn(
+                    'rounded-md border px-3 py-1 uppercase tracking-wide transition-colors',
+                    f === filter
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-transparent text-muted-foreground hover:bg-secondary'
+                  )}
+                >
+                  {f === 'all' ? 'All' : FAMILY_LABEL[f]}
+                </button>
+              ))}
+              {projectId ? (
+                <>
+                  <button
+                    onClick={() => setFilter('custom')}
+                    className={cn(
+                      'rounded-md border px-3 py-1 uppercase tracking-wide transition-colors',
+                      filter === 'custom'
+                        ? 'border-primary bg-primary/10 text-foreground'
+                        : 'border-transparent text-muted-foreground hover:bg-secondary'
+                    )}
+                  >
+                    Custom ({userStyles.length})
+                  </button>
+                  <div className="ml-auto">
+                    <TextStyleBuilder
+                      projectId={projectId}
+                      initial={null}
+                      language={language ?? 'vi'}
+                      aspect={aspect}
+                      previewBackground={previewBackground}
+                      previewText={sampleText}
+                      onSaved={() => refresh()}
+                      trigger={
+                        <Button variant="outline" size="sm">
+                          <Plus />
+                          Create new
+                        </Button>
+                      }
+                    />
+                  </div>
+                </>
+              ) : null}
+            </div>
 
+            <div className="flex-1 overflow-y-auto px-4 py-3">
+              {error ? (
+                <p className="text-sm text-destructive">{error}</p>
+              ) : !builtIn ? (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" /> Loading styles…
+                </div>
+              ) : (
+                <div
+                  className="grid grid-cols-2 gap-2 xl:grid-cols-3"
+                  onMouseLeave={() => setHoveredId(null)}
+                >
+                  {visibleStyles.map((s) => (
+                    <div
+                      key={s.id}
+                      onMouseEnter={() => setHoveredId(s.id)}
+                      onFocus={() => setHoveredId(s.id)}
+                    >
+                      <UserAwareCard
+                        style={s}
+                        selected={picked === s.id}
+                        onSelect={() => setPicked(s.id)}
+                        sampleText={
+                          sampleText.length > 32 ? sampleText.slice(0, 30) + '…' : sampleText
+                        }
+                        projectId={projectId}
+                        language={language ?? 'vi'}
+                        previewBackground={previewBackground}
+                        aspect={aspect}
+                        onEdited={() => refresh()}
+                        onDelete={() => deleteUserStyle(s.id)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
 
-        <DialogFooter className="flex-wrap gap-2 sm:flex-wrap sm:space-x-0">
+          {/* RIGHT — device mockup preview */}
+          <div className="flex min-h-0 items-center justify-center overflow-y-auto bg-secondary/20 p-4">
+            <DeviceMockupPreview
+              aspect={previewAspect}
+              background={previewBackground}
+              label={
+                previewedStyle
+                  ? `${previewedStyle.name} · ${FAMILY_LABEL[previewedStyle.family]}`
+                  : 'Hover a style'
+              }
+            >
+              {previewedStyle ? (
+                <PreviewedTextInline
+                  style={previewedStyle}
+                  text={sampleText.length > 64 ? sampleText.slice(0, 60) + '…' : sampleText}
+                />
+              ) : (
+                <span className="text-[10px] uppercase tracking-wide text-white/50">
+                  No style hovered
+                </span>
+              )}
+            </DeviceMockupPreview>
+          </div>
+        </div>
+
+        <DialogFooter className="flex-wrap gap-2 border-t px-4 py-3 sm:flex-wrap sm:space-x-0">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
@@ -510,5 +591,16 @@ export function StylePicker({
         }}
       />
     </Dialog>
+  )
+}
+
+// Helper that renders the style on the preview device. Uses the shared
+// /lib helpers (which accept a scale arg sized for the device frame)
+// rather than the in-file `textCss` that's tuned for small card previews.
+function PreviewedTextInline({ style, text }: { style: TextStyle; text: string }) {
+  return (
+    <div style={libPlateCss(style)}>
+      <span style={libTextCss(style, 5)}>{text}</span>
+    </div>
   )
 }

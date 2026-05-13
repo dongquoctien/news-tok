@@ -419,6 +419,8 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             projectId={project.id}
             logo={project.logo ?? { kind: 'none' }}
             onChange={(next) => updateProject({ logo: next })}
+            aspect={project.aspect}
+            previewBackground={project.segments.find((s) => s.visuals.background?.path)?.visuals.background?.path}
             trigger={
               <Button
                 variant="outline"
@@ -987,6 +989,8 @@ function SegmentEditor({
               onApply={onApplyStyle}
               projectId={projectId}
               language={language}
+              previewBackground={segment.visuals.background?.path}
+              aspect={aspect}
               trigger={
                 <Button variant="outline" size="sm">
                   <Type />
