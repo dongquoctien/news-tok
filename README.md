@@ -400,4 +400,9 @@ pnpm studio                              # open Studio to tweak
 
 ## License
 
-TBD — must be compatible with the Remotion license model.
+[MIT](LICENSE) © 2026 dongquoctien.
+
+Third-party note: this project depends on Remotion at runtime but does
+not redistribute it. Remotion is free for individuals and teams of ≤ 3
+developers; teams of 4+ need a Company License — see
+[remotion.dev/license](https://www.remotion.dev/license).

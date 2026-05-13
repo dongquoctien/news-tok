@@ -3,6 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "description": "Convert articles/text/URLs into short videos using Claude CLI as orchestrator and Remotion for render.",
+  "license": "MIT",
   "packageManager": "pnpm@11.0.9",
   "engines": {
     "node": ">=20"
