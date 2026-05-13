@@ -414,8 +414,10 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           <ProjectSettingsDialog
             exportPreset={project.exportPreset}
             sfxVolume={project.sfxVolume ?? 0.7}
+            showSceneBadges={project.showSceneBadges ?? false}
             onChangePreset={(preset) => updateProject({ exportPreset: preset })}
             onChangeSfxVolume={(v) => updateProject({ sfxVolume: v })}
+            onChangeShowSceneBadges={(show) => updateProject({ showSceneBadges: show })}
           />
           <Button
             variant={isDirty ? 'default' : 'outline'}

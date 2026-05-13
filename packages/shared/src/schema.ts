@@ -306,6 +306,13 @@ export const ProjectSchema = z.object({
   /** Master volume for text-transition SFX (multiplied into each cue). */
   sfxVolume: z.number().min(0).max(1).default(0.7),
   subtitles: SubtitleConfigSchema.default({ enabled: true, bottomPct: 0.18 }),
+  /**
+   * Show small scene-kind badges (Newspaper + title on title scenes,
+   * ListChecks + "Key point" on keypoint scenes). Useful in Studio for
+   * dev debugging; hidden in exported video so viewers don't see
+   * meta-labels they can't interpret.
+   */
+  showSceneBadges: z.boolean().default(false),
   exportPreset: ExportPresetSchema.default('standard'),
   /**
    * Render variants. Empty array preserves the legacy single-render behavior

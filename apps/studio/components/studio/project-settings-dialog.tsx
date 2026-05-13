@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Settings, Volume2 } from 'lucide-react'
+import { Eye, Settings, Volume2 } from 'lucide-react'
 import type { Project } from '@news-tok/shared/schema'
 import { Button } from '@/components/ui/button'
 import {
@@ -23,13 +23,17 @@ import { Label } from '@/components/ui/label'
 export function ProjectSettingsDialog({
   exportPreset,
   sfxVolume,
+  showSceneBadges,
   onChangePreset,
   onChangeSfxVolume,
+  onChangeShowSceneBadges,
 }: {
   exportPreset: Project['exportPreset']
   sfxVolume: number
+  showSceneBadges: boolean
   onChangePreset: (preset: Project['exportPreset']) => void
   onChangeSfxVolume: (volume: number) => void
+  onChangeShowSceneBadges: (show: boolean) => void
 }) {
   const [open, setOpen] = useState(false)
   const sfxPct = Math.round(sfxVolume * 100)
@@ -63,7 +67,7 @@ export function ProjectSettingsDialog({
               onChange={(e) =>
                 onChangePreset(e.target.value as Project['exportPreset'])
               }
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm font-medium [color-scheme:dark]"
+              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm font-medium [color-scheme:light_dark]"
             >
               <option value="standard" className="bg-background text-foreground">
                 Standard (30fps)
@@ -109,6 +113,29 @@ export function ProjectSettingsDialog({
               Multiplied into every text-transition SFX cue. 0% silences all
               built-in cues without removing them from the storyboard.
             </p>
+          </div>
+
+          {/* Scene badges toggle (dev-only) */}
+          <div className="space-y-2">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={showSceneBadges}
+                onChange={(e) => onChangeShowSceneBadges(e.target.checked)}
+                className="mt-0.5 size-4 cursor-pointer accent-primary"
+              />
+              <div className="flex-1">
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <Eye className="size-4" />
+                  Show scene badges (dev)
+                </div>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Render the small "Key point" / title badges in the corner of
+                  each segment. Off by default so exported videos don't show
+                  meta-labels viewers can't interpret.
+                </p>
+              </div>
+            </label>
           </div>
         </div>
       </DialogContent>
