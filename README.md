@@ -12,16 +12,38 @@ The Node app has no embedded "AI orchestrator". The Claude Code CLI **is** the o
 
 ## Features
 
-- **Flexible input**: paste text, an article URL, or a file path.
-- **Claude CLI orchestrates everything**: extract → summarize → pick images/music → TTS → render → `output.mp4`.
+- **Flexible input**: paste text, an article URL, or a file path — from either the terminal or the Studio home page.
+- **Two entry points to the AI orchestrator**:
+  - **Claude CLI in the terminal** — full power, asks follow-up questions, lets you fork scene TSX for custom effects.
+  - **Web Studio home page** — paste a URL and click Generate; Studio spawns `claude -p` headless and surfaces each tool call as a step indicator until the mp4 lands.
 - **Claude writes and edits scene TSX** when you ask for a custom effect (e.g. "give segment 2 a Cyberpunk glitch"). It forks a built-in scene into `data/projects/<id>/scenes/` and the dynamic scene resolver picks it up.
-- **Free neural TTS** (VI + EN) via Microsoft Edge voices.
-- **AI-picked music and images** from Pexels, Unsplash, and Internet Archive — all commercial-friendly licenses.
+- **Free neural TTS** (VI + EN) via Microsoft Edge voices, with per-word timing for subtitles, karaoke, and per-word SFX cues.
+- **AI-picked music and images** from Pexels, Unsplash, Openverse, and Internet Archive — all commercial-friendly licenses.
 - **Formats**: 9:16 (TikTok), 16:9, 1:1 — with export presets for TikTok 60fps / YouTube Shorts / Reels.
-- **Web Studio**: segment timeline with click-to-seek, inline narration editor, asset pickers, real-time `<Player>` preview, render-progress bar.
-- **100% local**: assets are cached on disk; outbound traffic only reaches your chosen providers (Pexels, Unsplash, Pixabay, Internet Archive, Microsoft Edge TTS) and Claude.
+- **Web Studio**: light / dark / system theme, segment timeline with click-to-seek, inline narration editor, image / music / voice / SFX / logo / text-style pickers, real-time `<Player>` preview, render-progress bar, captions on by default with word boundaries baked in.
+- **Render variants**: pick 3 looks per project (e.g. Sports yellow / Bebas impact / TikTok caption) and render `output-A.mp4` / `output-B.mp4` / `output-C.mp4` in one pass.
+- **Per-project custom assets**: upload your own SFX (≤ 500 KB, ≤ 5 s) and watermark (image or text), build your own text styles in-app — all scoped to one project so renders stay deterministic.
+- **100% local**: assets are cached on disk; outbound traffic only reaches your chosen providers (Pexels, Unsplash, Pixabay, Internet Archive, Openverse, Microsoft Edge TTS) and Claude.
 - **Subscription-based** — no Anthropic API key. Auth via `claude login` with a Pro/Max subscription.
 - **Unified iconography**: a single icon set — **Lucide React** — is shared by Studio and Remotion compositions. **No emoji anywhere** (Studio UI, scene TSX, CLAUDE.md, docs, commit messages).
+
+---
+
+## Screenshots
+
+Studio home — paste a URL or article text and Claude does the rest, locally:
+
+![Home page](docs/screenshots/home-light.png)
+
+Project editor — pick variants, swap assets, fine-tune narration, toggle the watermark, all with a live `<Player>` preview:
+
+![Editor](docs/screenshots/editor-dark.png)
+
+Project list — every project Claude has created, with thumbnails, language / aspect filters, and search:
+
+![Projects](docs/screenshots/projects-list.png)
+
+Light theme is supported on every page; the toggle in the header cycles System → Light → Dark.
 
 ---
 
@@ -312,18 +334,24 @@ Applies to **Studio UI**, **Remotion scenes**, **CLAUDE.md**, and every doc in t
 
 - **M0 — Setup**: pnpm workspace, TypeScript config, `.env.example`, zod schemas, `ui-tokens.ts`, `CLAUDE.md`.
 - **M1 — Remotion render core**: 9:16 / 16:9 / 1:1 compositions, built-in scenes (`TitleCard`, `KeyPoint`, `Quote`, `Outro`, `MissingScene`), Ken Burns / typewriter / fade effects, dynamic scene loading (built-in + per-project custom), `renderSegment` / `renderProject`, Be Vietnam Pro font wiring.
-- **M2 — Media adapters**: Pexels + Unsplash + Pixabay (image), Internet Archive (music), Edge TTS (VI / EN), Readability with emoji strip, ffmpeg concat / mix, hash-based asset cache.
+- **M2 — Media adapters**: Pexels + Unsplash + Pixabay + Openverse (image), Internet Archive (music), Edge TTS (VI / EN), Readability with emoji strip, ffmpeg concat / mix, hash-based asset cache.
 - **M3 — MCP server**: stdio MCP server registered in `.mcp.json`, tools wired for media + render, `prompts/generate.md`, `prompts/edit.md`, end-to-end "URL → output.mp4" works.
 - **M4 — Web Studio core**: project list, project editor, Remotion `<Player>` preview, segment list with badges, inspector for text / voice / duration / scene / speed / image, save / render endpoints.
 - **M5 — Studio asset pickers**: image, music, voice pickers as dialogs.
 - **M6 — Studio UX polish**: segment timeline with click-to-seek, dirty-save indicator + `beforeunload` guard, render progress bar in the header, export-preset selector, subtitle toggle.
+- **M7 — Text style library + variants**: 28 built-in styles across 5 families, multi-variant render (`output-<id>.mp4`), per-segment font / color overrides, tone-aware orchestrator, karaoke + letter-stagger motions.
+- **M8 — Render polish**: SFX bank, narration auto-fit so audio never gets cut, per-variant voice override, subtitle styling via TextStyle, project list with variant thumbnails.
+- **M9 — Branding + builder**: hidden scene badges in output, per-segment SFX override, custom SFX upload per project, image + text watermark, project duplicate / delete, social caption helper, in-app TextStyle builder.
+- **Orchestrate from the web**: paste a URL on the Studio home page and the editor takes over from the CLI — `/api/orchestrate` spawns `claude -p` headless with a strict tool allowlist and streams progress back into a step indicator.
+- **Light + dark theme**: class-based, defaults to the OS preference, three-state header toggle.
 - **Crawler fallback**: Playwright-based crawl providers (`crawl:pixabay-image`, `crawl:unsplash`) for when JSON APIs are blocked.
 
-### Next
+### Future ideas
 
+- Voice cloning (offline) via a packaged open-source Vietnamese TTS model.
 - Batch render across multiple projects.
 - Drag-to-reorder segments.
-- Project duplicate / template.
+- Project template gallery.
 - Lint rule: `no-emoji` over `apps/studio/**`, `packages/remotion/**`, `**/*.md`.
 
 ---
@@ -351,13 +379,22 @@ cp .mcp.json.example .mcp.json
 # 5. Verify Claude can find the MCP tools
 claude mcp list   # should list "news-tok"
 
-# 6a. Create a video using Claude (terminal)
+# 6. Pick one of two flows.
+
+# 6a. Web-first (recommended for everyday use)
+pnpm studio                              # http://localhost:3000
+# Paste a URL on the home page, click Generate, watch the steps run.
+
+# 6b. Terminal-first (for follow-up questions and custom scenes)
 claude
 > Create a 30s video from https://vnexpress.net/... — VI, 9:16
-
-# 6b. Open Studio to tweak it
-pnpm studio   # http://localhost:3000
+pnpm studio                              # open Studio to tweak
 ```
+
+> On Windows, if Studio can't find `claude.exe` automatically, set
+> `CLAUDE_CLI_PATH=C:\path\to\claude.exe` in `apps/studio/.env.local`
+> before running `pnpm studio` — the orchestrate route resolves the
+> CLI through that env var when present.
 
 ---
 
