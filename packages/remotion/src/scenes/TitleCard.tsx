@@ -33,34 +33,36 @@ export const TitleCard = ({
             'linear-gradient(180deg, rgba(11,11,15,0.2) 0%, rgba(11,11,15,0.6) 60%, rgba(11,11,15,0.92) 100%)',
         }}
       />
-      <Fade inSec={0.4} outSec={0.4}>
-        <AbsoluteFill
-          style={{
-            justifyContent: 'flex-start',
-            alignItems: 'flex-start',
-            padding: 80 * r.unit,
-            pointerEvents: 'none',
-          }}
-        >
-          <div
+      {project.showSceneBadges ? (
+        <Fade inSec={0.4} outSec={0.4}>
+          <AbsoluteFill
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 12 * r.unit,
-              color: '#a5b4fc',
-              fontWeight: 600,
-              fontSize: 28 * r.font,
-              letterSpacing: 1,
-              textTransform: 'uppercase',
-              opacity: spring,
-              transform: `translateY(${(1 - spring) * 30}px)`,
+              justifyContent: 'flex-start',
+              alignItems: 'flex-start',
+              padding: 80 * r.unit,
+              pointerEvents: 'none',
             }}
           >
-            <Newspaper size={ICON.xl * r.unit} strokeWidth={ICON.strokeWidth} />
-            {project.title || 'News'}
-          </div>
-        </AbsoluteFill>
-      </Fade>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 12 * r.unit,
+                color: '#a5b4fc',
+                fontWeight: 600,
+                fontSize: 28 * r.font,
+                letterSpacing: 1,
+                textTransform: 'uppercase',
+                opacity: spring,
+                transform: `translateY(${(1 - spring) * 30}px)`,
+              }}
+            >
+              <Newspaper size={ICON.xl * r.unit} strokeWidth={ICON.strokeWidth} />
+              {project.title || 'News'}
+            </div>
+          </AbsoluteFill>
+        </Fade>
+      ) : null}
       <TextBlock
         text={segment.text}
         style={style}

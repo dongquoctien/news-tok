@@ -11,7 +11,7 @@ import { useResponsive } from './sizing.js'
 
 const CLASSIC = findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
-export const KeyPoint = ({ segment, textStyle, fontOverride, colorOverride }: SceneProps) => {
+export const KeyPoint = ({ segment, project, textStyle, fontOverride, colorOverride }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 16 })
   const r = useResponsive()
   const bg = segment.visuals.background
@@ -27,34 +27,36 @@ export const KeyPoint = ({ segment, textStyle, fontOverride, colorOverride }: Sc
             'linear-gradient(180deg, rgba(11,11,15,0.0) 0%, rgba(11,11,15,0.55) 70%, rgba(11,11,15,0.95) 100%)',
         }}
       />
-      <Fade inSec={0.35} outSec={0.35}>
-        <AbsoluteFill
-          style={{
-            justifyContent: 'flex-start',
-            alignItems: 'flex-start',
-            padding: 72 * r.unit,
-            pointerEvents: 'none',
-          }}
-        >
-          <div
+      {project.showSceneBadges ? (
+        <Fade inSec={0.35} outSec={0.35}>
+          <AbsoluteFill
             style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 12 * r.unit,
-              color: '#a5b4fc',
-              fontWeight: 600,
-              fontSize: 24 * r.font,
-              letterSpacing: 1.5,
-              textTransform: 'uppercase',
-              opacity: spring,
-              transform: `translateY(${(1 - spring) * 20}px)`,
+              justifyContent: 'flex-start',
+              alignItems: 'flex-start',
+              padding: 72 * r.unit,
+              pointerEvents: 'none',
             }}
           >
-            <ListChecks size={ICON.lg * r.unit} strokeWidth={ICON.strokeWidth} />
-            Key point
-          </div>
-        </AbsoluteFill>
-      </Fade>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 12 * r.unit,
+                color: '#a5b4fc',
+                fontWeight: 600,
+                fontSize: 24 * r.font,
+                letterSpacing: 1.5,
+                textTransform: 'uppercase',
+                opacity: spring,
+                transform: `translateY(${(1 - spring) * 20}px)`,
+              }}
+            >
+              <ListChecks size={ICON.lg * r.unit} strokeWidth={ICON.strokeWidth} />
+              Key point
+            </div>
+          </AbsoluteFill>
+        </Fade>
+      ) : null}
       <TextBlock
         text={segment.text}
         style={style}
