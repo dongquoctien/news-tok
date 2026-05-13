@@ -23,6 +23,7 @@ import {
 import { Label } from '@/components/ui/label'
 import { fontLabel } from '@/lib/font-label'
 import { plateCss, previewFontStack, textCss } from '@/lib/text-style-preview'
+import { PREVIEW_KEYFRAMES, previewAnimationStyle } from '@/lib/text-style-anim'
 import { cn } from '@/lib/utils'
 import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
 import { FontPickerDialog } from './font-picker-dialog'
@@ -304,7 +305,11 @@ export function TextStyleBuilder({
   }
 
   const split = splitRatioFor(aspect)
-  const animate = tab === 'motion'
+  // Animate the preview on every tab so users see motion the moment
+  // they pick it — gating on `tab === 'motion'` was confusing: people
+  // try a new motion, switch to Layout to nudge anchor, and think the
+  // motion silently broke.
+  const animate = true
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -400,7 +405,7 @@ export function TextStyleBuilder({
           </Button>
           <Button size="sm" onClick={save} disabled={saving || !draft.name.trim()}>
             {saving ? <Loader2 className="animate-spin" /> : null}
-            {isEdit ? 'Update' : 'Save'}
+            {isEdit ? 'Update' : 'Create New'}
           </Button>
         </div>
       </DialogContent>
@@ -417,12 +422,11 @@ function BuilderPreviewText({
 }: {
   draft: TextStyle
   text: string
-  animate: boolean
+  /** Kept for API back-compat; preview always animates now so users
+   *  see motion the moment they pick it, on any tab. */
+  animate?: boolean
 }) {
-  const animationName: string | undefined = animate
-    ? ANIMATION_FOR_MOTION[draft.enter]
-    : undefined
-
+  void animate
   // Take over the FrameContent slot's flex centring so anchor +
   // marginPct from the Layout tab actually move the text. We render
   // an absolute container that fills the device frame, then place
@@ -440,6 +444,7 @@ function BuilderPreviewText({
         ? 'flex-end'
         : 'center'
   const m = `${draft.marginPct}%`
+  const animStyle = previewAnimationStyle(draft.enter, draft.enterDurationSec)
 
   return (
     <>
@@ -457,15 +462,11 @@ function BuilderPreviewText({
       >
         <div style={plateCss(draft)}>
           <span
-            key={animate ? `${draft.enter}-${draft.enterDurationSec}` : 'static'}
-            style={{
-              ...textCss(draft, 5),
-              animationName,
-              animationDuration: `${Math.max(0.4, draft.enterDurationSec)}s`,
-              animationIterationCount: 'infinite',
-              animationDirection: 'alternate',
-              animationTimingFunction: 'ease-in-out',
-            }}
+            // Force remount on motion or duration change so the CSS
+            // animation restarts cleanly. Without this, swapping
+            // `bounceIn` → `tada` would keep the previous timer running.
+            key={`${draft.enter}-${draft.enterDurationSec}`}
+            style={{ ...textCss(draft, 5), ...animStyle }}
           >
             {text || 'Live preview'}
           </span>
@@ -475,95 +476,6 @@ function BuilderPreviewText({
     </>
   )
 }
-
-const ANIMATION_FOR_MOTION: Record<TextMotion, string | undefined> = {
-  none: undefined,
-  fade: 'nt-fade',
-  slideUp: 'nt-slide-up',
-  slideDown: 'nt-slide-down',
-  scaleIn: 'nt-scale-in',
-  typewriter: 'nt-typewriter',
-  wordPop: 'nt-scale-in',
-  wordHighlight: 'nt-fade',
-  gradientWipe: 'nt-fade',
-  slotMachine: 'nt-slide-up',
-  blurReveal: 'nt-blur',
-  glitch: 'nt-glitch',
-  wordReveal3d: 'nt-slide-up',
-  waveBounce: 'nt-slide-up',
-  maskWipe: 'nt-fade',
-  karaoke: 'nt-fade',
-  letterStagger: 'nt-fade',
-  bounceIn: 'nt-bounce-in',
-  rubberBand: 'nt-rubber-band',
-  flipInX: 'nt-flip-in-x',
-  lightSpeedIn: 'nt-light-speed-in',
-  rollIn: 'nt-roll-in',
-  tada: 'nt-tada',
-  jello: 'nt-jello',
-}
-
-const PREVIEW_KEYFRAMES = `
-  @keyframes nt-fade { from { opacity: 0 } to { opacity: 1 } }
-  @keyframes nt-slide-up { from { opacity: 0; transform: translateY(20px) } to { opacity: 1; transform: translateY(0) } }
-  @keyframes nt-slide-down { from { opacity: 0; transform: translateY(-20px) } to { opacity: 1; transform: translateY(0) } }
-  @keyframes nt-scale-in { from { opacity: 0; transform: scale(0.7) } to { opacity: 1; transform: scale(1) } }
-  @keyframes nt-typewriter { from { opacity: 0; clip-path: inset(0 100% 0 0) } to { opacity: 1; clip-path: inset(0 0 0 0) } }
-  @keyframes nt-blur { from { opacity: 0; filter: blur(8px) } to { opacity: 1; filter: blur(0) } }
-  @keyframes nt-glitch { 0%, 100% { transform: translate(0, 0) } 25% { transform: translate(-1px, 1px) } 75% { transform: translate(1px, -1px) } }
-  @keyframes nt-bounce-in {
-    0% { opacity: 0; transform: scale(0.3) }
-    20% { transform: scale(1.1) }
-    40% { transform: scale(0.9) }
-    60% { opacity: 1; transform: scale(1.03) }
-    80% { transform: scale(0.97) }
-    100% { opacity: 1; transform: scale(1) }
-  }
-  @keyframes nt-rubber-band {
-    0% { transform: scale(1,1) }
-    30% { transform: scaleX(1.25) scaleY(0.75) }
-    40% { transform: scaleX(0.75) scaleY(1.25) }
-    50% { transform: scaleX(1.15) scaleY(0.85) }
-    65% { transform: scaleX(0.95) scaleY(1.05) }
-    75% { transform: scaleX(1.05) scaleY(0.95) }
-    100% { transform: scale(1,1) }
-  }
-  @keyframes nt-flip-in-x {
-    0% { opacity: 0; transform: perspective(400px) rotateX(90deg) }
-    40% { opacity: 1; transform: perspective(400px) rotateX(-20deg) }
-    60% { transform: perspective(400px) rotateX(10deg) }
-    80% { transform: perspective(400px) rotateX(-5deg) }
-    100% { opacity: 1; transform: perspective(400px) rotateX(0deg) }
-  }
-  @keyframes nt-light-speed-in {
-    0% { opacity: 0; transform: translateX(100%) skewX(-30deg) }
-    60% { opacity: 1; transform: translateX(0) skewX(20deg) }
-    80% { transform: skewX(-5deg) }
-    100% { opacity: 1; transform: translateX(0) skewX(0) }
-  }
-  @keyframes nt-roll-in {
-    0% { opacity: 0; transform: translateX(-100%) rotate(-120deg) }
-    100% { opacity: 1; transform: translateX(0) rotate(0) }
-  }
-  @keyframes nt-tada {
-    0% { transform: scale(1) rotate(0) }
-    10%, 20% { transform: scale(0.9) rotate(-3deg) }
-    30%, 50%, 70%, 90% { transform: scale(1.1) rotate(3deg) }
-    40%, 60%, 80% { transform: scale(1.1) rotate(-3deg) }
-    100% { transform: scale(1) rotate(0) }
-  }
-  @keyframes nt-jello {
-    0%, 100% { transform: skewX(0) skewY(0) }
-    11% { transform: skewX(-12.5deg) skewY(-12.5deg) }
-    22% { transform: skewX(6.25deg) skewY(6.25deg) }
-    33% { transform: skewX(-3.125deg) skewY(-3.125deg) }
-    44% { transform: skewX(1.56deg) skewY(1.56deg) }
-    55% { transform: skewX(-0.78deg) skewY(-0.78deg) }
-    66% { transform: skewX(0.39deg) skewY(0.39deg) }
-    77% { transform: skewX(-0.2deg) skewY(-0.2deg) }
-    88% { transform: skewX(0.1deg) skewY(0.1deg) }
-  }
-`
 
 // --- Tab bar -------------------------------------------------------------
 

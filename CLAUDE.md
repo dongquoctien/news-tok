@@ -305,6 +305,16 @@ per segment.
    user picks all 3, call `renderProject({ projectId, variants: 'all' })`.
 9. Report the absolute path(s) to the output file(s) so the user can open
    them — for multi-variant renders, list every output explicitly.
+10. **Generate + rewrite social captions** (REQUIRED — do not skip).
+    Call `generateSocialCaption({ projectId })` to pull the template
+    baseline. The template glues every keypoint into the caption body
+    so it reads like a transcript — DO NOT paste it verbatim. Rewrite
+    each platform variant following the "prep video for social upload"
+    section below (TikTok 120–250 chars, FB 400–800, IG 250–500), then
+    show all three rewritten captions plus char counts so the user can
+    copy whichever platform they're posting to. The render step is
+    not "done" until the user has the captions in their hands — most
+    users want to post immediately after `output.mp4` lands.
 
 ## Common task: edit an existing segment
 
@@ -340,9 +350,13 @@ block. Override `topic` if the article straddles two categories (e.g.
 
 ### Step 2 — Rewrite each variant (REQUIRED)
 
-The baseline lists every keypoint verbatim, which makes TikTok/IG
-captions far too long. Rewrite the three variants per platform target
-length:
+The baseline already compresses each keypoint to its lead clause and
+roughly hits the platform sweet-spot length — but it can't pick the
+hook, can't write in the user's voice, and can't read between the
+lines of the article. Your job is to rewrite each variant so it reads
+like a human who watched the video, not a script reader.
+
+Rewrite the three variants per platform target length:
 
 | Platform | Target length | Style |
 |---|---|---|

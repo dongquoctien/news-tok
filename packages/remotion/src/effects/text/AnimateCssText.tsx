@@ -10,6 +10,9 @@ import { useResponsive } from '../../scenes/sizing.js'
  * matches animate.css; the durations are read from `enterDurationSec` so
  * the user controls timing the same way as for every other primitive.
  */
+function animateDurationFrames(props: TextPrimitiveProps, fps: number): number {
+  return Math.max(1, props.style.enterDurationSec * fps)
+}
 
 function wrapStyle(
   props: TextPrimitiveProps,
@@ -32,7 +35,7 @@ export const BounceInText = (props: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
-  const durFrames = Math.max(1, props.style.enterDurationSec * fps)
+  const durFrames = animateDurationFrames(props, fps)
   // animate.css bounceIn: opacity 0→1 at 0%/60%, scale 0.3→1.05→0.9→1.03→0.97→1.
   const t = Math.min(1, frame / durFrames)
   const scale = interpolate(
@@ -54,7 +57,7 @@ export const RubberBandText = (props: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
-  const dur = Math.max(1, props.style.enterDurationSec * fps)
+  const dur = animateDurationFrames(props, fps)
   const t = Math.min(1, frame / dur)
   // 0% scale(1,1); 30% scaleX(1.25, 0.75); 40% scaleX(0.75, 1.25);
   // 50% scaleX(1.15, 0.85); 65% scaleX(0.95, 1.05); 75% scaleX(1.05, 0.95);
@@ -83,7 +86,7 @@ export const FlipInXText = (props: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
-  const dur = Math.max(1, props.style.enterDurationSec * fps)
+  const dur = animateDurationFrames(props, fps)
   const t = Math.min(1, frame / dur)
   const rot = interpolate(t, [0, 0.4, 0.6, 0.8, 1], [90, -20, 10, -5, 0], {
     extrapolateRight: 'clamp',
@@ -117,7 +120,7 @@ export const LightSpeedInText = (props: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
-  const dur = Math.max(1, props.style.enterDurationSec * fps)
+  const dur = animateDurationFrames(props, fps)
   const t = Math.min(1, frame / dur)
   const tx = interpolate(t, [0, 0.6, 1], [100, 0, 0], { extrapolateRight: 'clamp' })
   const skew = interpolate(t, [0, 0.6, 0.8, 1], [-30, 20, -5, 0], { extrapolateRight: 'clamp' })
@@ -136,24 +139,33 @@ export const LightSpeedInText = (props: TextPrimitiveProps) => {
   )
 }
 
-/** rollIn — slide in from the left with a rotation. */
+/** rollIn — slide in from the left while rotating. Animate.css spec:
+ *  translate3d(-100%, 0, 0) + rotate(-120deg) → settle at (0, 0deg).
+ *  We bump to -180deg so the rotation reads as a full half-turn the
+ *  way users expect from a "roll" — strictly closer to animate.css's
+ *  `lightSpeedInRight` energy, but reviewers consistently report the
+ *  120deg version looks too subtle in 9:16 narrow frames. */
 export const RollInText = (props: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
-  const dur = Math.max(1, props.style.enterDurationSec * fps)
+  const dur = animateDurationFrames(props, fps)
   const t = Math.min(1, frame / dur)
   const tx = interpolate(t, [0, 1], [-100, 0], { extrapolateRight: 'clamp' })
-  const rot = interpolate(t, [0, 1], [-120, 0], { extrapolateRight: 'clamp' })
-  const opacity = interpolate(t, [0, 0.5, 1], [0, 1, 1], { extrapolateRight: 'clamp' })
+  const rot = interpolate(t, [0, 1], [-180, 0], { extrapolateRight: 'clamp' })
+  const opacity = interpolate(t, [0, 0.4, 1], [0, 1, 1], { extrapolateRight: 'clamp' })
   return (
     <div
-      style={wrapStyle(
-        props,
-        props.style.fontSize * r.font,
-        `translateX(${tx}%) rotate(${rot}deg)`,
-        opacity
-      )}
+      style={{
+        ...wrapStyle(
+          props,
+          props.style.fontSize * r.font,
+          `translateX(${tx}%) rotate(${rot}deg)`,
+          opacity
+        ),
+        // Roll feels more "roll" when the pivot is the leading edge.
+        transformOrigin: 'left center',
+      }}
     >
       {props.text}
     </div>
@@ -165,7 +177,7 @@ export const TadaText = (props: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
-  const dur = Math.max(1, props.style.enterDurationSec * fps)
+  const dur = animateDurationFrames(props, fps)
   const t = Math.min(1, frame / dur)
   const scale = interpolate(t, [0, 0.1, 0.2, 1], [1, 0.9, 1.1, 1], { extrapolateRight: 'clamp' })
   // Wobble: -3°/+3° alternating between 20% and 90% of the duration.
@@ -194,7 +206,7 @@ export const JelloText = (props: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
-  const dur = Math.max(1, props.style.enterDurationSec * fps)
+  const dur = animateDurationFrames(props, fps)
   const t = Math.min(1, frame / dur)
   const skewX = interpolate(
     t,

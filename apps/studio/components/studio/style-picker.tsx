@@ -19,6 +19,7 @@ import {
   plateCss as libPlateCss,
   textCss as libTextCss,
 } from '@/lib/text-style-preview'
+import { PREVIEW_KEYFRAMES, previewAnimationStyle } from '@/lib/text-style-anim'
 import { TextStyleBuilder } from './text-style-builder'
 import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
 
@@ -124,6 +125,7 @@ function UserAwareCard({
   previewBackground,
   aspect,
   onEdited,
+  onUserStyleSaved,
   onDelete,
 }: {
   style: TextStyle
@@ -135,6 +137,12 @@ function UserAwareCard({
   previewBackground?: string
   aspect?: import('@news-tok/shared/schema').Aspect
   onEdited?: () => void
+  /** Bubbles the saved/edited style up so the parent (editor.tsx) can
+   *  merge it into project.userTextStyles. Required to keep the React
+   *  state in sync with disk — without this, the next project Save
+   *  PATCH overwrites the disk back to a state that doesn't contain
+   *  the new style, and the style "disappears" after F5. */
+  onUserStyleSaved?: (style: TextStyle) => void
   onDelete?: () => void
 }) {
   const isUser = style.source === 'user'
@@ -157,7 +165,10 @@ function UserAwareCard({
           aspect={aspect}
           previewBackground={previewBackground}
           previewText={sampleText}
-          onSaved={() => onEdited?.()}
+          onSaved={(saved) => {
+            onUserStyleSaved?.(saved)
+            onEdited?.()
+          }}
           trigger={
             <button
               type="button"
@@ -255,6 +266,12 @@ export type StylePickerProps = {
   /** Project aspect — forwarded to the builder + future right-pane
    *  mockup so the device frame matches the final render. */
   aspect?: import('@news-tok/shared/schema').Aspect
+  /** Fired whenever the builder saves a new or edited user style.
+   *  The parent must merge `style` into its `project.userTextStyles`
+   *  state — without this, the next project Save PATCH overwrites
+   *  disk back to a state that doesn't contain the new style, and
+   *  the style "disappears" after F5. */
+  onUserStyleSaved?: (style: TextStyle) => void
 }
 
 export function StylePicker({
@@ -268,6 +285,7 @@ export function StylePicker({
   language,
   previewBackground,
   aspect,
+  onUserStyleSaved,
 }: StylePickerProps) {
   const [open, setOpen] = useState(false)
   const [builtIn, setBuiltIn] = useState<TextStyle[] | null>(null)
@@ -442,7 +460,10 @@ export function StylePicker({
                       aspect={aspect}
                       previewBackground={previewBackground}
                       previewText={sampleText}
-                      onSaved={() => refresh()}
+                      onSaved={(saved) => {
+                        onUserStyleSaved?.(saved)
+                        refresh()
+                      }}
                       trigger={
                         <Button variant="outline" size="sm">
                           <Plus />
@@ -485,6 +506,7 @@ export function StylePicker({
                         previewBackground={previewBackground}
                         aspect={aspect}
                         onEdited={() => refresh()}
+                        onUserStyleSaved={onUserStyleSaved}
                         onDelete={() => deleteUserStyle(s.id)}
                       />
                     </div>
@@ -597,10 +619,55 @@ export function StylePicker({
 // Helper that renders the style on the preview device. Uses the shared
 // /lib helpers (which accept a scale arg sized for the device frame)
 // rather than the in-file `textCss` that's tuned for small card previews.
+//
+// We also honour the style's `anchor` / `align` / `marginPct` so the
+// preview shows where the text will actually land on the rendered
+// video — without this wrapper, the DeviceMockupPreview's flex
+// centring would pin every style to the middle regardless of what it
+// declared. Mirrors `BuilderPreviewText` in the TextStyleBuilder.
 function PreviewedTextInline({ style, text }: { style: TextStyle; text: string }) {
+  const justify =
+    style.anchor === 'top'
+      ? 'flex-start'
+      : style.anchor === 'bottom'
+        ? 'flex-end'
+        : 'center'
+  const items =
+    style.align === 'left'
+      ? 'flex-start'
+      : style.align === 'right'
+        ? 'flex-end'
+        : 'center'
+  const animStyle = previewAnimationStyle(style.enter, style.enterDurationSec)
   return (
-    <div style={libPlateCss(style)}>
-      <span style={libTextCss(style, 5)}>{text}</span>
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        padding: `${style.marginPct}%`,
+        display: 'flex',
+        flexDirection: 'column',
+        justifyContent: justify,
+        alignItems: items,
+        pointerEvents: 'none',
+      }}
+    >
+      <div style={libPlateCss(style)}>
+        <span
+          // Remount whenever the previewed style changes so CSS
+          // animation restarts cleanly — hovering style A then style B
+          // would otherwise leave B's timer running from A's old offset.
+          key={`${style.id}-${style.enter}-${style.enterDurationSec}`}
+          style={{ ...libTextCss(style, 5), ...animStyle }}
+        >
+          {text}
+        </span>
+      </div>
+      {/* Inject keyframes inside the dialog DOM so they're live as
+          soon as the picker opens. Reusing the same `<style>` block in
+          builder + picker is fine — duplicate `@keyframes` declarations
+          with identical bodies don't fight each other. */}
+      <style>{PREVIEW_KEYFRAMES}</style>
     </div>
   )
 }
