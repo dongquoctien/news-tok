@@ -80,10 +80,10 @@ Tách 2 axis:
    - Nút "Use style default" để clear override.
 3. Mount trong inspector segment, cùng hàng với Voice / Font / Style.
 
-### Mở rộng SFX bank?
+### Mở rộng SFX bank
 
-Mục này không thuộc M9 — bank 12 entry đã đủ phong phú cho phase này.
-Để mở M10 nếu cần thêm SFX upload.
+Built-in 12 cue cố định ở `packages/shared/sfx/`. User upload SFX
+riêng → xem **M9-5** dưới đây (tách riêng để ship M9-2 trước).
 
 ### Files đụng
 
@@ -361,18 +361,95 @@ TextBlock đã consume mọi field của TextStyleSchema.
 
 ---
 
+## M9-5 — Upload SFX từ máy người dùng
+
+### Vấn đề
+
+Bank `packages/shared/sfx/` cố định 12 cue committed in repo —
+deterministic nhưng cứng nhắc. Một số creator có SFX riêng (jingle
+thương hiệu, sound bite ký tên, hiệu ứng thu âm) muốn dùng cho
+project mà không phải fork repo. Hiện không có cách nào ngoài việc
+sửa thẳng `packages/shared/sfx/` + cập nhật `BUILT_IN_SFX` array.
+
+### Quyết định
+
+Cho phép user upload mp3 vào bank **per-project** thay vì global,
+để giữ render determinism (mỗi project tự đóng gói SFX của mình
+trong `data/projects/<id>/sfx/`):
+
+- Schema: thêm `Project.customSfx: SfxEntry[]` (mặc định `[]`).
+  Mỗi entry có `id` (slug auto-generated từ filename),
+  `label`, `durationSec` (đọc qua ffprobe lúc upload),
+  `defaultGain` (mặc định 1.0), `source: 'local'`, `path` (absolute
+  path đến mp3 đã copy vào `data/projects/<id>/sfx/`).
+- API mới `POST /api/projects/[id]/sfx`:
+  - Multipart upload, max 500 KB, mp3 only (validate header).
+  - ffprobe đọc duration (cap 2s — SFX dài hơn nên dùng `bgMusic`
+    hoặc `segment.audio.sfx`).
+  - Slug id deterministic theo content hash (giống `/api/upload`).
+  - Lưu vào `data/projects/<id>/sfx/<slug>.mp3`.
+  - Append vào `project.customSfx`, save storyboard.
+- SfxPicker UI: thêm **tab "Custom"** bên cạnh tab "Built-in" (12
+  cue có sẵn). Tab Custom có:
+  - Upload area (reuse `UploadDropzone` `accept="audio/mp3"`).
+  - List custom SFX của project hiện tại, mỗi entry có preview +
+    pick + nút delete.
+- Render path:
+  - `collectUsedSfxIds` + `stageSfxFiles` ở `packages/render/src/sfx-staging.ts`
+    đọc thêm `project.customSfx` → copy vào staging dir.
+  - Render lookup: built-in trước, custom sau (id namespace tách
+    rời nhờ slug có prefix `user-`).
+- Player preview: endpoint mới `/api/projects/[id]/sfx/[slug]` serve
+  từ `data/projects/<id>/sfx/`. `SfxPicker` build url map merge built-in
+  (`/api/sfx/<id>`) + custom (`/api/projects/<id>/sfx/<slug>`).
+
+### Files đụng
+
+- `packages/shared/src/schema.ts` — `Project.customSfx`.
+- `apps/studio/app/api/projects/[id]/sfx/route.ts` — mới (POST upload, DELETE per-slug).
+- `apps/studio/app/api/projects/[id]/sfx/[slug]/route.ts` — mới (GET stream).
+- `apps/studio/components/studio/sfx-picker.tsx` — thêm 2 tab + upload area.
+- `apps/studio/components/studio/player-pane.tsx` — merge url map.
+- `packages/render/src/sfx-staging.ts` — stage custom files cho render.
+- `packages/mcp-server/dist/` — rebuild.
+
+### Effort
+
+~4 h (UI tab + 2 endpoint + 2 chỗ render + ffprobe duration).
+
+### Edge case
+
+- User upload trùng id (cùng content hash): treat as idempotent, không
+  duplicate entry.
+- File quá to (>500 KB / >2s): reject, hint dùng `bgMusic` hoặc
+  `segment.audio.sfx`.
+- Project bị xoá: SFX trong `data/projects/<id>/sfx/` xoá cùng (đã
+  có sẵn ở `deleteProject` MCP tool).
+- Sao chép project: `duplicateProject` cần copy `data/projects/<src>/sfx/`
+  sang `<dst>/sfx/` và rewrite paths trong `customSfx[]`.
+
+### Mở rộng (không thuộc M9-5)
+
+- Library global cho user (`~/.news-tok/sfx/`) — hiện chưa cần, mỗi
+  project có bank riêng đã đủ.
+- Trim / fade in editor — dùng web audio API. Tốn 1 PR riêng nếu
+  user yêu cầu sau.
+
+---
+
 ## Thứ tự PR
 
-| PR | Items | Effort | Ship trước/sau |
-|---|---|---|---|
-| **PR-A** | M9-1 (ẩn badges) | 1 h | Ship trước — quick win, không schema |
-| **PR-B** | M9-2 (SFX picker) | 3 h | Schema-light, độc lập |
-| **PR-C** | M9-3 (Logo marker — image + text) | 6 h | Schema + renderer + UI, độc lập với PR-B |
-| **PR-D** | M9-4 (TextStyle builder) | 8 h | UI lớn, không đụng renderer, ship cuối |
+| PR | Items | Effort | Ship trước/sau | Trạng thái |
+|---|---|---|---|---|
+| **PR-A** | M9-1 (ẩn badges) | 1 h | Ship trước — quick win, không schema | merged (#20) |
+| **PR-B** | M9-2 (SFX picker) | 3 h | Schema-light, độc lập | review (#21) |
+| **PR-C** | M9-5 (Upload SFX) | 4 h | Phụ thuộc PR-B (UI cùng dialog) | chưa làm |
+| **PR-D** | M9-3 (Logo marker — image + text) | 6 h | Schema + renderer + UI, độc lập | chưa làm |
+| **PR-E** | M9-4 (TextStyle builder) | 8 h | UI lớn, không đụng renderer, ship cuối | chưa làm |
 
-Tổng: **~18 h** chia 4 PR, mỗi PR ship đơn lẻ được. Không có
-inter-dependency cứng — A → B → C → D chỉ là gợi ý theo độ "quick win
-trước".
+Tổng: **~22 h** chia 5 PR. Inter-dependency duy nhất: **M9-5 nên ship
+sau M9-2** vì cùng đụng `SfxPicker` dialog (gom tab Built-in / Custom
+trong 1 lần thay vì rewrite picker 2 đợt).
 
 ## Quyết định đã chốt
 
