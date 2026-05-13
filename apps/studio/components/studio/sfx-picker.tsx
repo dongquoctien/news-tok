@@ -1,8 +1,13 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Pause, Play, RotateCcw, Volume2 } from 'lucide-react'
-import { BUILT_IN_SFX, type SfxEntry, type TextSfx } from '@news-tok/shared'
+import { Loader2, Pause, Play, RotateCcw, Trash2, Upload, Volume2 } from 'lucide-react'
+import {
+  BUILT_IN_SFX,
+  type CustomSfxEntry,
+  type SfxEntry,
+  type TextSfx,
+} from '@news-tok/shared'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -24,23 +29,35 @@ type PreviewState = { sfxId: string; status: 'loading' | 'playing' | 'idle' }
  * Per-segment SFX picker. Stores the user's choice as a `TextSfx` object
  * (the same shape used by TextStyle.sfx) into `segment.sfxOverride`.
  * `null` means "clear override" — fall back to the resolved style's sfx.
+ *
+ * Two banks are shown:
+ *   - Built-in: 12 cues committed in `packages/shared/sfx/`. Served via
+ *     `/api/sfx/<id>`.
+ *   - Custom: user-uploaded mp3s scoped to this project. Served via
+ *     `/api/projects/<projectId>/sfx/<slug>`. CRUD goes through
+ *     `/api/projects/<projectId>/sfx`.
  */
 export function SfxPicker({
+  projectId,
+  customSfx,
   override,
   resolvedFromStyle,
   onChange,
+  onCustomSfxChange,
   trigger,
 }: {
+  projectId: string
+  customSfx: CustomSfxEntry[]
   /** Current segment.sfxOverride, if any. */
   override: TextSfx | undefined
   /** What the renderer would play if override is cleared. */
   resolvedFromStyle: TextSfx | undefined
   onChange: (next: TextSfx | null) => void
+  /** Called after a successful upload or delete so the parent can refresh. */
+  onCustomSfxChange: (next: CustomSfxEntry[]) => void
   trigger: React.ReactNode
 }) {
   const [open, setOpen] = useState(false)
-  // Initialize draft from override if present, else from the resolved style,
-  // so the dialog opens reflecting what the user currently hears.
   const initial = useMemo<TextSfx>(
     () =>
       override ?? {
@@ -55,17 +72,10 @@ export function SfxPicker({
   const [preview, setPreview] = useState<PreviewState>({ sfxId: '', status: 'idle' })
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  // Reset draft each time the dialog opens, so a previous abandoned edit
-  // doesn't leak into the new session.
   useEffect(() => {
     if (open) setDraft(initial)
   }, [open, initial])
 
-  // Tear down the current preview audio without touching the state — the
-  // caller decides whether to reset the picker UI. Crucially this nulls
-  // the audio's event handlers BEFORE pausing/clearing src, so the
-  // forthcoming "error" event the browser fires when src is cleared
-  // can't race with a fresh playPreview() that already updated state.
   const teardownAudio = () => {
     const audio = audioRef.current
     if (!audio) return
@@ -82,20 +92,18 @@ export function SfxPicker({
     setPreview({ sfxId: '', status: 'idle' })
   }
 
-  // Preview audio is served via /api/sfx/[id], which streams the bank
-  // file from packages/shared/sfx/. Going through a dedicated endpoint
-  // avoids leaking the absolute repo path through query strings and
-  // sidesteps the cwd-vs-allowlist mismatch of /api/asset.
-  const previewUrl = (sfxId: string) => `/api/sfx/${encodeURIComponent(sfxId)}`
+  // Built-in bank ids start with no prefix; custom ids start with "user-".
+  // The picker uses this to route preview audio to the right endpoint.
+  const previewUrl = (sfxId: string) =>
+    sfxId.startsWith('user-')
+      ? `/api/projects/${encodeURIComponent(projectId)}/sfx/${encodeURIComponent(sfxId)}`
+      : `/api/sfx/${encodeURIComponent(sfxId)}`
 
   const playPreview = (sfxId: string) => {
     teardownAudio()
     const audio = new Audio(previewUrl(sfxId))
     audioRef.current = audio
     setPreview({ sfxId, status: 'loading' })
-    // Guard each handler so an event firing on a stale audio element
-    // (e.g. canplay arriving after the user clicked a different tile)
-    // can't stomp the state of whichever preview is currently active.
     audio.oncanplay = () => {
       if (audioRef.current !== audio) return
       setPreview({ sfxId, status: 'playing' })
@@ -137,9 +145,22 @@ export function SfxPicker({
     setOpen(false)
   }
 
+  const labelFor = (sfxId: string | undefined): string => {
+    if (!sfxId) return ''
+    const builtIn = BUILT_IN_SFX.find((s) => s.id === sfxId)
+    if (builtIn) return builtIn.label
+    const custom = customSfx.find((s) => s.id === sfxId)
+    if (custom) return custom.label
+    // The override still references a custom entry that's been deleted
+    // from the bank. Show that explicitly so the footer doesn't read like
+    // the cue still works — Apply with a stale id would just play silence.
+    return `${sfxId} (deleted)`
+  }
+
   const summary = override
-    ? [override.enterSoundId, override.perWordSoundId].filter(Boolean).join(' · ') ||
-      'silenced'
+    ? [labelFor(override.enterSoundId), labelFor(override.perWordSoundId)]
+        .filter(Boolean)
+        .join(' · ') || 'silenced'
     : resolvedFromStyle?.enterSoundId || resolvedFromStyle?.perWordSoundId
       ? 'inherits from style'
       : 'none'
@@ -147,7 +168,7 @@ export function SfxPicker({
   return (
     <Dialog open={open} onOpenChange={(o) => (o ? setOpen(true) : (stopPreview(), setOpen(false)))}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-h-[90vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Volume2 className="size-5" />
@@ -167,10 +188,13 @@ export function SfxPicker({
             currentId={draft.enterSoundId}
             currentVolume={draft.enterVolume ?? 0.6}
             preview={preview}
+            customSfx={customSfx}
+            projectId={projectId}
             onPlay={playPreview}
             onStop={stopPreview}
             onPick={(id) => setSlot('enter', id)}
             onVolume={(v) => setVolume('enter', v)}
+            onCustomSfxChange={onCustomSfxChange}
           />
           <SlotPicker
             slot="perWord"
@@ -178,10 +202,13 @@ export function SfxPicker({
             currentId={draft.perWordSoundId}
             currentVolume={draft.perWordVolume ?? 0.4}
             preview={preview}
+            customSfx={customSfx}
+            projectId={projectId}
             onPlay={playPreview}
             onStop={stopPreview}
             onPick={(id) => setSlot('perWord', id)}
             onVolume={(v) => setVolume('perWord', v)}
+            onCustomSfxChange={onCustomSfxChange}
           />
         </div>
 
@@ -212,22 +239,47 @@ function SlotPicker({
   currentId,
   currentVolume,
   preview,
+  customSfx,
+  projectId,
   onPlay,
   onStop,
   onPick,
   onVolume,
+  onCustomSfxChange,
 }: {
   slot: Slot
   label: string
   currentId: string | undefined
   currentVolume: number
   preview: PreviewState
+  customSfx: CustomSfxEntry[]
+  projectId: string
   onPlay: (sfxId: string) => void
   onStop: () => void
   onPick: (sfxId: string | undefined) => void
   onVolume: (v: number) => void
+  onCustomSfxChange: (next: CustomSfxEntry[]) => void
 }) {
+  const [tab, setTab] = useState<'builtin' | 'custom'>('builtin')
   const volumePct = Math.round(currentVolume * 100)
+
+  // Snap the active tab to wherever the currently picked SFX lives — so
+  // when the dialog opens with an existing override, the user lands on
+  // the tab that contains it.
+  useEffect(() => {
+    if (currentId?.startsWith('user-')) setTab('custom')
+  }, [currentId])
+
+  // If the draft references a custom SFX entry that no longer exists
+  // (e.g. user just deleted it from the bank), clear the slot so the
+  // footer doesn't keep showing a dangling id and Apply can't save an
+  // unresolvable override.
+  useEffect(() => {
+    if (!currentId?.startsWith('user-')) return
+    if (customSfx.some((e) => e.id === currentId)) return
+    onPick(undefined)
+  }, [currentId, customSfx, onPick])
+
   return (
     <div className="space-y-2">
       <div className="flex items-baseline justify-between">
@@ -245,19 +297,45 @@ function SlotPicker({
           None
         </button>
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-        {BUILT_IN_SFX.map((entry) => (
-          <SfxTile
-            key={entry.id}
-            entry={entry}
-            selected={currentId === entry.id}
-            preview={preview}
-            onPlay={onPlay}
-            onStop={onStop}
-            onPick={onPick}
-          />
-        ))}
+
+      <div className="flex gap-1 rounded-md border bg-secondary/20 p-0.5 text-xs">
+        <TabButton active={tab === 'builtin'} onClick={() => setTab('builtin')}>
+          Built-in ({BUILT_IN_SFX.length})
+        </TabButton>
+        <TabButton active={tab === 'custom'} onClick={() => setTab('custom')}>
+          Custom ({customSfx.length})
+        </TabButton>
       </div>
+
+      {tab === 'builtin' ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {BUILT_IN_SFX.map((entry) => (
+            <SfxTile
+              key={entry.id}
+              id={entry.id}
+              label={entry.label}
+              meta={`${entry.durationSec}s · ${entry.source}`}
+              selected={currentId === entry.id}
+              preview={preview}
+              onPlay={onPlay}
+              onStop={onStop}
+              onPick={onPick}
+            />
+          ))}
+        </div>
+      ) : (
+        <CustomBank
+          projectId={projectId}
+          customSfx={customSfx}
+          selected={currentId}
+          preview={preview}
+          onPlay={onPlay}
+          onStop={onStop}
+          onPick={onPick}
+          onCustomSfxChange={onCustomSfxChange}
+        />
+      )}
+
       {currentId ? (
         <div className="flex items-center gap-3 rounded-md border bg-secondary/30 px-3 py-2 text-xs">
           <span className="text-muted-foreground">Volume</span>
@@ -282,23 +360,183 @@ function SlotPicker({
   )
 }
 
-function SfxTile({
-  entry,
+function TabButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean
+  onClick: () => void
+  children: React.ReactNode
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'flex-1 rounded px-2 py-1 text-[11px] font-medium uppercase tracking-wide transition-colors',
+        active
+          ? 'bg-background text-foreground shadow-sm'
+          : 'text-muted-foreground hover:text-foreground'
+      )}
+    >
+      {children}
+    </button>
+  )
+}
+
+function CustomBank({
+  projectId,
+  customSfx,
   selected,
   preview,
   onPlay,
   onStop,
   onPick,
+  onCustomSfxChange,
 }: {
-  entry: SfxEntry
+  projectId: string
+  customSfx: CustomSfxEntry[]
+  selected: string | undefined
+  preview: PreviewState
+  onPlay: (sfxId: string) => void
+  onStop: () => void
+  onPick: (sfxId: string) => void
+  onCustomSfxChange: (next: CustomSfxEntry[]) => void
+}) {
+  const inputRef = useRef<HTMLInputElement | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const upload = async (file: File) => {
+    setError(null)
+    setUploading(true)
+    try {
+      const form = new FormData()
+      form.append('file', file)
+      const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/sfx`, {
+        method: 'POST',
+        body: form,
+      })
+      const body = (await res.json()) as {
+        entry?: CustomSfxEntry
+        error?: string
+        dedup?: boolean
+      }
+      if (!res.ok || !body.entry) {
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      // Avoid duplicating an entry the server reported as dedup.
+      const existing = customSfx.find((e) => e.id === body.entry!.id)
+      if (existing) {
+        onCustomSfxChange(customSfx)
+      } else {
+        onCustomSfxChange([...customSfx, body.entry])
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const remove = async (slug: string) => {
+    if (preview.sfxId === slug) onStop()
+    setError(null)
+    try {
+      const res = await fetch(
+        `/api/projects/${encodeURIComponent(projectId)}/sfx?slug=${encodeURIComponent(slug)}`,
+        { method: 'DELETE' }
+      )
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      onCustomSfxChange(customSfx.filter((e) => e.id !== slug))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div
+        onClick={() => inputRef.current?.click()}
+        className="flex cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-border p-4 text-center transition-colors hover:border-primary hover:bg-secondary/40"
+      >
+        {uploading ? (
+          <Loader2 className="size-5 animate-spin text-muted-foreground" />
+        ) : (
+          <Upload className="size-5 text-muted-foreground" />
+        )}
+        <p className="mt-2 text-xs font-medium">
+          {uploading ? 'Uploading…' : 'Drop or click to upload mp3'}
+        </p>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          ≤ 500 KB · ≤ 5 s · stored in this project only
+        </p>
+      </div>
+      <input
+        ref={inputRef}
+        type="file"
+        accept="audio/mpeg,audio/mp3,.mp3"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0]
+          if (file) void upload(file)
+          e.target.value = ''
+        }}
+      />
+
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+
+      {customSfx.length === 0 && !uploading ? (
+        <p className="text-xs text-muted-foreground">No custom cues yet.</p>
+      ) : (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {customSfx.map((entry) => (
+            <SfxTile
+              key={entry.id}
+              id={entry.id}
+              label={entry.label}
+              meta={`${entry.durationSec.toFixed(1)}s · user`}
+              selected={selected === entry.id}
+              preview={preview}
+              onPlay={onPlay}
+              onStop={onStop}
+              onPick={onPick}
+              onDelete={() => void remove(entry.id)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SfxTile({
+  id,
+  label,
+  meta,
+  selected,
+  preview,
+  onPlay,
+  onStop,
+  onPick,
+  onDelete,
+}: {
+  id: string
+  label: string
+  meta: string
   selected: boolean
   preview: PreviewState
   onPlay: (sfxId: string) => void
   onStop: () => void
   onPick: (sfxId: string) => void
+  onDelete?: () => void
 }) {
-  const isLoading = preview.sfxId === entry.id && preview.status === 'loading'
-  const isPlaying = preview.sfxId === entry.id && preview.status === 'playing'
+  const isLoading = preview.sfxId === id && preview.status === 'loading'
+  const isPlaying = preview.sfxId === id && preview.status === 'playing'
   return (
     <div
       className={cn(
@@ -313,10 +551,10 @@ function SfxTile({
         onClick={(e) => {
           e.stopPropagation()
           if (isPlaying || isLoading) onStop()
-          else onPlay(entry.id)
+          else onPlay(id)
         }}
         className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border bg-background text-muted-foreground hover:text-foreground"
-        title={`Preview ${entry.label}`}
+        title={`Preview ${label}`}
         aria-label={isPlaying ? 'Stop preview' : 'Play preview'}
       >
         {isLoading ? (
@@ -329,15 +567,30 @@ function SfxTile({
       </button>
       <button
         type="button"
-        onClick={() => onPick(entry.id)}
+        onClick={() => onPick(id)}
         className="flex min-w-0 flex-1 flex-col items-start text-left"
-        title={`Pick ${entry.label}`}
+        title={`Pick ${label}`}
       >
-        <span className="truncate font-medium">{entry.label}</span>
-        <span className="truncate text-[10px] text-muted-foreground">
-          {entry.durationSec}s · {entry.source}
-        </span>
+        <span className="truncate font-medium">{label}</span>
+        <span className="truncate text-[10px] text-muted-foreground">{meta}</span>
       </button>
+      {onDelete ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete()
+          }}
+          className="inline-flex size-6 shrink-0 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+          title={`Delete ${label}`}
+          aria-label={`Delete ${label}`}
+        >
+          <Trash2 className="size-3" />
+        </button>
+      ) : null}
     </div>
   )
 }
+
+// Re-export type so the original SfxEntry type stays available to other components.
+export type { SfxEntry }

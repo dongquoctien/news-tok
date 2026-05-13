@@ -111,7 +111,7 @@ export async function renderSegmentMedia(
   // at bundle time. If we stage after, the bundler resolves the URL but
   // the snapshot has no entry, so the renderer 404s on every cue.
   const sfxIds = collectUsedSfxIds(project)
-  const sfxUrlMap = await stageSfxFiles(sfxIds)
+  const sfxUrlMap = await stageSfxFiles(sfxIds, project)
   const serveUrl = await bundleForProject(projectId)
   const inputProps = {
     storyboard: rewriteProjectAssets(segmentSubProject(project, segment)),
@@ -160,7 +160,7 @@ export async function renderProjectMedia(
   // snapshots publicDir into `window.remotion_staticFiles`, so cues must
   // be on disk before bundle, not after. (Same reason as renderSegmentMedia.)
   const sfxIds = collectUsedSfxIds(project)
-  const sfxUrlMap = await stageSfxFiles(sfxIds)
+  const sfxUrlMap = await stageSfxFiles(sfxIds, project)
   const serveUrl = await bundleForProject(projectId)
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)

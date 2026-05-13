@@ -7,7 +7,9 @@ import { sfxBankDir, sfxStagingDir } from './paths.js'
 /**
  * Walk every text style the project may use and collect distinct sfx ids
  * (enter + per-word). Includes built-in styles referenced by variants and
- * inline user-authored styles.
+ * inline user-authored styles. Custom SFX entries are not part of the
+ * "used" set per style, but `stageSfxFiles` still copies them onto disk
+ * because segments can reference them via `sfxOverride`.
  */
 export function collectUsedSfxIds(project: Project): string[] {
   const ids = new Set<string>()
@@ -34,22 +36,28 @@ export function collectUsedSfxIds(project: Project): string[] {
 }
 
 /**
- * Copy SFX files from `packages/shared/sfx/<id>.mp3` into the publicDir
- * staging directory `data/sfx/<id>.mp3`. Files that do not exist in the
- * bank are skipped (the renderer will see no entry in the URL map and
- * treat them as silence). Returns the id → public URL map that goes into
- * the composition's inputProps.
+ * Copy SFX files into the publicDir staging directory `data/sfx/<id>.mp3`.
+ * Two sources are merged:
+ *   1. Built-in bank — `packages/shared/sfx/<id>.mp3` for every id in `ids`.
+ *   2. Project-scoped custom SFX — `project.customSfx[].path`, copied under
+ *      their slug so the picker and the composition can reference them by
+ *      id the same way they do built-ins.
+ *
+ * Files that do not exist on disk are silently skipped (the composition will
+ * see no entry in the URL map and treat them as silence). Returns the id →
+ * public URL map that goes into the composition's inputProps.
  */
-export async function stageSfxFiles(ids: string[]): Promise<Record<string, string>> {
+export async function stageSfxFiles(
+  ids: string[],
+  project?: Project
+): Promise<Record<string, string>> {
   const bank = sfxBankDir()
   const stage = sfxStagingDir()
   await mkdir(stage, { recursive: true })
   const map: Record<string, string> = {}
-  for (const id of ids) {
-    const fileName = sfxFileName(id)
-    const src = resolve(bank, fileName)
-    if (!existsSync(src)) continue // silent fallback for empty bank entries
-    const dst = resolve(stage, fileName)
+
+  const copyIfNeeded = async (src: string, dst: string): Promise<boolean> => {
+    if (!existsSync(src)) return false
     const srcStat = await stat(src)
     let needsCopy = true
     if (existsSync(dst)) {
@@ -63,7 +71,27 @@ export async function stageSfxFiles(ids: string[]): Promise<Record<string, strin
       }
     }
     if (needsCopy) await copyFile(src, dst)
-    map[id] = `/public/sfx/${fileName}`
+    return true
   }
+
+  // Built-in bank
+  for (const id of ids) {
+    const fileName = sfxFileName(id)
+    const src = resolve(bank, fileName)
+    const dst = resolve(stage, fileName)
+    if (await copyIfNeeded(src, dst)) {
+      map[id] = `/public/sfx/${fileName}`
+    }
+  }
+
+  // Custom per-project SFX
+  for (const entry of project?.customSfx ?? []) {
+    const fileName = sfxFileName(entry.id)
+    const dst = resolve(stage, fileName)
+    if (await copyIfNeeded(entry.path, dst)) {
+      map[entry.id] = `/public/sfx/${fileName}`
+    }
+  }
+
   return map
 }

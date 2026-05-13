@@ -131,10 +131,19 @@ export async function duplicateProject(sourceId: string): Promise<{ projectId: s
   }
 
   const now = new Date().toISOString()
+  // Rewrite per-project custom SFX paths so they point at the duplicate's
+  // sfx/ directory (already copied above) instead of the source project.
+  // Without this, deleting the source project would invalidate every
+  // override on the duplicate.
+  const customSfx = (src.customSfx ?? []).map((entry) => ({
+    ...entry,
+    path: entry.path.replace(srcDir, newDir),
+  }))
   const copy: Project = {
     ...src,
     id: newId,
     title: `${src.title} (copy)`,
+    customSfx,
     createdAt: now,
     updatedAt: now,
   }

@@ -161,3 +161,30 @@ export async function mixAudio(opts: MixAudioOptions): Promise<string> {
 export function ffmpegBinary(): string {
   return bin()
 }
+
+/**
+ * Probe a media file for its duration in seconds. Uses the ffmpeg binary
+ * (which prints `Duration: HH:MM:SS.MS` on stderr when called with no
+ * output target) so we don't need a separate ffprobe install — ffmpeg-static
+ * ships only `ffmpeg.exe`.
+ */
+export async function probeDurationSec(path: string): Promise<number> {
+  const stderr = await new Promise<string>((resolveRun, rejectRun) => {
+    const proc = spawn(bin(), ['-hide_banner', '-i', path, '-f', 'null', '-'], {
+      stdio: ['ignore', 'ignore', 'pipe'],
+    })
+    let buf = ''
+    proc.stderr.on('data', (chunk: Buffer) => {
+      buf += chunk.toString('utf8')
+    })
+    proc.on('error', rejectRun)
+    // ffmpeg exits 0 here; even on missing output container it still reports.
+    proc.on('close', () => resolveRun(buf))
+  })
+  const match = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/)
+  if (!match) throw new Error('Could not parse duration from ffmpeg output')
+  const hours = Number.parseInt(match[1]!, 10)
+  const minutes = Number.parseInt(match[2]!, 10)
+  const seconds = Number.parseFloat(match[3]!)
+  return hours * 3600 + minutes * 60 + seconds
+}
