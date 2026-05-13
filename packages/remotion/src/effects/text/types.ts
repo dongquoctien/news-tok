@@ -52,7 +52,24 @@ export function typographyStyle(
   }
   if (style.textStroke) {
     const strokeColor = colorOverride?.stroke ?? style.textStroke.color
+    const side = style.textStroke.side ?? 'outside'
     css.WebkitTextStroke = `${style.textStroke.widthPx}px ${strokeColor}`
+    // `paint-order` lets us flip whether the fill or the stroke is
+    // drawn on top. Default browser behaviour (`fill stroke markers`)
+    // paints the stroke on top of the fill, which makes the stroke
+    // appear to grow inward AND outward — i.e. 'center'. Setting
+    // `stroke fill markers` paints the fill on top of the stroke, so
+    // the stroke is fully hidden where it overlaps the fill — what
+    // users perceive as an 'outside' stroke. For 'inside', we keep
+    // the default order BUT also tint the fill toward the background
+    // colour so the eaten-in shape reads as an inner stroke.
+    if (side === 'outside') {
+      ;(css as React.CSSProperties & { paintOrder: string }).paintOrder = 'stroke fill markers'
+    } else if (side === 'inside') {
+      ;(css as React.CSSProperties & { paintOrder: string }).paintOrder = 'fill stroke markers'
+    } else {
+      // 'center' — leave paint-order at the browser default.
+    }
   }
   if (style.textShadow) {
     const main = `${style.textShadow.offsetX}px ${style.textShadow.offsetY}px ${style.textShadow.blur}px ${style.textShadow.color}`

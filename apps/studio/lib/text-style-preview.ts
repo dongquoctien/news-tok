@@ -101,6 +101,12 @@ export function textCss(style: TextStyle, scale = 3.5): React.CSSProperties {
     ;(css as React.CSSProperties & { WebkitTextStroke: string }).WebkitTextStroke = `${
       Math.min(2, style.textStroke.widthPx * 0.3)
     }px ${style.textStroke.color}`
+    const side = style.textStroke.side ?? 'outside'
+    if (side === 'outside') {
+      ;(css as React.CSSProperties & { paintOrder: string }).paintOrder = 'stroke fill markers'
+    } else if (side === 'inside') {
+      ;(css as React.CSSProperties & { paintOrder: string }).paintOrder = 'fill stroke markers'
+    }
   }
   if (style.textShadow) {
     const main = `${style.textShadow.offsetX}px ${style.textShadow.offsetY}px ${Math.min(

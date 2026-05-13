@@ -5,11 +5,9 @@ import {
   ChevronDown,
   Loader2,
   Pipette,
-  Plus,
   RotateCcw,
   Sparkles,
   Type,
-  X,
 } from 'lucide-react'
 import {
   BUILT_IN_TEXT_STYLES,
@@ -19,7 +17,6 @@ import type { TextMotion, TextStyle } from '@news-tok/shared/schema'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
-  DialogClose,
   DialogContent,
   DialogTrigger,
 } from '@/components/ui/dialog'
@@ -52,9 +49,6 @@ const FAMILIES: { id: TextStyle['family']; label: string }[] = [
   { id: 'playful', label: 'Playful' },
 ]
 
-const ALIGNS: TextStyle['align'][] = ['left', 'center', 'right']
-const ANCHORS: TextStyle['anchor'][] = ['top', 'middle', 'bottom']
-
 const ENTER_MOTIONS: TextMotion[] = [
   'none',
   'fade',
@@ -66,6 +60,14 @@ const ENTER_MOTIONS: TextMotion[] = [
   'wordHighlight',
   'karaoke',
   'letterStagger',
+  // animate.css-flavoured ports
+  'bounceIn',
+  'rubberBand',
+  'flipInX',
+  'lightSpeedIn',
+  'rollIn',
+  'tada',
+  'jello',
 ]
 
 const EXIT_MOTIONS: TextStyle['exit'][] = ['fade', 'slideDown', 'none']
@@ -311,24 +313,18 @@ export function TextStyleBuilder({
           DeviceMockupPreview on the right showing the draft over the
           segment background. */}
       <DialogContent className="grid max-h-[92vh] w-full max-w-5xl grid-rows-[auto_1fr_auto] gap-0 overflow-hidden p-0">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b px-4 py-3">
-          <div className="flex items-center gap-2">
-            <Type className="size-5" />
-            <div>
-              <h2 className="text-sm font-semibold leading-none tracking-tight">
-                {isEdit ? 'Edit text style' : 'Create text style'}
-              </h2>
-              <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
-                Id: <code className="font-mono normal-case">{draft.id}</code>
-              </p>
-            </div>
+        {/* Header — Radix DialogContent already renders its own close X
+            in the top-right; don't add a second one. */}
+        <div className="flex items-center gap-2 border-b px-4 py-3 pr-12">
+          <Type className="size-5" />
+          <div>
+            <h2 className="text-sm font-semibold leading-none tracking-tight">
+              {isEdit ? 'Edit text style' : 'Create text style'}
+            </h2>
+            <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Id: <code className="font-mono normal-case">{draft.id}</code>
+            </p>
           </div>
-          <DialogClose asChild>
-            <Button variant="ghost" size="icon" aria-label="Close">
-              <X />
-            </Button>
-          </DialogClose>
         </div>
 
         {/* Split body */}
@@ -403,7 +399,7 @@ export function TextStyleBuilder({
             Cancel
           </Button>
           <Button size="sm" onClick={save} disabled={saving || !draft.name.trim()}>
-            {saving ? <Loader2 className="animate-spin" /> : <Plus />}
+            {saving ? <Loader2 className="animate-spin" /> : null}
             {isEdit ? 'Update' : 'Save'}
           </Button>
         </div>
@@ -426,22 +422,54 @@ function BuilderPreviewText({
   const animationName: string | undefined = animate
     ? ANIMATION_FOR_MOTION[draft.enter]
     : undefined
+
+  // Take over the FrameContent slot's flex centring so anchor +
+  // marginPct from the Layout tab actually move the text. We render
+  // an absolute container that fills the device frame, then place
+  // the text inside it according to the draft's anchor.
+  const justify =
+    draft.anchor === 'top'
+      ? 'flex-start'
+      : draft.anchor === 'bottom'
+        ? 'flex-end'
+        : 'center'
+  const items =
+    draft.align === 'left'
+      ? 'flex-start'
+      : draft.align === 'right'
+        ? 'flex-end'
+        : 'center'
+  const m = `${draft.marginPct}%`
+
   return (
     <>
-      <div style={plateCss(draft)}>
-        <span
-          key={animate ? `${draft.enter}-${draft.enterDurationSec}` : 'static'}
-          style={{
-            ...textCss(draft, 5),
-            animationName,
-            animationDuration: `${Math.max(0.4, draft.enterDurationSec)}s`,
-            animationIterationCount: 'infinite',
-            animationDirection: 'alternate',
-            animationTimingFunction: 'ease-in-out',
-          }}
-        >
-          {text || 'Live preview'}
-        </span>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          padding: m,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: justify,
+          alignItems: items,
+          pointerEvents: 'none',
+        }}
+      >
+        <div style={plateCss(draft)}>
+          <span
+            key={animate ? `${draft.enter}-${draft.enterDurationSec}` : 'static'}
+            style={{
+              ...textCss(draft, 5),
+              animationName,
+              animationDuration: `${Math.max(0.4, draft.enterDurationSec)}s`,
+              animationIterationCount: 'infinite',
+              animationDirection: 'alternate',
+              animationTimingFunction: 'ease-in-out',
+            }}
+          >
+            {text || 'Live preview'}
+          </span>
+        </div>
       </div>
       <style>{PREVIEW_KEYFRAMES}</style>
     </>
@@ -466,6 +494,13 @@ const ANIMATION_FOR_MOTION: Record<TextMotion, string | undefined> = {
   maskWipe: 'nt-fade',
   karaoke: 'nt-fade',
   letterStagger: 'nt-fade',
+  bounceIn: 'nt-bounce-in',
+  rubberBand: 'nt-rubber-band',
+  flipInX: 'nt-flip-in-x',
+  lightSpeedIn: 'nt-light-speed-in',
+  rollIn: 'nt-roll-in',
+  tada: 'nt-tada',
+  jello: 'nt-jello',
 }
 
 const PREVIEW_KEYFRAMES = `
@@ -476,11 +511,67 @@ const PREVIEW_KEYFRAMES = `
   @keyframes nt-typewriter { from { opacity: 0; clip-path: inset(0 100% 0 0) } to { opacity: 1; clip-path: inset(0 0 0 0) } }
   @keyframes nt-blur { from { opacity: 0; filter: blur(8px) } to { opacity: 1; filter: blur(0) } }
   @keyframes nt-glitch { 0%, 100% { transform: translate(0, 0) } 25% { transform: translate(-1px, 1px) } 75% { transform: translate(1px, -1px) } }
+  @keyframes nt-bounce-in {
+    0% { opacity: 0; transform: scale(0.3) }
+    20% { transform: scale(1.1) }
+    40% { transform: scale(0.9) }
+    60% { opacity: 1; transform: scale(1.03) }
+    80% { transform: scale(0.97) }
+    100% { opacity: 1; transform: scale(1) }
+  }
+  @keyframes nt-rubber-band {
+    0% { transform: scale(1,1) }
+    30% { transform: scaleX(1.25) scaleY(0.75) }
+    40% { transform: scaleX(0.75) scaleY(1.25) }
+    50% { transform: scaleX(1.15) scaleY(0.85) }
+    65% { transform: scaleX(0.95) scaleY(1.05) }
+    75% { transform: scaleX(1.05) scaleY(0.95) }
+    100% { transform: scale(1,1) }
+  }
+  @keyframes nt-flip-in-x {
+    0% { opacity: 0; transform: perspective(400px) rotateX(90deg) }
+    40% { opacity: 1; transform: perspective(400px) rotateX(-20deg) }
+    60% { transform: perspective(400px) rotateX(10deg) }
+    80% { transform: perspective(400px) rotateX(-5deg) }
+    100% { opacity: 1; transform: perspective(400px) rotateX(0deg) }
+  }
+  @keyframes nt-light-speed-in {
+    0% { opacity: 0; transform: translateX(100%) skewX(-30deg) }
+    60% { opacity: 1; transform: translateX(0) skewX(20deg) }
+    80% { transform: skewX(-5deg) }
+    100% { opacity: 1; transform: translateX(0) skewX(0) }
+  }
+  @keyframes nt-roll-in {
+    0% { opacity: 0; transform: translateX(-100%) rotate(-120deg) }
+    100% { opacity: 1; transform: translateX(0) rotate(0) }
+  }
+  @keyframes nt-tada {
+    0% { transform: scale(1) rotate(0) }
+    10%, 20% { transform: scale(0.9) rotate(-3deg) }
+    30%, 50%, 70%, 90% { transform: scale(1.1) rotate(3deg) }
+    40%, 60%, 80% { transform: scale(1.1) rotate(-3deg) }
+    100% { transform: scale(1) rotate(0) }
+  }
+  @keyframes nt-jello {
+    0%, 100% { transform: skewX(0) skewY(0) }
+    11% { transform: skewX(-12.5deg) skewY(-12.5deg) }
+    22% { transform: skewX(6.25deg) skewY(6.25deg) }
+    33% { transform: skewX(-3.125deg) skewY(-3.125deg) }
+    44% { transform: skewX(1.56deg) skewY(1.56deg) }
+    55% { transform: skewX(-0.78deg) skewY(-0.78deg) }
+    66% { transform: skewX(0.39deg) skewY(0.39deg) }
+    77% { transform: skewX(-0.2deg) skewY(-0.2deg) }
+    88% { transform: skewX(0.1deg) skewY(0.1deg) }
+  }
 `
 
 // --- Tab bar -------------------------------------------------------------
 
 function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
+  // Selected tab gets a stronger visual: filled primary background,
+  // primary-foreground text, and an underline accent. Previous thin
+  // border-b alone made the "selected" state easy to miss, especially
+  // with `tracking-wide` softening the contrast.
   return (
     <div className="flex border-b bg-secondary/10 text-[11px] uppercase tracking-wide">
       {TABS.map((t) => (
@@ -489,13 +580,16 @@ function TabBar({ tab, onChange }: { tab: Tab; onChange: (t: Tab) => void }) {
           type="button"
           onClick={() => onChange(t)}
           className={cn(
-            'flex-1 px-3 py-2 font-medium transition-colors',
+            'relative flex-1 px-3 py-2.5 font-semibold transition-colors',
             t === tab
-              ? 'border-b-2 border-primary text-foreground'
-              : 'border-b-2 border-transparent text-muted-foreground hover:text-foreground'
+              ? 'bg-primary/15 text-primary'
+              : 'text-muted-foreground hover:bg-secondary/40 hover:text-foreground'
           )}
         >
           {TAB_LABELS[t]}
+          {t === tab ? (
+            <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-primary" />
+          ) : null}
         </button>
       ))}
     </div>
@@ -676,19 +770,16 @@ function LayoutTab({
 }) {
   return (
     <>
-      <Field label="Align">
-        <Radio
-          value={draft.align}
-          options={ALIGNS}
-          onChange={(v) => onPatch({ align: v as TextStyle['align'] })}
+      <Field label="Position">
+        <PositionGrid
+          anchor={draft.anchor}
+          align={draft.align}
+          onChange={(anchor, align) => onPatch({ anchor, align })}
         />
-      </Field>
-      <Field label="Anchor">
-        <Radio
-          value={draft.anchor}
-          options={ANCHORS}
-          onChange={(v) => onPatch({ anchor: v as TextStyle['anchor'] })}
-        />
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Click any cell to anchor the text. Combines vertical anchor
+          (top / middle / bottom) and horizontal align (left / center / right).
+        </p>
       </Field>
       <Slider
         label="Margin (% of canvas)"
@@ -700,6 +791,62 @@ function LayoutTab({
         onChange={(v) => onPatch({ marginPct: v })}
       />
     </>
+  )
+}
+
+/**
+ * Watermark-style 3×3 grid that drives both `anchor` (row) and `align`
+ * (column) in a single click. The active cell shows a filled dot in
+ * its corner so the user can see, at a glance, where the text will sit.
+ */
+function PositionGrid({
+  anchor,
+  align,
+  onChange,
+}: {
+  anchor: TextStyle['anchor']
+  align: TextStyle['align']
+  onChange: (anchor: TextStyle['anchor'], align: TextStyle['align']) => void
+}) {
+  const rows: TextStyle['anchor'][] = ['top', 'middle', 'bottom']
+  const cols: TextStyle['align'][] = ['left', 'center', 'right']
+  return (
+    <div className="grid grid-cols-3 gap-1 rounded-md border bg-secondary/10 p-1.5">
+      {rows.map((row) =>
+        cols.map((col) => {
+          const active = row === anchor && col === align
+          // Translate row/col into the corresponding flex alignment so
+          // the dot inside the cell sits in the same spot the text
+          // will land on the preview.
+          const justify =
+            col === 'left' ? 'flex-start' : col === 'right' ? 'flex-end' : 'center'
+          const items =
+            row === 'top' ? 'flex-start' : row === 'bottom' ? 'flex-end' : 'center'
+          return (
+            <button
+              key={`${row}-${col}`}
+              type="button"
+              onClick={() => onChange(row, col)}
+              title={`${row} · ${col}`}
+              className={cn(
+                'flex h-10 items-stretch rounded border transition-colors',
+                active
+                  ? 'border-primary bg-primary/10'
+                  : 'border-border hover:border-muted-foreground/40 hover:bg-secondary/40'
+              )}
+              style={{ display: 'flex', justifyContent: justify, alignItems: items, padding: 4 }}
+            >
+              <span
+                className={cn(
+                  'block size-2 rounded-full',
+                  active ? 'bg-primary' : 'bg-muted-foreground/40'
+                )}
+              />
+            </button>
+          )
+        })
+      )}
+    </div>
   )
 }
 
@@ -786,21 +933,42 @@ function DecoratorsTab({
           Outline the text
         </label>
         {draft.textStroke ? (
-          <div className="mt-2 grid grid-cols-2 gap-3">
-            <Slider
-              label="Width"
-              min={1}
-              max={12}
-              step={1}
-              value={draft.textStroke.widthPx}
-              unit="px"
-              onChange={(v) => onPatch({ textStroke: { ...draft.textStroke!, widthPx: v } })}
-            />
-            <Field label="Stroke colour">
-              <ColorInput
-                value={draft.textStroke.color}
-                onChange={(c) => onPatch({ textStroke: { ...draft.textStroke!, color: c } })}
+          <div className="mt-2 space-y-2">
+            <div className="grid grid-cols-2 gap-3">
+              <Slider
+                label="Width"
+                min={1}
+                max={12}
+                step={1}
+                value={draft.textStroke.widthPx}
+                unit="px"
+                onChange={(v) => onPatch({ textStroke: { ...draft.textStroke!, widthPx: v } })}
               />
+              <Field label="Stroke colour">
+                <ColorInput
+                  value={draft.textStroke.color}
+                  onChange={(c) => onPatch({ textStroke: { ...draft.textStroke!, color: c } })}
+                />
+              </Field>
+            </div>
+            <Field label="Stroke side">
+              <Radio
+                value={draft.textStroke.side ?? 'outside'}
+                options={['outside', 'inside', 'center']}
+                onChange={(v) =>
+                  onPatch({
+                    textStroke: {
+                      ...draft.textStroke!,
+                      side: v as NonNullable<TextStyle['textStroke']>['side'],
+                    },
+                  })
+                }
+              />
+              <p className="mt-1 text-[10px] text-muted-foreground">
+                Outside grows past the glyph (cartoon look). Inside eats
+                into the fill (needs thicker width to stay visible).
+                Center is the browser default.
+              </p>
             </Field>
           </div>
         ) : null}
