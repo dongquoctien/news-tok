@@ -77,6 +77,14 @@ export function PlayerPane({
     }
     return map
   }, [project.id, project.customSfx])
+
+  // Hit the file-stream endpoint with a cache-busting key tied to the
+  // stored path so the preview <img> refreshes when the user swaps the
+  // logo without renaming.
+  const logoUrl = useMemo(() => {
+    if (!project.logo || project.logo.kind !== 'image') return undefined
+    return `/api/projects/${encodeURIComponent(project.id)}/logo/file?v=${encodeURIComponent(project.logo.path)}`
+  }, [project.id, project.logo])
   const playerRef = useRef<PlayerRef>(null)
   const playheadRef = useRef<HTMLDivElement>(null)
   const timeLabelRef = useRef<HTMLSpanElement>(null)
@@ -142,6 +150,7 @@ export function PlayerPane({
             storyboard: playerProject,
             variantId: previewVariantId ?? undefined,
             sfxUrlMap,
+            logoUrl,
           }}
           durationInFrames={durationInFrames}
           fps={preset.fps}
