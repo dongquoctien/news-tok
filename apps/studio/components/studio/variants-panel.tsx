@@ -89,10 +89,10 @@ export function VariantsPanel({
           <button
             onClick={() => onSelectVariant(null)}
             className={cn(
-              'rounded px-2 py-0.5',
+              'rounded border px-2 py-0.5 transition-colors',
               activeVariantId === null
-                ? 'bg-secondary text-foreground'
-                : 'hover:bg-secondary/60'
+                ? 'border-primary bg-primary/15 text-foreground ring-1 ring-primary/40'
+                : 'border-border bg-card text-muted-foreground hover:bg-secondary/60'
             )}
             title="Preview the default render (no variantId — first declared variant wins)"
           >
@@ -112,7 +112,9 @@ export function VariantsPanel({
                   // Grid keeps the three columns aligned across rows even
                   // when individual cells are missing (no mp4 yet, etc.).
                   'grid grid-cols-[1fr_72px_88px] items-center gap-2 rounded-md border px-2 py-1.5 text-xs transition-colors',
-                  isActive ? 'border-primary bg-primary/10' : 'border-border'
+                  isActive
+                    ? 'border-primary bg-primary/15 ring-1 ring-primary/40 shadow-sm'
+                    : 'border-border bg-card hover:bg-secondary/50'
                 )}
               >
                 <button

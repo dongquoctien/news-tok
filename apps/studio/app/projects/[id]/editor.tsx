@@ -985,6 +985,8 @@ function SegmentEditor({
               sceneKind={String(segment.scene)}
               activeVariantId={activeVariantId}
               onApply={onApplyStyle}
+              projectId={projectId}
+              language={language}
               trigger={
                 <Button variant="outline" size="sm">
                   <Type />
