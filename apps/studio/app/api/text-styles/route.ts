@@ -1,19 +1,34 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, type NextRequest } from 'next/server'
 import { BUILT_IN_TEXT_STYLES } from '@news-tok/shared/text-styles'
+import { readStoryboard } from '@news-tok/render'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 /**
- * GET /api/text-styles — list every built-in text style.
+ * GET /api/text-styles[?projectId=...]
  *
- * The shape we return is exactly the TextStyle JSON the renderer
- * consumes, so the Studio picker can preview a card and write the
- * selected id back to the storyboard without an extra lookup.
+ * Without `projectId`: returns just the built-in text style pool, which
+ * is enough for callers that want to browse styles without scoping to
+ * a project (e.g. landing page demo).
+ *
+ * With `projectId`: also returns the project's `userTextStyles[]` so
+ * the picker can list both sources in one merged grid.
  */
-export async function GET() {
+export async function GET(req: NextRequest) {
+  const projectId = req.nextUrl.searchParams.get('projectId') ?? undefined
+  let userStyles: typeof BUILT_IN_TEXT_STYLES = []
+  if (projectId) {
+    try {
+      const project = await readStoryboard(projectId)
+      userStyles = project.userTextStyles ?? []
+    } catch {
+      // Unknown project ids are not fatal — just fall back to built-in only.
+    }
+  }
   return NextResponse.json({
     builtIn: BUILT_IN_TEXT_STYLES,
-    count: BUILT_IN_TEXT_STYLES.length,
+    user: userStyles,
+    count: BUILT_IN_TEXT_STYLES.length + userStyles.length,
   })
 }
