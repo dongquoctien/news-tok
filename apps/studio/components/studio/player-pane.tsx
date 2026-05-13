@@ -3,9 +3,18 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { Player, type PlayerRef } from '@remotion/player'
 import { ASPECT_PRESETS, type AssetRef, type Project, type Segment } from '@news-tok/shared/schema'
+import { BUILT_IN_SFX } from '@news-tok/shared'
 import { NewsTokComposition } from '@news-tok/remotion/compositions/NewsTokComposition'
 import { assetUrl } from '@/lib/asset-url'
 import { cn } from '@/lib/utils'
+
+// Studio's <Player> bundles the same composition the headless renderer
+// uses, but it doesn't run the SFX staging pipeline. Wire every bank
+// entry to /api/sfx/<id> directly so the in-browser preview plays the
+// same cues the final mp4 will.
+const SFX_URL_MAP: Record<string, string> = Object.fromEntries(
+  BUILT_IN_SFX.map((entry) => [entry.id, `/api/sfx/${entry.id}`])
+)
 
 function rewriteAsset<T extends AssetRef | undefined>(asset: T): T {
   if (!asset) return asset
@@ -124,6 +133,7 @@ export function PlayerPane({
           inputProps={{
             storyboard: playerProject,
             variantId: previewVariantId ?? undefined,
+            sfxUrlMap: SFX_URL_MAP,
           }}
           durationInFrames={durationInFrames}
           fps={preset.fps}

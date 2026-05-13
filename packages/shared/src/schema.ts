@@ -249,6 +249,16 @@ export const SegmentSchema = z.object({
    * over this, so per-variant tweaks don't leak across renders.
    */
   colorOverride: ColorOverrideSchema.optional(),
+  /**
+   * Optional per-segment SFX override. When set, wins over `TextStyle.sfx`
+   * at render time. Use to silence a style's cue (set `enterSoundId` to
+   * the empty string and the renderer treats it as "none"), or to swap
+   * the cue for a different bank entry on this one segment without
+   * forking the whole style.
+   *
+   * Render priority: `segment.sfxOverride` > `textStyle.sfx`.
+   */
+  sfxOverride: TextSfxSchema.optional(),
 })
 export type Segment = z.infer<typeof SegmentSchema>
 
