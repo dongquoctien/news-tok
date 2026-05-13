@@ -1,11 +1,54 @@
-# news-tok — project context for Claude
+# CLAUDE.md
 
-You are working inside the `news-tok` repo. The goal of this project is to turn
-articles, raw text, or URLs into short videos (TikTok/Reels/Shorts style),
-running 100% on the user's local machine.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this repo is
+
+`news-tok` turns articles, raw text, or URLs into short videos
+(TikTok/Reels/Shorts style), running 100% on the user's local machine. Two
+clearly separated halves share one source of truth (`storyboard.json`):
+
+- **Claude CLI (you)** — the AI orchestrator: extract article → plan
+  segments → fetch images/music/TTS → render via MCP tools.
+- **Web Studio** (`apps/studio`, Next.js) — visual editor the user opens
+  separately. You do not interact with Studio; you only mutate the
+  storyboard.
 
 This file is loaded by the Claude Code CLI whenever a user runs `claude` inside
 this repo. Treat it as the authoritative description of how to work here.
+
+## Commands
+
+Package manager is **pnpm** (workspace monorepo, Node ≥ 20).
+
+```bash
+pnpm install                  # one-time
+pnpm build                    # build every workspace package (recursive)
+pnpm typecheck                # tsc --noEmit across every package
+pnpm lint                     # lint every workspace package (currently only Studio defines it)
+pnpm studio                   # run the Web Studio dev server (http://localhost:3000)
+pnpm mcp:build                # rebuild the MCP server (required after editing packages/mcp-server)
+pnpm doctor                   # verify ffmpeg, env vars, MCP wiring (scripts/doctor.mjs)
+```
+
+Smoke tests live under `scripts/` and run with `tsx`. Use them for fast
+end-to-end checks instead of writing ad-hoc test code:
+
+```bash
+pnpm smoke:render             # programmatic Remotion render of a tiny project
+pnpm smoke:media              # offline media-adapter checks (cache, ffmpeg, TTS)
+pnpm smoke:media:network      # same, but hits real Pexels / Unsplash / Internet Archive
+pnpm smoke:mcp                # spawns the MCP server and lists tools
+pnpm smoke:m6                 # Studio M6 smoke: storyboard round-trip + render API
+```
+
+There is **no Jest/Vitest suite**. To run a single check, invoke the
+appropriate smoke script directly with `tsx scripts/<name>.ts`, or run the
+package-scoped typecheck with `pnpm --filter @news-tok/<package> typecheck`.
+
+After editing `packages/mcp-server/`, you must `pnpm mcp:build` before the
+Claude CLI picks up the change — the MCP server is consumed as a built
+artifact via `.mcp.json`, not from source.
 
 ## Your role
 
@@ -27,24 +70,58 @@ You and the Studio share state through `data/projects/<id>/storyboard.json`.
 
 ```
 news-tok/
-  CLAUDE.md                       (this file)
-  .mcp.json                       (registers the local MCP server)
-  prompts/                        (example prompts users can copy)
-  apps/studio/                    (Next.js Web Studio — do not modify unless asked)
+  CLAUDE.md                              (this file)
+  .mcp.json                              (registers the local MCP server)
+  prompts/                               (example prompts users can copy)
+  apps/studio/                           (Next.js Web Studio — do not modify unless asked)
   packages/
-    shared/                       (zod schemas, UI tokens, sanitize helpers)
-    media/                        (Pexels, Pixabay, Edge TTS, Readability, ffmpeg)
-    remotion/                     (built-in compositions + scene library)
-    render/                       (programmatic Remotion render)
-    mcp-server/                   (the MCP server that exposes media + render tools)
-  data/
+    shared/src/                          (zod schemas, UI tokens, sanitize, social, sfx, text-styles)
+      schema.ts                          ← ProjectSchema lives here
+      ui-tokens.ts                       ← COLOR / SPACE / RADIUS / ICON / FONT
+    media/src/                           (Pexels, Unsplash, Pixabay, Openverse, Internet Archive,
+                                          Edge TTS, Readability, ffmpeg, Playwright crawler fallbacks)
+    remotion/src/
+      compositions/NewsTokComposition.tsx  ← root composition
+      scenes/                            ← built-in scenes (TitleCard, KeyPoint, Quote, Outro, MissingScene)
+      effects/                           ← KenBurns, Typewriter, Fade, Subtitles
+    render/src/                          (programmatic Remotion render: bundle, jobs, storyboard)
+    mcp-server/src/                      (the MCP server that exposes media + render tools)
+      index.ts                           ← tool wiring (build emits dist/index.js)
+      projects.ts                        ← create / update / delete project helpers
+      research.ts                        ← researchProjectAesthetic
+  scripts/                               (doctor + smoke harnesses run via tsx)
+  data/                                  (gitignored — shared state)
     projects/<id>/
-      storyboard.json             (source of truth for one project)
-      scenes/                     (your custom scene TSX, per project)
-      segments/<segmentId>.mp4    (per-segment render output)
-      output.mp4                  (final concatenated video)
-    cache/                        (hash-based asset cache)
+      storyboard.json                    (source of truth for one project)
+      scenes/                            (forked custom scene TSX, per project)
+      segments/<segmentId>.mp4           (per-segment render output)
+      output.mp4                         (final concatenated video)
+    cache/                               (hash-based asset cache for images / music / tts)
 ```
+
+### Architecture — the big picture
+
+Dependency direction (no cycles):
+
+- `shared` is leaf — used by everything; the **only** source of truth for
+  schemas, design tokens, and sanitisation rules.
+- `media` is used by `mcp-server`, `render`, and **Studio directly**.
+  Studio bypasses MCP for media calls because both live in one Node process.
+- `remotion` is used by `render` and by Studio's in-browser `<Player>`.
+- `render` is used by `mcp-server` and Studio API routes.
+- `mcp-server` is a standalone stdio process spawned by the Claude CLI
+  (registered in `.mcp.json`). It is the **only** way you (Claude) call
+  into Node code in this repo.
+
+There are **two CSS pipelines**, and mixing them silently breaks rendering:
+
+| Where | What | Why |
+|---|---|---|
+| `apps/studio/**` | Tailwind v4 + shadcn/ui | Studio's PostCSS pipeline runs Tailwind |
+| `packages/remotion/src/scenes/**`, `data/projects/<id>/scenes/**` | Inline `style={{...}}` sourced from `@news-tok/shared/ui-tokens` | The Remotion bundler has its own webpack and does NOT run Tailwind PostCSS — classes would silently render as text or be dropped |
+
+Single source of design values for both pipelines:
+`packages/shared/src/ui-tokens.ts`.
 
 ## Source of truth
 
@@ -303,7 +380,7 @@ chars, then keep the topic-aware hashtags from the tool.
 
 When the user requests a visual effect not covered by the built-in library:
 
-1. Glob `packages/remotion/scenes/*.tsx` to see the available scenes.
+1. Glob `packages/remotion/src/scenes/*.tsx` to see the available scenes.
 2. Read the scene that is closest to what the user wants.
 3. Write a forked, modified version to
    `data/projects/<id>/scenes/<PascalCaseName>.tsx`. Use the same prop interface
@@ -340,20 +417,10 @@ When the user requests a visual effect not covered by the built-in library:
 
 ### Where each CSS approach applies
 
-This repo has **two separate render pipelines**, each with its own CSS rule:
-
-- **Web Studio** (`apps/studio/**`) — uses **Tailwind CSS v4 + shadcn/ui**.
-  Class-based styling, design tokens in `apps/studio/app/globals.css`.
-- **Remotion scenes** (`packages/remotion/scenes/**`, `data/projects/<id>/scenes/**`)
-  — uses **inline `style={{...}}`** with constants imported from
-  `packages/shared/src/ui-tokens.ts` (`COLOR`, `SPACE`, `RADIUS`, `ICON`, `FONT`).
-  **Do NOT use Tailwind classes in scene TSX** — the Remotion bundler runs its
-  own webpack pipeline that does not include Tailwind PostCSS, so classes will
-  silently render as text or be ignored.
-
-When forking a scene into `data/projects/<id>/scenes/`, keep using inline styles
-sourced from `@news-tok/shared/ui-tokens`. The shared `ui-tokens.ts` file is the
-single source of truth for design values across both pipelines.
+The two CSS pipelines are described under "Architecture — the big picture"
+above. When forking a scene into `data/projects/<id>/scenes/`, keep using
+inline styles sourced from `@news-tok/shared/ui-tokens` — Tailwind classes
+will silently fail there.
 
 ## What you should not do
 
