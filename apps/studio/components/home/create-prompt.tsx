@@ -2,8 +2,10 @@
 
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import {
+  Check,
   ChevronDown,
   ChevronUp,
+  Circle,
   Link2,
   Loader2,
   Sliders,
@@ -46,13 +48,41 @@ const SEGMENTS_DEFAULT = 7
 const SEGMENTS_MIN = 3
 const SEGMENTS_MAX = 15
 
+type Phase =
+  | 'starting'
+  | 'extract'
+  | 'research'
+  | 'plan'
+  | 'assets'
+  | 'render'
+  | 'done'
+
 type Job = {
   jobId: string
   status: 'running' | 'completed' | 'failed' | 'cancelled'
   projectId?: string
   step?: string
+  phase?: Phase
+  willRender?: boolean
   error?: string
 }
+
+/** Ordered phases shown in the loading checklist. Mirrors
+ *  OrchestratePhase in apps/studio/lib/orchestrate-jobs.ts. The
+ *  'render' phase is hidden when the job was started with
+ *  skipRender: true (the home default). */
+const PHASE_ORDER: ReadonlyArray<{
+  phase: Phase
+  label: string
+}> = [
+  { phase: 'starting', label: 'Khởi động AI' },
+  { phase: 'extract', label: 'Đọc bài báo' },
+  { phase: 'research', label: 'Chọn phong cách thị giác' },
+  { phase: 'plan', label: 'Lên kịch bản từng đoạn' },
+  { phase: 'assets', label: 'Tìm ảnh, nhạc & tạo giọng đọc' },
+  { phase: 'render', label: 'Dựng video hoàn chỉnh' },
+  { phase: 'done', label: 'Mở Studio' },
+]
 
 function detectSource(raw: string): Source | null {
   const trimmed = raw.trim()
@@ -226,7 +256,7 @@ export function CreatePrompt() {
           value={value}
           onChange={(e) => setValue(e.target.value)}
           disabled={running}
-          placeholder="Paste a link, drop a .txt file, or type the article text…"
+          placeholder="Dán link bài báo, thả file .txt, hoặc gõ nội dung…"
           rows={2}
           className="block w-full resize-none overflow-y-auto bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none disabled:cursor-not-allowed"
         />
@@ -238,7 +268,7 @@ export function CreatePrompt() {
             </span>
           ) : (
             <span className="text-xs text-muted-foreground">
-              Auto-detect: paste URL or 20+ chars of text
+              Tự nhận diện: dán link hoặc gõ ít nhất 20 ký tự
             </span>
           )}
           <div className="ml-auto flex items-center gap-2">
@@ -277,10 +307,10 @@ export function CreatePrompt() {
               disabled={running}
               aria-expanded={advancedOpen}
               aria-controls="create-prompt-advanced"
-              title="Tweak variants, total duration, segment count"
+              title="Tinh chỉnh số kiểu video, thời lượng tối đa, số đoạn"
             >
               <Sliders />
-              Advanced
+              Tinh chỉnh
               {advancedTouched ? (
                 <span className="ml-0.5 inline-block size-1.5 rounded-full bg-primary" />
               ) : null}
@@ -289,12 +319,12 @@ export function CreatePrompt() {
             {running ? (
               <Button variant="outline" size="sm" onClick={cancel}>
                 <X />
-                Cancel
+                Huỷ
               </Button>
             ) : (
               <Button size="sm" onClick={submit} disabled={!source}>
                 <Sparkles />
-                Generate
+                Tạo video
               </Button>
             )}
           </div>
@@ -306,8 +336,8 @@ export function CreatePrompt() {
             className="mt-4 space-y-4 border-t pt-4"
           >
             <SliderRow
-              label="Style variants"
-              hint="More variants render multiple looks (A/B/C) for the same content. 1 is fastest."
+              label="Số kiểu video"
+              hint="Mỗi kiểu (A/B/C) là một bộ font + màu khác nhau cho cùng nội dung. Chọn 1 cho nhanh; chọn 3 nếu muốn so sánh phong cách."
               min={1}
               max={3}
               step={1}
@@ -315,33 +345,33 @@ export function CreatePrompt() {
               onChange={(n) => setVariants(n as Variants)}
               format={(n) =>
                 n === 1
-                  ? '1 (only A)'
+                  ? '1 kiểu (A)'
                   : n === 2
-                    ? '2 (A + B)'
-                    : '3 (A + B + C)'
+                    ? '2 kiểu (A + B)'
+                    : '3 kiểu (A + B + C)'
               }
               disabled={running}
             />
             <SliderRow
-              label="Max duration"
-              hint="Hard cap on total video length. The planner aims for the article's natural length but won't exceed this."
+              label="Thời lượng tối đa"
+              hint="Giới hạn cứng độ dài video. AI sẽ chọn thời lượng phù hợp với bài báo nhưng không vượt quá ngưỡng này."
               min={DURATION_MIN_SEC}
               max={DURATION_MAX_SEC}
               step={5}
               value={maxDurationSec}
               onChange={setMaxDurationSec}
-              format={(n) => `${n}s`}
+              format={(n) => `${n} giây`}
               disabled={running}
             />
             <SliderRow
-              label="Max segments"
-              hint="Total intro + body + outro count. Higher = more beats but each one is shorter."
+              label="Số đoạn"
+              hint="Tổng số đoạn (mở bài + thân bài + kết bài). Càng nhiều thì mỗi đoạn càng ngắn."
               min={SEGMENTS_MIN}
               max={SEGMENTS_MAX}
               step={1}
               value={maxSegments}
               onChange={setMaxSegments}
-              format={(n) => `${n}`}
+              format={(n) => `${n} đoạn`}
               disabled={running}
             />
           </div>
@@ -353,7 +383,7 @@ export function CreatePrompt() {
           getting in the way once they're typing or watching a render. */}
       {!value && !running && !job ? (
         <div className="flex flex-wrap items-center justify-center gap-2 text-xs text-muted-foreground">
-          <span>Try a source:</span>
+          <span>Thử ngay:</span>
           {STARTER_URLS.map((s) => (
             <button
               key={s.url}
@@ -368,18 +398,17 @@ export function CreatePrompt() {
         </div>
       ) : null}
 
-      {running ? (
-        <div className="flex items-center gap-2 rounded-md border bg-card px-4 py-3 text-sm">
-          <Loader2 className="size-4 animate-spin text-primary" />
-          <span className="text-muted-foreground">{job?.step ?? 'Working…'}</span>
-        </div>
-      ) : job?.status === 'failed' ? (
+      {running ? <PhaseTimeline job={job!} /> : null}
+
+      {job?.status === 'failed' ? (
         <div className="rounded-md border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          Job failed: {job.error ?? 'unknown error'}
+          Có lỗi xảy ra: {job.error ?? 'không rõ nguyên nhân'}
         </div>
-      ) : job?.status === 'cancelled' ? (
+      ) : null}
+
+      {job?.status === 'cancelled' ? (
         <div className="rounded-md border bg-muted px-4 py-3 text-sm text-muted-foreground">
-          Cancelled.
+          Đã huỷ.
         </div>
       ) : null}
 
@@ -388,6 +417,76 @@ export function CreatePrompt() {
           {error}
         </div>
       ) : null}
+    </div>
+  )
+}
+
+/**
+ * Loading timeline shown while Claude orchestrates the job. Renders
+ * each phase as a checklist row: done (✓), current (spinner + step
+ * text), or pending (○). Renders the `render` row only when the job
+ * was started without `skipRender`, so the home flow (which skips
+ * render by design) doesn't show a step that will never fire.
+ */
+function PhaseTimeline({ job }: { job: Job }) {
+  const currentIdx = job.phase
+    ? PHASE_ORDER.findIndex((p) => p.phase === job.phase)
+    : 0
+  const phases = job.willRender
+    ? PHASE_ORDER
+    : PHASE_ORDER.filter((p) => p.phase !== 'render')
+
+  return (
+    <div className="rounded-md border bg-card p-4 text-left text-sm">
+      <ul className="space-y-2.5">
+        {phases.map(({ phase, label }) => {
+          const orderIdx = PHASE_ORDER.findIndex((p) => p.phase === phase)
+          const state =
+            orderIdx < currentIdx
+              ? 'done'
+              : orderIdx === currentIdx
+                ? 'running'
+                : 'pending'
+          return (
+            <li key={phase} className="flex items-start gap-3">
+              <span
+                className={cn(
+                  'mt-0.5 inline-flex size-4 shrink-0 items-center justify-center',
+                  state === 'done' && 'text-emerald-600 dark:text-emerald-400',
+                  state === 'running' && 'text-primary',
+                  state === 'pending' && 'text-muted-foreground/50'
+                )}
+                aria-hidden
+              >
+                {state === 'done' ? (
+                  <Check className="size-4" strokeWidth={3} />
+                ) : state === 'running' ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Circle className="size-3" />
+                )}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p
+                  className={cn(
+                    'text-sm leading-tight',
+                    state === 'pending'
+                      ? 'text-muted-foreground/70'
+                      : state === 'running'
+                        ? 'font-medium text-foreground'
+                        : 'text-foreground'
+                  )}
+                >
+                  {label}
+                </p>
+                {state === 'running' && job.step ? (
+                  <p className="mt-0.5 text-xs text-muted-foreground">{job.step}</p>
+                ) : null}
+              </div>
+            </li>
+          )
+        })}
+      </ul>
     </div>
   )
 }

@@ -9,7 +9,26 @@ import {
   readOrchestrateJob,
   writeOrchestrateJob,
   type OrchestrateJob,
+  type OrchestratePhase,
 } from '@/lib/orchestrate-jobs'
+
+/**
+ * Map MCP tool names → phase + Vietnamese-friendly step label. Drives
+ * the home loading checklist. Tools not in the map fall back to a
+ * generic "Đang xử lý…" with no phase advance.
+ */
+const TOOL_TO_PHASE: Record<string, { phase: OrchestratePhase; label: string }> = {
+  createProject: { phase: 'starting', label: 'Tạo dự án mới…' },
+  extractArticle: { phase: 'extract', label: 'Đang đọc bài báo…' },
+  researchProjectAesthetic: { phase: 'research', label: 'Chọn phong cách thị giác…' },
+  updateStoryboard: { phase: 'plan', label: 'Lên kịch bản từng đoạn…' },
+  searchImage: { phase: 'assets', label: 'Tìm ảnh minh hoạ…' },
+  searchMusic: { phase: 'assets', label: 'Chọn nhạc nền…' },
+  synthesizeVoice: { phase: 'assets', label: 'Tạo giọng đọc…' },
+  listVoices: { phase: 'assets', label: 'Tải danh sách giọng…' },
+  renderSegment: { phase: 'render', label: 'Dựng từng đoạn video…' },
+  renderProject: { phase: 'render', label: 'Ghép video hoàn chỉnh…' },
+}
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,20 +57,29 @@ type StartBody = {
   source: { type: 'url' | 'text' | 'file'; value: string }
   language: 'vi' | 'en'
   aspect: '9:16' | '16:9' | '1:1'
-  /** How many style variants to render: 1 (just A), 2 (A+B), or 3 (A+B+C).
-   *  More variants = more disk + render time but lets users compare looks. */
+  /** How many style variants to plan: 1 (just A), 2 (A+B), or 3 (A+B+C).
+   *  When `skipRender` is true (the home default) this only affects
+   *  which `project.variants[]` entries the planner declares — no mp4
+   *  is rendered until the user clicks Render in Studio. */
   variants?: 1 | 2 | 3
   /** Cap on total video duration in seconds. Planner aims for the
    *  natural length of the article but never exceeds this. Default 90s. */
   maxDurationSec?: number
   /** Cap on number of segments (intro + body + outro combined). Default 7. */
   maxSegments?: number
+  /** When true (the default for home), Claude finishes after
+   *  `updateStoryboard` and never calls `renderProject`. The user
+   *  lands in Studio with a ready-to-render project, which is much
+   *  faster (no ~30-60s ffmpeg pass) and lets them tweak before
+   *  committing to a render. */
+  skipRender?: boolean
 }
 
 const DEFAULTS = {
   variants: 1 as 1 | 2 | 3,
   maxDurationSec: 90,
   maxSegments: 7,
+  skipRender: true,
 } as const
 
 const LIMITS = {
@@ -81,7 +109,9 @@ function normalizeOptions(body: StartBody) {
         LIMITS.maxSegments.max
       )
     : DEFAULTS.maxSegments
-  return { variants, maxDurationSec, maxSegments }
+  const skipRender =
+    typeof body.skipRender === 'boolean' ? body.skipRender : DEFAULTS.skipRender
+  return { variants, maxDurationSec, maxSegments, skipRender }
 }
 
 function variantPicksToRender(variants: 1 | 2 | 3): string {
@@ -93,7 +123,8 @@ function variantPicksToRender(variants: 1 | 2 | 3): string {
 
 function buildPrompt(body: StartBody): string {
   const { source, language, aspect } = body
-  const { variants, maxDurationSec, maxSegments } = normalizeOptions(body)
+  const { variants, maxDurationSec, maxSegments, skipRender } =
+    normalizeOptions(body)
   const sourceLine =
     source.type === 'url'
       ? `Source URL: ${source.value}`
@@ -122,7 +153,9 @@ function buildPrompt(body: StartBody): string {
     `- Total segments: at most ${maxSegments} (intro + body + outro).`,
     `- Body segments: between ${bodyMin} and ${bodyMax}.`,
     `- Aim for ~${perSegmentTargetSec}s per segment so the total fits.`,
-    `- Render exactly ${variants} variant${variants === 1 ? '' : 's'}.`,
+    skipRender
+      ? `- Plan ${variants} variant${variants === 1 ? '' : 's'} in the storyboard but DO NOT render — the user will trigger render from Studio later.`
+      : `- Render exactly ${variants} variant${variants === 1 ? '' : 's'}.`,
     '',
     'Workflow:',
     '1. Call mcp__news-tok__createProject with the source / language / aspect above.',
@@ -134,8 +167,10 @@ function buildPrompt(body: StartBody): string {
     '5. For each segment, call searchImage + synthesizeVoice in parallel. Set segment.durationSec = recommendedSegmentDurationSec.',
     '6. Call searchMusic using the musicMood from research, set bgMusic.',
     '7. Call updateStoryboard to persist.',
-    `8. Call renderProject with variants: ${variantPicksToRender(variants)}.`,
-    '9. Report the absolute output path.',
+    skipRender
+      ? '8. DO NOT call renderProject. The user will trigger render from Studio when ready. Report the project path and stop.'
+      : `8. Call renderProject with variants: ${variantPicksToRender(variants)}.`,
+    skipRender ? '9. Done — return the project id and absolute project directory path.' : '9. Report the absolute output path.',
     '',
     'Important: this is non-interactive. Make sensible defaults whenever CLAUDE.md says to ask — never call AskUserQuestion.',
   ].join('\n')
@@ -154,6 +189,7 @@ export async function POST(req: NextRequest) {
     }
 
     const jobId = newOrchestrateJobId()
+    const { skipRender } = normalizeOptions(body)
     const job: OrchestrateJob = {
       jobId,
       status: 'running',
@@ -161,7 +197,9 @@ export async function POST(req: NextRequest) {
       source: body.source,
       language: body.language,
       aspect: body.aspect,
-      step: 'Starting Claude…',
+      phase: 'starting',
+      step: 'Đang khởi động AI…',
+      willRender: !skipRender,
     }
     await writeOrchestrateJob(job)
 
@@ -259,18 +297,28 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 
-  await writeOrchestrateJob({ ...job, pid: child.pid, step: 'Claude started…' })
+  await writeOrchestrateJob({ ...job, pid: child.pid, step: 'AI đã sẵn sàng…' })
 
   let buffer = ''
   let lastStep = job.step
+  let lastPhase: OrchestratePhase | undefined = job.phase
   let projectId: string | undefined
 
-  const updateStep = async (step: string) => {
-    if (step === lastStep) return
+  const updateStep = async (
+    step: string,
+    phase?: OrchestratePhase
+  ): Promise<void> => {
+    if (step === lastStep && phase === lastPhase) return
     lastStep = step
+    if (phase) lastPhase = phase
     const current = await readOrchestrateJob(job.jobId)
     if (!current || current.status !== 'running') return
-    await writeOrchestrateJob({ ...current, step, projectId: projectId ?? current.projectId })
+    await writeOrchestrateJob({
+      ...current,
+      step,
+      phase: phase ?? current.phase,
+      projectId: projectId ?? current.projectId,
+    })
   }
 
   child.stdout.on('data', (chunk: Buffer) => {
@@ -309,7 +357,14 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
         for (const block of content) {
           if (block?.type === 'tool_use' && block.name) {
             const short = block.name.replace(/^mcp__news-tok__/, '')
-            await updateStep(`Running ${short}…`)
+            const mapped = TOOL_TO_PHASE[short]
+            if (mapped) {
+              await updateStep(mapped.label, mapped.phase)
+            } else {
+              // Unknown MCP tool — keep the user informed without
+              // advancing the phase checklist.
+              await updateStep('Đang xử lý…')
+            }
           }
         }
       }
@@ -338,7 +393,8 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     status: projectId ? 'completed' : 'failed',
     endedAt: new Date().toISOString(),
     projectId,
-    step: projectId ? 'Done' : 'Finished without creating a project',
+    phase: projectId ? 'done' : final?.phase,
+    step: projectId ? 'Hoàn tất — đang mở Studio…' : 'Không tạo được dự án',
     error: projectId ? undefined : 'No projectId detected in Claude output',
   })
 }

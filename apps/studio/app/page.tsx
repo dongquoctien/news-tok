@@ -31,11 +31,11 @@ export default function HomePage() {
           with the headline now. */}
       <section className="flex flex-1 flex-col items-center justify-start gap-5 px-6 py-10 text-center lg:justify-center lg:py-16">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          Turn a link into a short video
+          Biến bài báo thành video ngắn
         </h1>
         <p className="max-w-md text-sm text-muted-foreground">
-          Paste an article URL or article text. Claude drafts the storyboard,
-          picks the visuals, and renders the video — all locally.
+          Dán link bài báo hoặc nội dung. AI lên kịch bản, chọn ảnh và
+          giọng đọc. Bạn xem trước trong Studio rồi bấm Render khi ưng.
         </p>
         <CreatePrompt />
       </section>
