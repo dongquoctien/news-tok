@@ -53,6 +53,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 type Status = 'idle' | 'saving' | 'saved' | 'error'
@@ -502,40 +509,27 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   </>
                 )}
               </Button>
-              <div className="relative inline-flex">
-                <Button
-                  size="sm"
-                  disabled={renderStatus === 'running' || project.segments.length === 0}
-                  title="Pick one variant to render"
-                  className="rounded-l-none px-2"
-                  tabIndex={-1}
-                  asChild
-                >
-                  <span>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    size="sm"
+                    disabled={renderStatus === 'running' || project.segments.length === 0}
+                    title="Pick one variant to render"
+                    className="rounded-l-none px-2"
+                    aria-label="Render single variant"
+                  >
                     <ChevronDown className="size-3.5" />
-                  </span>
-                </Button>
-                <select
-                  value=""
-                  onChange={(e) => {
-                    const v = e.target.value
-                    if (v) triggerRender(v)
-                    e.currentTarget.value = ''
-                  }}
-                  disabled={renderStatus === 'running' || project.segments.length === 0}
-                  className="absolute inset-0 cursor-pointer opacity-0 [color-scheme:light_dark]"
-                  aria-label="Render single variant"
-                >
-                  <option value="" className="bg-background text-foreground" disabled>
-                    Pick a variant…
-                  </option>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Render one variant</DropdownMenuLabel>
                   {project.variants.map((v) => (
-                    <option key={v.id} value={v.id} className="bg-background text-foreground">
+                    <DropdownMenuItem key={v.id} onSelect={() => triggerRender(v.id)}>
                       Render {v.id} · {v.label}
-                    </option>
+                    </DropdownMenuItem>
                   ))}
-                </select>
-              </div>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           ) : (
             <Button
