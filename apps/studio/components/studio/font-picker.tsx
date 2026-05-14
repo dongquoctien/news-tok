@@ -2,19 +2,27 @@
 
 import { useEffect, useState } from 'react'
 import { Check, Type } from 'lucide-react'
-import { ALLOWED_FONT_IDS } from '@news-tok/shared/text-styles'
+import {
+  ALLOWED_FONT_IDS,
+  findTextStyle,
+} from '@news-tok/shared/text-styles'
+import type { Aspect, TextStyle } from '@news-tok/shared/schema'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { FONT_LABEL } from '@/lib/font-label'
+import {
+  plateCss as libPlateCss,
+  textCss as libTextCss,
+} from '@/lib/text-style-preview'
+import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
 
 /**
  * CSS font stack the Studio uses to PREVIEW each logical font id. The
@@ -121,6 +129,16 @@ export type FontPickerProps = {
     scope: 'segmentInVariant' | 'segment' | 'all'
   }) => void
   trigger: React.ReactNode
+  /** Resolved style for this segment so the preview pane renders the
+   *  headline with the right plate / shadow / colour, only swapping
+   *  fontFamily as the user clicks through the grid. Omit to fall
+   *  back to the classic style. */
+  resolvedStyle?: TextStyle | null
+  /** Project aspect — drives the device frame (phone / laptop / square). */
+  aspect?: Aspect
+  /** Optional segment background image path. Drawn under the text so
+   *  font weight / serif vs sans reads against the real composition. */
+  previewBackground?: string
 }
 
 export function FontPicker({
@@ -129,6 +147,9 @@ export function FontPicker({
   activeVariantId,
   onApply,
   trigger,
+  resolvedStyle,
+  aspect,
+  previewBackground,
 }: FontPickerProps) {
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<string | null>(currentFontId ?? null)
@@ -143,35 +164,94 @@ export function FontPicker({
     setOpen(false)
   }
 
+  const previewAspect = aspect ?? '9:16'
+  const split = splitRatioFor(previewAspect)
+  // Always show the preview pane: fall back to classic when no
+  // resolved style is passed (variant=default). Mirrors ColorPicker.
+  const previewStyle =
+    resolvedStyle ?? findTextStyle('classic', []) ?? null
+  const showPreview = !!previewStyle
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-3xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent
+        className={cn(
+          'grid max-h-[92vh] w-full gap-0 overflow-hidden p-0',
+          showPreview
+            ? 'max-w-5xl grid-rows-[auto_1fr_auto]'
+            : 'max-w-3xl grid-rows-[auto_1fr_auto]'
+        )}
+      >
+        <div className="border-b px-4 py-3">
+          <DialogTitle className="flex items-center gap-2 text-base">
             <Type className="size-5" />
             Pick a font
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="mt-1 text-xs">
             Override the typeface for this segment without forking the whole text
             style. The renderer prefers segment / variant overrides before the
-            style's own font.
+            style&apos;s own font.
           </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid max-h-[55vh] grid-cols-3 gap-2 overflow-y-auto pr-1">
-          {ALLOWED_FONT_IDS.map((id) => (
-            <FontCard
-              key={id}
-              fontId={id}
-              selected={picked === id}
-              onSelect={() => setPicked(id)}
-              sampleText={sampleText.length > 60 ? sampleText.slice(0, 58) + '…' : sampleText}
-            />
-          ))}
         </div>
 
-        <DialogFooter className="flex-wrap gap-2 sm:flex-wrap sm:space-x-0">
+        <div
+          className="grid min-h-0 overflow-hidden"
+          style={
+            showPreview
+              ? { gridTemplateColumns: `${split.left} ${split.right}` }
+              : undefined
+          }
+        >
+          {/* LEFT — font grid */}
+          <div className="overflow-y-auto p-4">
+            <div className="grid grid-cols-3 gap-2">
+              {ALLOWED_FONT_IDS.map((id) => (
+                <FontCard
+                  key={id}
+                  fontId={id}
+                  selected={picked === id}
+                  onSelect={() => setPicked(id)}
+                  sampleText={
+                    sampleText.length > 60
+                      ? sampleText.slice(0, 58) + '…'
+                      : sampleText
+                  }
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* RIGHT — device mockup preview */}
+          {showPreview ? (
+            <div className="flex min-h-0 items-center justify-center overflow-y-auto border-l bg-secondary/20 p-4">
+              <DeviceMockupPreview
+                aspect={previewAspect}
+                background={previewBackground}
+                maxWidth={300}
+                label={
+                  resolvedStyle
+                    ? picked
+                      ? `${FONT_LABEL[picked] ?? picked}`
+                      : 'Live preview'
+                    : 'Live preview · classic fallback'
+                }
+              >
+                <FontPreviewText
+                  style={previewStyle!}
+                  fontId={picked}
+                  text={
+                    sampleText.length > 64
+                      ? sampleText.slice(0, 60) + '…'
+                      : sampleText
+                  }
+                />
+              </DeviceMockupPreview>
+            </div>
+          ) : null}
+        </div>
+
+        <DialogFooter className="flex-wrap gap-2 border-t px-4 py-3 sm:flex-wrap sm:space-x-0">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
@@ -203,5 +283,43 @@ export function FontPicker({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Renders the headline at the resolved style's typography, swapping
+ * just the fontFamily for what the user has picked (or the style's
+ * own fontFamily when nothing is picked yet). Mirrors how the
+ * renderer applies a font override at composite time.
+ */
+function FontPreviewText({
+  style,
+  fontId,
+  text,
+}: {
+  style: TextStyle
+  fontId: string | null
+  text: string
+}) {
+  const effective: TextStyle = {
+    ...style,
+    fontFamily: fontId ?? style.fontFamily,
+  }
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '8%',
+        pointerEvents: 'none',
+      }}
+    >
+      <div style={libPlateCss(effective)}>
+        <span style={libTextCss(effective)}>{text}</span>
+      </div>
+    </div>
   )
 }

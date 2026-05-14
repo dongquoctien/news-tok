@@ -1228,6 +1228,9 @@ function SegmentEditor({
               sampleText={segment.text || 'Aa'}
               activeVariantId={activeVariantId}
               onApply={onApplyFont}
+              resolvedStyle={resolvedStyle ?? null}
+              aspect={aspect}
+              previewBackground={segment.visuals.background?.path}
               trigger={
                 <Button variant="outline" size="sm">
                   <Type />
