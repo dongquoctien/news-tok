@@ -7,6 +7,7 @@ import type {
   ColorOverride,
   TextStyle,
 } from '@news-tok/shared/schema'
+import { findTextStyle } from '@news-tok/shared/text-styles'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -246,10 +247,13 @@ export function ColorPicker({
 
   const previewAspect = aspect ?? '9:16'
   const split = splitRatioFor(previewAspect)
-  // Right pane is only useful when the caller actually passed a style
-  // to preview against — without it we'd just be rendering colour
-  // chips on a grey card, which the left pane already does.
-  const showPreview = !!resolvedStyle
+  // Always show the preview pane: fall back to the built-in 'classic'
+  // text style when the caller didn't pass one (variant=default
+  // segments). The user still sees the override layered on a real
+  // headline shape, even if it's the generic fallback shape.
+  const previewStyle =
+    resolvedStyle ?? findTextStyle('classic', []) ?? null
+  const showPreview = !!previewStyle
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -302,10 +306,14 @@ export function ColorPicker({
                 aspect={previewAspect}
                 background={previewBackground}
                 maxWidth={300}
-                label="Live preview"
+                label={
+                  resolvedStyle
+                    ? 'Live preview'
+                    : 'Live preview · using classic fallback'
+                }
               >
                 <ColorPreviewText
-                  style={resolvedStyle!}
+                  style={previewStyle!}
                   override={draft}
                   text={
                     (sampleText && sampleText.length > 64
