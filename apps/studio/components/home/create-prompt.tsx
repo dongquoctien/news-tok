@@ -169,6 +169,15 @@ export function CreatePrompt() {
     pollRef.current = setInterval(async () => {
       try {
         const res = await fetch(`/api/orchestrate?jobId=${job.jobId}`, { cache: 'no-store' })
+        if (res.status === 404) {
+          // Job file was deleted mid-poll (data dir wiped, mock
+          // cleanup, etc). Stop polling and clear the running
+          // state — otherwise the loop would 404 forever.
+          if (pollRef.current) clearInterval(pollRef.current)
+          pollRef.current = null
+          setJob(null)
+          return
+        }
         if (!res.ok) return
         const next = (await res.json()) as Job
         setJob(next)
