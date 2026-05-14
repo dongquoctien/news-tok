@@ -28,6 +28,13 @@ const LAYOUTS = [
   'builtin-magazineCover',
   'builtin-statHero',
   'builtin-dossierCard',
+  'builtin-phoneMockup',
+  'builtin-browserWindow',
+  'builtin-neonSign',
+  'builtin-numberedSteps',
+  'builtin-gradientMesh',
+  'builtin-crtTerminal',
+  'builtin-comparisonSplit',
 ] as const
 
 /**
@@ -68,6 +75,45 @@ const SAMPLES: Record<(typeof LAYOUTS)[number], {
     eyebrow: 'CASE FILE',
     fileId: 'FILE 07',
     chips: ['2024', '12 NƯỚC', '$1B', 'INTERPOL'],
+  },
+  'builtin-phoneMockup': {
+    text: 'Meta ra mắt nền tảng AI mới',
+    eyebrow: 'PROFILE ID',
+    chips: ['AUTODATA', 'FRAMEWORK', 'LLM TỰ TẠO'],
+  },
+  'builtin-browserWindow': {
+    text: 'Jarvis: AI của bạn',
+    eyebrow: 'CASE FILE',
+    fileId: 'JARVIS.APP',
+  },
+  'builtin-neonSign': {
+    text: 'Ruflo là gì?',
+    eyebrow: 'PROFILE ID',
+    fileId: 'uFlo',
+    chips: ['OPEN SOURCE', 'MULTI-AGENT', 'TỐI ƯU'],
+  },
+  'builtin-numberedSteps': {
+    text: 'Chip AI Huawei cháy hàng',
+    eyebrow: 'TRUNG QUỐC BỨT PHÁ',
+    fileId: '01',
+    chips: ['AI KHÔNG CẦN MỸ', 'NGÀNH AI CHẤN ĐỘNG', 'CỘNG ĐỒNG NGỠ NGÀNG'],
+  },
+  'builtin-gradientMesh': {
+    text: 'Toto làm chip AI?',
+    eyebrow: 'HÀNG BỎN CẦU NỐI TIẾNG',
+    chips: ['BƯỚC VÀO CHUỖI BÁN DẪN', 'CỔ PHIẾU TĂNG VỌT'],
+  },
+  'builtin-crtTerminal': {
+    text: 'Thứ gì đang quay trở lại?',
+    eyebrow: 'PRIMARY METRIC',
+    fileId: 'LIVE EP: 8 / OS 4',
+    chips: ['TRONG THỜI ĐẠI AI', 'DẪN DẮT XU HƯỚNG MỚI'],
+  },
+  'builtin-comparisonSplit': {
+    text: 'AI thắng bác sĩ?',
+    eyebrow: 'EVIDENCE OVERLAY',
+    fileId: '15 NĂM SINH NGHIỆM',
+    chips: ['Triệu ca bệnh', 'Kết quả bất ngờ', 'FDA duyệt thử nghiệm'],
   },
 }
 

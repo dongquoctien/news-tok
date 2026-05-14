@@ -1,8 +1,15 @@
 import type { LayoutComponent } from './types.js'
+import { BrowserWindow } from './BrowserWindow.js'
 import { Card } from './Card.js'
+import { ComparisonSplit } from './ComparisonSplit.js'
+import { CrtTerminal } from './CrtTerminal.js'
 import { DossierCard } from './DossierCard.js'
 import { FullBleed } from './FullBleed.js'
+import { GradientMesh } from './GradientMesh.js'
 import { MagazineCover } from './MagazineCover.js'
+import { NeonSign } from './NeonSign.js'
+import { NumberedSteps } from './NumberedSteps.js'
+import { PhoneMockup } from './PhoneMockup.js'
 import { SplitVertical } from './SplitVertical.js'
 import { StatHero } from './StatHero.js'
 
@@ -24,6 +31,16 @@ const BUILT_IN_LAYOUTS: Record<string, LayoutComponent> = {
   'builtin-magazineCover': MagazineCover,
   'builtin-statHero': StatHero,
   'builtin-dossierCard': DossierCard,
+  // YupVid moodboard ports — 7 new design-forward / chrome-mockup
+  // looks. Each is self-contained: no shared CSS between them, so
+  // tweaking one can't break another.
+  'builtin-phoneMockup': PhoneMockup,
+  'builtin-browserWindow': BrowserWindow,
+  'builtin-neonSign': NeonSign,
+  'builtin-numberedSteps': NumberedSteps,
+  'builtin-gradientMesh': GradientMesh,
+  'builtin-crtTerminal': CrtTerminal,
+  'builtin-comparisonSplit': ComparisonSplit,
 }
 
 /**
