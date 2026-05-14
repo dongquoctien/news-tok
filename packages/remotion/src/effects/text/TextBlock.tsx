@@ -111,24 +111,36 @@ function anchorStyle(style: TextStyle): CSSProperties {
 }
 
 /**
- * One-stop component every built-in scene uses for headline / body text.
- * Owns layout (anchor / align / margin / plate); delegates motion to a
- * primitive picked by `style.enter`. Scenes still own their background,
- * icon, and any subordinate elements.
+ * One-stop component for headline / body text.
  *
- * `fontOverride` is computed once by the composition (variant → segment →
- * style chain) and passed through to every primitive so they don't all
- * repeat the lookup.
+ * Mode 'owned' (default): wraps the text in an AbsoluteFill + flex
+ * container and honours the style's `anchor` / `align` / `marginPct`.
+ * Used by built-in scenes and the FullBleed layout (current pre-layout-
+ * library behaviour).
+ *
+ * Mode 'slot': skips the AbsoluteFill + anchorStyle wrap. The caller
+ * (a custom layout) has already placed the text container, so we only
+ * need to render plate + primitive. All other style fields still apply
+ * — typography, decorators, motion, fontOverride, colorOverride — just
+ * not the placement triplet.
+ *
+ * `fontOverride` is computed once by the composition (variant → segment
+ * → style chain) and passed through to every primitive so they don't
+ * all repeat the lookup.
  */
 export function TextBlock({
   text,
   style,
+  mode = 'owned',
   wordBoundaries,
   fontOverride,
   colorOverride,
 }: {
   text: string
   style: TextStyle
+  /** 'owned' (default) wraps in AbsoluteFill + flex; 'slot' renders
+   *  inline so the caller controls placement. */
+  mode?: 'owned' | 'slot'
   wordBoundaries?: WordBoundary[]
   fontOverride?: string
   colorOverride?: ColorOverride
@@ -145,9 +157,11 @@ export function TextBlock({
       colorOverride={colorOverride}
     />
   )
+  const inner = plate ? <div style={plate}>{wrap}</div> : wrap
+  if (mode === 'slot') return inner
   return (
     <AbsoluteFill style={{ display: 'flex', ...anchorStyle(style) }}>
-      {plate ? <div style={plate}>{wrap}</div> : wrap}
+      {inner}
     </AbsoluteFill>
   )
 }
