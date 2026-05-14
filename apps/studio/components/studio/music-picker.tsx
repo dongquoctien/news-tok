@@ -94,12 +94,18 @@ export function MusicPicker({
   const [tracks, setTracks] = useState<TrackCandidate[]>([])
   const [selectedTrack, setSelectedTrack] = useState<TrackCandidate | null>(null)
   const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
+  // Loading lasts from the click until audio.play() resolves (browser
+  // has fetched enough buffer to start). Without it the Play icon
+  // doesn't change for 2-3s while archive.org's CDN warms up, so the
+  // user thinks the click was ignored.
+  const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
   // Pixabay + upload flows still surface a single preview AssetRef
   // because both produce a cached AssetRef immediately (no list).
   const [singlePreview, setSinglePreview] = useState<AssetRef | null>(null)
   const [playingSingle, setPlayingSingle] = useState(false)
+  const [loadingSingle, setLoadingSingle] = useState(false)
 
   const stopAudio = () => {
     if (audioRef.current) {
@@ -109,6 +115,8 @@ export function MusicPicker({
     audioRef.current = null
     setPlayingTrackId(null)
     setPlayingSingle(false)
+    setLoadingTrackId(null)
+    setLoadingSingle(false)
   }
 
   const runSearch = async () => {
@@ -172,16 +180,28 @@ export function MusicPicker({
     // archive.org's CDN directly; the file isn't cached locally until
     // the user clicks Apply.
     stopAudio()
+    // Flip the row into loading state immediately so the user gets
+    // visual feedback before the CDN catches up (typically 2-3s on a
+    // cold archive.org node).
+    setLoadingTrackId(key)
     const audio = new Audio(track.streamUrl)
     audio.addEventListener('ended', () => setPlayingTrackId(null))
     audio.addEventListener('error', () => {
       setError(`Failed to stream "${track.title ?? track.identifier}"`)
+      setLoadingTrackId((curr) => (curr === key ? null : curr))
       setPlayingTrackId(null)
     })
     audioRef.current = audio
-    audio.play().then(() => setPlayingTrackId(key)).catch((err) =>
-      setError(err instanceof Error ? err.message : String(err))
-    )
+    audio
+      .play()
+      .then(() => {
+        setLoadingTrackId((curr) => (curr === key ? null : curr))
+        setPlayingTrackId(key)
+      })
+      .catch((err) => {
+        setLoadingTrackId((curr) => (curr === key ? null : curr))
+        setError(err instanceof Error ? err.message : String(err))
+      })
   }
 
   const togglePlaySingle = () => {
@@ -192,14 +212,26 @@ export function MusicPicker({
       return
     }
     stopAudio()
+    setLoadingSingle(true)
     // Local cache file — Studio exposes it via /api/asset.
     const url = `/api/asset?path=${encodeURIComponent(singlePreview.path)}`
     const audio = new Audio(url)
     audio.addEventListener('ended', () => setPlayingSingle(false))
+    audio.addEventListener('error', () => {
+      setLoadingSingle(false)
+      setPlayingSingle(false)
+    })
     audioRef.current = audio
-    audio.play().then(() => setPlayingSingle(true)).catch((err) =>
-      setError(err instanceof Error ? err.message : String(err))
-    )
+    audio
+      .play()
+      .then(() => {
+        setLoadingSingle(false)
+        setPlayingSingle(true)
+      })
+      .catch((err) => {
+        setLoadingSingle(false)
+        setError(err instanceof Error ? err.message : String(err))
+      })
   }
 
   const applyArchiveTrack = async () => {
@@ -298,6 +330,7 @@ export function MusicPicker({
               <SingleTrackCard
                 asset={singlePreview}
                 playing={playingSingle}
+                loading={loadingSingle}
                 onToggle={togglePlaySingle}
                 provider="local"
               />
@@ -388,6 +421,7 @@ export function MusicPicker({
                         track={track}
                         selected={selectedTrack ? trackKey(selectedTrack) === key : false}
                         playing={playingTrackId === key}
+                        loading={loadingTrackId === key}
                         target={duration}
                         onSelect={() => setSelectedTrack(track)}
                         onToggle={() => togglePlayTrack(track)}
@@ -403,6 +437,7 @@ export function MusicPicker({
               <SingleTrackCard
                 asset={singlePreview}
                 playing={playingSingle}
+                loading={loadingSingle}
                 onToggle={togglePlaySingle}
                 provider="pixabay"
               />
@@ -452,6 +487,7 @@ function TrackRow({
   track,
   selected,
   playing,
+  loading,
   target,
   onSelect,
   onToggle,
@@ -459,6 +495,7 @@ function TrackRow({
   track: TrackCandidate
   selected: boolean
   playing: boolean
+  loading: boolean
   target: number
   onSelect: () => void
   onToggle: () => void
@@ -495,9 +532,22 @@ function TrackRow({
           e.stopPropagation()
           onToggle()
         }}
-        title={playing ? 'Pause audition' : 'Audition this track'}
+        disabled={loading}
+        title={
+          loading
+            ? 'Buffering audio…'
+            : playing
+              ? 'Pause audition'
+              : 'Audition this track'
+        }
       >
-        {playing ? <Pause /> : <Play />}
+        {loading ? (
+          <Loader2 className="animate-spin" />
+        ) : playing ? (
+          <Pause />
+        ) : (
+          <Play />
+        )}
       </Button>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">
@@ -533,18 +583,20 @@ function TrackRow({
 function SingleTrackCard({
   asset,
   playing,
+  loading,
   onToggle,
   provider,
 }: {
   asset: AssetRef
   playing: boolean
+  loading: boolean
   onToggle: () => void
   provider: string
 }) {
   return (
     <div className="flex items-center gap-3 rounded-md border p-3">
-      <Button variant="outline" size="icon" onClick={onToggle}>
-        {playing ? <Pause /> : <Play />}
+      <Button variant="outline" size="icon" onClick={onToggle} disabled={loading}>
+        {loading ? <Loader2 className="animate-spin" /> : playing ? <Pause /> : <Play />}
       </Button>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">
