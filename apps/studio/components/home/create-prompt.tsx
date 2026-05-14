@@ -203,6 +203,10 @@ export function CreatePrompt() {
   const submit = async () => {
     if (!source) return
     setError(null)
+    // Collapse the Advanced panel on submit so the form shrinks back
+    // and the loading checklist below isn't pushed off-screen by the
+    // extra sliders. User can re-open from the trigger if needed.
+    setAdvancedOpen(false)
     try {
       const res = await fetch('/api/orchestrate', {
         method: 'POST',
