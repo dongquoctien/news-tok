@@ -3,7 +3,15 @@ import { createHash } from 'node:crypto'
 import { mkdir, readdir, writeFile, stat, readFile } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { bundleCacheRoot, dataDir, projectScenesDir, projectStoryboardPath, REPO_ROOT, sfxStagingDir } from './paths.js'
+import {
+  bundleCacheRoot,
+  dataDir,
+  layoutsDir,
+  projectScenesDir,
+  projectStoryboardPath,
+  REPO_ROOT,
+  sfxStagingDir,
+} from './paths.js'
 
 // Stage temp entry files inside packages/remotion so module resolution finds
 // `remotion`, `react`, `@news-tok/*` via pnpm's nested node_modules.
@@ -19,6 +27,44 @@ async function listCustomScenes(projectId: string): Promise<{ name: string; path
       name: e.name.replace(/\.tsx?$/, ''),
       path: resolve(dir, e.name),
     }))
+}
+
+/**
+ * Scan the global `data/layouts/` pool. Each layout lives in its own
+ * subfolder containing a `layout.tsx` (the React component) plus
+ * sidecar files (`meta.json`, optional `reference/`). User layouts are
+ * NOT project-scoped — the same pool is available to every render.
+ *
+ * The returned `name` is the layout id (folder name), e.g.
+ * `user-scoreboard`, ready to use as the key in
+ * `__NEWS_TOK_USER_LAYOUTS__`.
+ */
+async function listUserLayouts(): Promise<{ name: string; path: string }[]> {
+  const root = layoutsDir()
+  if (!existsSync(root)) return []
+  const entries = await readdir(root, { withFileTypes: true })
+  const out: { name: string; path: string }[] = []
+  for (const e of entries) {
+    if (!e.isDirectory()) continue
+    const tsx = resolve(root, e.name, 'layout.tsx')
+    if (existsSync(tsx)) out.push({ name: e.name, path: tsx })
+  }
+  return out
+}
+
+async function hashUserLayouts(layouts: { name: string; path: string }[]): Promise<string> {
+  if (layouts.length === 0) return ''
+  const h = createHash('sha256')
+  for (const l of layouts) {
+    h.update(l.name)
+    h.update('|')
+    const st = await stat(l.path)
+    h.update(String(st.size))
+    h.update('|')
+    h.update(String(st.mtimeMs))
+    h.update('\n')
+  }
+  return h.digest('hex').slice(0, 16)
 }
 
 async function hashScenes(scenes: { name: string; path: string }[]): Promise<string> {
@@ -106,20 +152,36 @@ function joinHashParts(...parts: string[]): string {
   return nonEmpty.length === 0 ? 'base' : nonEmpty.join('-')
 }
 
-function entrySource(scenes: { name: string; path: string }[]): string {
+function entrySource(
+  scenes: { name: string; path: string }[],
+  layouts: { name: string; path: string }[]
+): string {
   // The bundler validates that the entry contains the literal string
   // "registerRoot" — `import '@news-tok/remotion'` triggers the actual
   // registerRoot call inside that package. We also include a benign
   // mention here so the validator passes regardless of bundler version.
-  const imports = scenes
+  const sceneImports = scenes
     .map((s, i) => `import Scene${i} from ${JSON.stringify(s.path.replace(/\\/g, '/'))}`)
     .join('\n')
-  const map = scenes.map((s, i) => `  ${JSON.stringify(s.name)}: Scene${i}`).join(',\n')
-  return `// AUTO-GENERATED — Remotion entry with optional per-project custom scenes.
+  const sceneMap = scenes
+    .map((s, i) => `  ${JSON.stringify(s.name)}: Scene${i}`)
+    .join(',\n')
+  const layoutImports = layouts
+    .map((l, i) => `import Layout${i} from ${JSON.stringify(l.path.replace(/\\/g, '/'))}`)
+    .join('\n')
+  const layoutMap = layouts
+    .map((l, i) => `  ${JSON.stringify(l.name)}: Layout${i}`)
+    .join(',\n')
+  return `// AUTO-GENERATED — Remotion entry with optional per-project custom
+// scenes and the global user-layout pool.
 // (registerRoot is invoked inside @news-tok/remotion.)
-${imports}
+${sceneImports}
+${layoutImports}
 ;(globalThis).__NEWS_TOK_CUSTOM_SCENES__ = {
-${map}
+${sceneMap}
+}
+;(globalThis).__NEWS_TOK_USER_LAYOUTS__ = {
+${layoutMap}
 }
 import '@news-tok/remotion'
 export {}
@@ -132,10 +194,12 @@ export {}
  */
 export async function bundleForProject(projectId: string): Promise<string> {
   const scenes = await listCustomScenes(projectId)
+  const layouts = await listUserLayouts()
   const sceneHash = await hashScenes(scenes)
+  const layoutHash = await hashUserLayouts(layouts)
   const assetsHash = await hashStoryboardAssets(projectId)
   const sfxHash = await hashSfxStaging()
-  const cacheKey = joinHashParts(sceneHash, assetsHash, sfxHash)
+  const cacheKey = joinHashParts(sceneHash, layoutHash, assetsHash, sfxHash)
   const outDir = resolve(bundleCacheRoot(), cacheKey)
 
   if (existsSync(resolve(outDir, 'index.html'))) {
@@ -145,7 +209,7 @@ export async function bundleForProject(projectId: string): Promise<string> {
 
   await mkdir(ENTRY_STAGING_ROOT, { recursive: true })
   const entryPath = resolve(ENTRY_STAGING_ROOT, `entry-${cacheKey}.tsx`)
-  await writeFile(entryPath, entrySource(scenes), 'utf8')
+  await writeFile(entryPath, entrySource(scenes, layouts), 'utf8')
 
   return bundle({
     entryPoint: entryPath,

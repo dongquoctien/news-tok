@@ -284,6 +284,32 @@ export const SegmentSchema = z.object({
    * Render priority: `segment.sfxOverride` > `textStyle.sfx`.
    */
   sfxOverride: TextSfxSchema.optional(),
+  /**
+   * Reference to a layout in the global pool at `data/layouts/<id>/`
+   * or the built-in registry. When absent the renderer falls back to
+   * `builtin-fullBleed` — which is the current pre-layout-library
+   * behaviour (image full-bleed + gradient overlay + TextBlock).
+   * Storyboards saved before the layout library shipped have no
+   * `layoutId` and continue to render unchanged.
+   */
+  layoutId: z.string().optional(),
+  /**
+   * Short uppercase label rendered by layouts that have an eyebrow
+   * slot — e.g. "CASE FILE", "PRIMARY METRIC", "EP 03". Hard-styled
+   * per layout (uppercase tracking, accent colour) so users don't
+   * need to tweak typography for it.
+   */
+  eyebrow: z.string().max(40).optional(),
+  /**
+   * Up to 5 short pill-style chips rendered by layouts with a chip
+   * grid (e.g. dossierCard). Each chip ≤ 30 chars.
+   */
+  chips: z.array(z.string().max(30)).max(5).optional(),
+  /**
+   * Optional dossier-style file id ("FILE 02", "PROFILE 03"). Hard-
+   * styled per layout — small monospace label near the eyebrow.
+   */
+  fileId: z.string().max(20).optional(),
 })
 export type Segment = z.infer<typeof SegmentSchema>
 

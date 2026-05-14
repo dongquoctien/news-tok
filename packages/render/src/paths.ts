@@ -22,3 +22,7 @@ export const bundleCacheRoot = () => resolve(REPO_ROOT, '.remotion-cache')
 export const sfxBankDir = () => resolve(REPO_ROOT, 'packages', 'shared', 'sfx')
 /** Where SFX files are staged inside publicDir for Remotion to serve. */
 export const sfxStagingDir = () => resolve(dataDir(), 'sfx')
+/** Global pool of user-authored layouts. Each subfolder holds
+ *  `layout.tsx` + `meta.json` + optional preview/reference files. */
+export const layoutsDir = () => resolve(dataDir(), 'layouts')
+export const layoutDir = (layoutId: string) => resolve(layoutsDir(), layoutId)
