@@ -165,7 +165,10 @@ All MCP tools are exposed under the `mcp__news-tok__*` namespace:
   image path. `provider` is one of `pexels` (default, reliable), `unsplash`
   (fallback when Pexels has no match), `openverse` (federated CC-licensed
   search across Wikimedia / Flickr / Smithsonian / museums — best for
-  niche or historical topics, anonymous OK), or `pixabay` (often
+  niche or historical topics, anonymous OK), `wikimedia` (direct
+  Wikimedia Commons API — best for named people / places / events /
+  logos / maps / historical photos, since Pexels and Unsplash only
+  carry generic stock for proper nouns), or `pixabay` (often
   rate-limited by Cloudflare; avoid unless explicitly requested).
 - `searchMusic({ mood, durationSec, provider? })` — returns a local cached
   audio path. Always use `provider: 'archive'` (default). Pixabay's music
@@ -409,10 +412,13 @@ When the user requests a visual effect not covered by the built-in library:
 - **Default voice (English)**: `en-US-AriaNeural`
 - **Default aspect**: `9:16`, 30 fps, 1080×1920
 - **Prefer Pexels** for images (most reliable); use `unsplash` as fallback
-  when Pexels has no good match, and `openverse` when the topic is niche
-  / historical / museum-flavored (it federates Wikimedia, Flickr CC,
-  Smithsonian, museums.victoria, etc.). Avoid `pixabay` unless the user
-  asks for it — Cloudflare often blocks Node requests.
+  when Pexels has no good match, `wikimedia` when the query is a
+  proper noun (person, place, event, logo, map, historical photo —
+  Pexels/Unsplash only carry generic stock for those), and `openverse`
+  when the topic is niche / historical / museum-flavored (it federates
+  Wikimedia, Flickr CC, Smithsonian, museums.victoria, etc.). Avoid
+  `pixabay` unless the user asks for it — Cloudflare often blocks
+  Node requests.
 - **Prefer Internet Archive** for music (default in `searchMusic`); it is
   filtered to commercial-friendly CC0/CC-BY licenses and needs no key.
 - Always validate `storyboard.json` against `ProjectSchema` before saving.

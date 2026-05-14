@@ -23,6 +23,7 @@ import {
   pixabay,
   synthesize,
   unsplash,
+  wikimedia,
 } from '@news-tok/media'
 import {
   deleteProject as deleteProjectFiles,
@@ -242,7 +243,7 @@ async function main() {
     {
       title: 'Search a free stock image',
       description:
-        'Search for an image and return an AssetRef. Default provider is Pexels (most reliable). Crawl-based providers ("crawl:pixabay-image", "crawl:unsplash") use a headless Chromium to bypass Cloudflare JA3 fingerprinting; they are slower but work when the JSON APIs are blocked or rate-limited.',
+        'Search for an image and return an AssetRef. Default provider is Pexels (most reliable). Use "wikimedia" when the query is a proper noun — named people, places, events, logos, maps, or historical photos — since Pexels/Unsplash only carry generic stock for those. Crawl-based providers ("crawl:pixabay-image", "crawl:unsplash") use a headless Chromium to bypass Cloudflare JA3 fingerprinting; they are slower but work when the JSON APIs are blocked or rate-limited.',
       inputSchema: {
         query: z.string().min(1),
         orientation: z.enum(['landscape', 'portrait', 'square']).optional(),
@@ -252,6 +253,7 @@ async function main() {
             'unsplash',
             'pixabay',
             'openverse',
+            'wikimedia',
             'crawl:pixabay-image',
             'crawl:unsplash',
           ])
@@ -285,6 +287,10 @@ async function main() {
         }
         if (which === 'openverse') {
           const asset = await openverse.searchImage({ query, orientation })
+          return ok(asset)
+        }
+        if (which === 'wikimedia') {
+          const asset = await wikimedia.searchImage({ query, orientation })
           return ok(asset)
         }
         const asset = await pexels.searchImage({ query, orientation })

@@ -1,9 +1,8 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Loader2, Music, Pause, Play, Search } from 'lucide-react'
+import { Check, Clock, Loader2, Music, Pause, Play, Search } from 'lucide-react'
 import type { AssetRef } from '@news-tok/shared/schema'
-import { assetUrl } from '@/lib/asset-url'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -20,8 +19,55 @@ import { cn } from '@/lib/utils'
 import { UploadDropzone } from '@/components/studio/upload-dropzone'
 
 const MOODS = ['calm', 'news', 'dramatic', 'energetic', 'cinematic', 'chill'] as const
+const LIST_SIZE = 8
 
 type Mode = 'search' | 'upload'
+
+/** One row in the archive.org candidate list. Streams directly from
+ *  archive.org's CDN during audition — only the user-selected track is
+ *  downloaded to cache (via POST /api/search/music/fetch). */
+type TrackCandidate = {
+  identifier: string
+  fileName: string
+  streamUrl: string
+  pageUrl: string
+  title?: string
+  creator?: string
+  durationSec?: number
+  licenseurl?: string
+}
+
+/**
+ * Stable key for a single audio file. `identifier` alone is NOT unique:
+ * one archive.org item often contains many mp3s (intro / loop / 30s /
+ * 60s variants), so all 8 candidates from the same album share the
+ * identifier. Pair it with the fileName to disambiguate — otherwise
+ * clicking Play on one row would flip every same-identifier row's icon
+ * to Pause, and selecting one would highlight all of its siblings.
+ */
+function trackKey(track: Pick<TrackCandidate, 'identifier' | 'fileName'>): string {
+  return `${track.identifier}::${track.fileName}`
+}
+
+/**
+ * Turn an archive.org filename into something readable in a list row.
+ * Strips the .mp3 extension, decodes %20 spaces, normalises underscores,
+ * and trims overly long names so the row doesn't push the duration
+ * badge off-screen. Returns an empty string for hash-only / opaque
+ * names so callers can fall back to the item title.
+ */
+function prettyFileName(fileName: string): string {
+  const stem = fileName.replace(/\.[a-z0-9]+$/i, '')
+  const cleaned = stem
+    .replace(/_/g, ' ')
+    .replace(/%20/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  // Drop names that look like hashes / opaque ids (no letters or only
+  // digit-heavy) so we don't show "01_track_03_final_v2" as the only label.
+  if (!/[a-z]{3}/i.test(cleaned)) return ''
+  return cleaned.length > 60 ? cleaned.slice(0, 57) + '…' : cleaned
+}
 
 export function MusicPicker({
   defaultMood,
@@ -40,38 +86,26 @@ export function MusicPicker({
   const [duration, setDuration] = useState(defaultDurationSec)
   const [provider, setProvider] = useState<'archive' | 'pixabay'>('archive')
   const [loading, setLoading] = useState(false)
-  const [preview, setPreview] = useState<AssetRef | null>(null)
+  const [applying, setApplying] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [playing, setPlaying] = useState(false)
+
+  // Archive list flow: tracks visible in the grid, plus the candidate
+  // the user is auditioning / has selected.
+  const [tracks, setTracks] = useState<TrackCandidate[]>([])
+  const [selectedTrack, setSelectedTrack] = useState<TrackCandidate | null>(null)
+  const [playingTrackId, setPlayingTrackId] = useState<string | null>(null)
+  // Loading lasts from the click until audio.play() resolves (browser
+  // has fetched enough buffer to start). Without it the Play icon
+  // doesn't change for 2-3s while archive.org's CDN warms up, so the
+  // user thinks the click was ignored.
+  const [loadingTrackId, setLoadingTrackId] = useState<string | null>(null)
   const audioRef = useRef<HTMLAudioElement | null>(null)
 
-  const runSearch = async () => {
-    if (!mood.trim()) return
-    setLoading(true)
-    setError(null)
-    setPreview(null)
-    audioRef.current?.pause()
-    audioRef.current = null
-    setPlaying(false)
-    try {
-      const params = new URLSearchParams({
-        mood,
-        duration: String(duration),
-        provider,
-      })
-      const res = await fetch(`/api/search/music?${params}`)
-      if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string }
-        throw new Error(body.error ?? `HTTP ${res.status}`)
-      }
-      const body = (await res.json()) as { asset: AssetRef }
-      setPreview(body.asset)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setLoading(false)
-    }
-  }
+  // Pixabay + upload flows still surface a single preview AssetRef
+  // because both produce a cached AssetRef immediately (no list).
+  const [singlePreview, setSinglePreview] = useState<AssetRef | null>(null)
+  const [playingSingle, setPlayingSingle] = useState(false)
+  const [loadingSingle, setLoadingSingle] = useState(false)
 
   const stopAudio = () => {
     if (audioRef.current) {
@@ -79,24 +113,156 @@ export function MusicPicker({
       audioRef.current.currentTime = 0
     }
     audioRef.current = null
-    setPlaying(false)
+    setPlayingTrackId(null)
+    setPlayingSingle(false)
+    setLoadingTrackId(null)
+    setLoadingSingle(false)
   }
 
-  const togglePlay = () => {
-    if (!preview) return
-    const url = assetUrl(preview.path)
-    if (!url) return
-    if (playing) {
+  const runSearch = async () => {
+    if (!mood.trim()) return
+    setLoading(true)
+    setError(null)
+    setTracks([])
+    setSelectedTrack(null)
+    setSinglePreview(null)
+    stopAudio()
+    try {
+      if (provider === 'archive') {
+        // archive.org → list of candidates. User picks then we fetch.
+        const params = new URLSearchParams({
+          mood,
+          duration: String(duration),
+          limit: String(LIST_SIZE),
+        })
+        const res = await fetch(`/api/search/music/list?${params}`)
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+        const body = (await res.json()) as { tracks: TrackCandidate[] }
+        if (body.tracks.length === 0) {
+          throw new Error(`No archive.org tracks for mood "${mood}"`)
+        }
+        setTracks(body.tracks)
+        setSelectedTrack(body.tracks[0] ?? null)
+      } else {
+        // pixabay → single-track legacy flow (already cached server-side).
+        const params = new URLSearchParams({
+          mood,
+          duration: String(duration),
+          provider,
+        })
+        const res = await fetch(`/api/search/music?${params}`)
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+        const body = (await res.json()) as { asset: AssetRef }
+        setSinglePreview(body.asset)
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const togglePlayTrack = (track: TrackCandidate) => {
+    const key = trackKey(track)
+    const isSame = playingTrackId === key
+    if (isSame) {
       audioRef.current?.pause()
-      setPlaying(false)
+      setPlayingTrackId(null)
       return
     }
-    if (!audioRef.current) {
-      const audio = new Audio(url)
-      audio.addEventListener('ended', () => setPlaying(false))
-      audioRef.current = audio
+    // Stop any previous audio, then start the new track. We stream from
+    // archive.org's CDN directly; the file isn't cached locally until
+    // the user clicks Apply.
+    stopAudio()
+    // Flip the row into loading state immediately so the user gets
+    // visual feedback before the CDN catches up (typically 2-3s on a
+    // cold archive.org node).
+    setLoadingTrackId(key)
+    const audio = new Audio(track.streamUrl)
+    audio.addEventListener('ended', () => setPlayingTrackId(null))
+    audio.addEventListener('error', () => {
+      setError(`Failed to stream "${track.title ?? track.identifier}"`)
+      setLoadingTrackId((curr) => (curr === key ? null : curr))
+      setPlayingTrackId(null)
+    })
+    audioRef.current = audio
+    audio
+      .play()
+      .then(() => {
+        setLoadingTrackId((curr) => (curr === key ? null : curr))
+        setPlayingTrackId(key)
+      })
+      .catch((err) => {
+        setLoadingTrackId((curr) => (curr === key ? null : curr))
+        setError(err instanceof Error ? err.message : String(err))
+      })
+  }
+
+  const togglePlaySingle = () => {
+    if (!singlePreview) return
+    if (playingSingle) {
+      audioRef.current?.pause()
+      setPlayingSingle(false)
+      return
     }
-    audioRef.current.play().then(() => setPlaying(true)).catch((err) => setError(String(err)))
+    stopAudio()
+    setLoadingSingle(true)
+    // Local cache file — Studio exposes it via /api/asset.
+    const url = `/api/asset?path=${encodeURIComponent(singlePreview.path)}`
+    const audio = new Audio(url)
+    audio.addEventListener('ended', () => setPlayingSingle(false))
+    audio.addEventListener('error', () => {
+      setLoadingSingle(false)
+      setPlayingSingle(false)
+    })
+    audioRef.current = audio
+    audio
+      .play()
+      .then(() => {
+        setLoadingSingle(false)
+        setPlayingSingle(true)
+      })
+      .catch((err) => {
+        setLoadingSingle(false)
+        setError(err instanceof Error ? err.message : String(err))
+      })
+  }
+
+  const applyArchiveTrack = async () => {
+    if (!selectedTrack) return
+    setApplying(true)
+    setError(null)
+    try {
+      const res = await fetch('/api/search/music/fetch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          identifier: selectedTrack.identifier,
+          fileName: selectedTrack.fileName,
+          title: selectedTrack.title,
+          creator: selectedTrack.creator,
+          durationSec: selectedTrack.durationSec,
+        }),
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      const body = (await res.json()) as { asset: AssetRef }
+      stopAudio()
+      onSelect(body.asset)
+      setOpen(false)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setApplying(false)
+    }
   }
 
   return (
@@ -106,14 +272,16 @@ export function MusicPicker({
         setOpen(o)
         if (!o) {
           stopAudio()
-          setPreview(null)
+          setTracks([])
+          setSelectedTrack(null)
+          setSinglePreview(null)
           setError(null)
           setMode('search')
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Music className="size-5" />
@@ -121,7 +289,7 @@ export function MusicPicker({
           </DialogTitle>
           <DialogDescription>
             {mode === 'search'
-              ? 'Internet Archive / Pixabay — picks the track closest to the target duration.'
+              ? `Internet Archive / Pixabay — prefers tracks ≥ ${duration | 0}s so the loop seam stays inaudible.`
               : 'Drop an MP3, WAV, OGG, AAC, or M4A. Stored under data/cache/uploads/.'}
           </DialogDescription>
         </DialogHeader>
@@ -154,111 +322,127 @@ export function MusicPicker({
               hint="MP3 / WAV / OGG / AAC / M4A · up to 50 MB"
               onUploaded={(asset) => {
                 stopAudio()
-                setPreview(asset)
+                setSinglePreview(asset)
                 setError(null)
               }}
             />
-            {preview ? (
-              <div className="flex items-center gap-3 rounded-md border p-3">
-                <Button variant="outline" size="icon" onClick={togglePlay}>
-                  {playing ? <Pause /> : <Play />}
-                </Button>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium">
-                    {preview.source.attribution ?? preview.source.id ?? 'Track'}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    Local upload · {preview.source.provider}
-                  </div>
-                </div>
-              </div>
+            {singlePreview ? (
+              <SingleTrackCard
+                asset={singlePreview}
+                playing={playingSingle}
+                loading={loadingSingle}
+                onToggle={togglePlaySingle}
+                provider="local"
+              />
             ) : null}
             {error && <p className="text-sm text-destructive">{error}</p>}
           </div>
         ) : (
-        <div className="space-y-4">
-          <div className="grid grid-cols-[1fr_140px_auto] gap-2">
-            <div>
-              <Label htmlFor="music-mood">Mood</Label>
-              <Input
-                id="music-mood"
-                className="mt-1"
-                value={mood}
-                onChange={(e) => setMood(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') runSearch()
-                }}
-              />
-            </div>
-            <div>
-              <Label htmlFor="music-duration">Target (s)</Label>
-              <Input
-                id="music-duration"
-                className="mt-1"
-                type="number"
-                min={5}
-                max={300}
-                value={duration}
-                onChange={(e) => {
-                  const v = Number.parseFloat(e.target.value)
-                  if (Number.isFinite(v) && v > 0) setDuration(v)
-                }}
-              />
-            </div>
-            <Button onClick={runSearch} disabled={loading || !mood.trim()} className="self-end">
-              {loading ? <Loader2 className="animate-spin" /> : <Search />}
-              Find
-            </Button>
-          </div>
-
-          <div className="flex gap-2 text-sm">
-            <Label className="self-center">Source</Label>
-            {(['archive', 'pixabay'] as const).map((p) => (
-              <button
-                key={p}
-                onClick={() => setProvider(p)}
-                className={cn(
-                  'rounded-md border px-3 py-1 text-xs uppercase tracking-wide',
-                  p === provider
-                    ? 'border-primary bg-primary/10 text-foreground'
-                    : 'border-transparent text-muted-foreground hover:bg-secondary'
-                )}
-              >
-                {p === 'archive' ? 'archive.org' : p}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex flex-wrap gap-1">
-            {MOODS.map((m) => (
-              <button
-                key={m}
-                onClick={() => setMood(m)}
-                className="rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-secondary"
-              >
-                {m}
-              </button>
-            ))}
-          </div>
-
-          {error && <p className="text-sm text-destructive">{error}</p>}
-
-          {preview ? (
-            <div className="flex items-center gap-3 rounded-md border p-3">
-              <Button variant="outline" size="icon" onClick={togglePlay}>
-                {playing ? <Pause /> : <Play />}
+          <div className="space-y-4">
+            <div className="grid grid-cols-[1fr_140px_auto] gap-2">
+              <div>
+                <Label htmlFor="music-mood">Mood</Label>
+                <Input
+                  id="music-mood"
+                  className="mt-1"
+                  value={mood}
+                  onChange={(e) => setMood(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') runSearch()
+                  }}
+                />
+              </div>
+              <div>
+                <Label htmlFor="music-duration">Target (s)</Label>
+                <Input
+                  id="music-duration"
+                  className="mt-1"
+                  type="number"
+                  min={5}
+                  max={300}
+                  value={duration}
+                  onChange={(e) => {
+                    const v = Number.parseFloat(e.target.value)
+                    if (Number.isFinite(v) && v > 0) setDuration(v)
+                  }}
+                />
+              </div>
+              <Button onClick={runSearch} disabled={loading || !mood.trim()} className="self-end">
+                {loading ? <Loader2 className="animate-spin" /> : <Search />}
+                Find
               </Button>
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-sm font-medium">
-                  {preview.source.attribution ?? preview.source.id ?? 'Track'}
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  {preview.durationSec ? `${preview.durationSec.toFixed(0)}s` : 'unknown duration'} · {provider}
+            </div>
+
+            <div className="flex gap-2 text-sm">
+              <Label className="self-center">Source</Label>
+              {(['archive', 'pixabay'] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setProvider(p)}
+                  className={cn(
+                    'rounded-md border px-3 py-1 text-xs uppercase tracking-wide',
+                    p === provider
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-transparent text-muted-foreground hover:bg-secondary'
+                  )}
+                >
+                  {p === 'archive' ? 'archive.org' : p}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-1">
+              {MOODS.map((m) => (
+                <button
+                  key={m}
+                  onClick={() => setMood(m)}
+                  className="rounded-full border px-3 py-1 text-xs text-muted-foreground hover:bg-secondary"
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+
+            {error && <p className="text-sm text-destructive">{error}</p>}
+
+            {/* Archive list view */}
+            {provider === 'archive' && tracks.length > 0 ? (
+              <div className="space-y-1.5">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {tracks.length} candidates — click ▶ to audition, then highlight one and Apply.
+                  Green check = covers the target duration; no loop seam needed.
+                </p>
+                <div className="max-h-[320px] space-y-1 overflow-y-auto pr-1">
+                  {tracks.map((track) => {
+                    const key = trackKey(track)
+                    return (
+                      <TrackRow
+                        key={key}
+                        track={track}
+                        selected={selectedTrack ? trackKey(selectedTrack) === key : false}
+                        playing={playingTrackId === key}
+                        loading={loadingTrackId === key}
+                        target={duration}
+                        onSelect={() => setSelectedTrack(track)}
+                        onToggle={() => togglePlayTrack(track)}
+                      />
+                    )
+                  })}
                 </div>
               </div>
-            </div>
-          ) : null}
-        </div>
+            ) : null}
+
+            {/* Pixabay single-preview view */}
+            {provider === 'pixabay' && singlePreview ? (
+              <SingleTrackCard
+                asset={singlePreview}
+                playing={playingSingle}
+                loading={loadingSingle}
+                onToggle={togglePlaySingle}
+                provider="pixabay"
+              />
+            ) : null}
+          </div>
         )}
 
         <DialogFooter>
@@ -271,20 +455,158 @@ export function MusicPicker({
           >
             Cancel
           </Button>
-          <Button
-            disabled={!preview}
-            onClick={() => {
-              if (preview) {
-                stopAudio()
-                onSelect(preview)
-                setOpen(false)
-              }
-            }}
-          >
-            Use this track
-          </Button>
+          {/* Archive flow → fetch the selected track to cache before
+              calling onSelect. Pixabay / Upload already produced an
+              AssetRef, so commit it directly. */}
+          {mode === 'search' && provider === 'archive' ? (
+            <Button disabled={!selectedTrack || applying} onClick={applyArchiveTrack}>
+              {applying ? <Loader2 className="animate-spin" /> : null}
+              Use this track
+            </Button>
+          ) : (
+            <Button
+              disabled={!singlePreview}
+              onClick={() => {
+                if (singlePreview) {
+                  stopAudio()
+                  onSelect(singlePreview)
+                  setOpen(false)
+                }
+              }}
+            >
+              Use this track
+            </Button>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+function TrackRow({
+  track,
+  selected,
+  playing,
+  loading,
+  target,
+  onSelect,
+  onToggle,
+}: {
+  track: TrackCandidate
+  selected: boolean
+  playing: boolean
+  loading: boolean
+  target: number
+  onSelect: () => void
+  onToggle: () => void
+}) {
+  const dur = track.durationSec ?? 0
+  const longEnough = dur >= target
+  // Row is a focusable div (NOT a button) so the Play <Button> nested
+  // inside is valid HTML. Buttons-inside-buttons render in Chrome but
+  // their click delegation is non-deterministic — Play would trigger
+  // both `onToggle` and the row's `onSelect`, which made the audition
+  // never start.
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
+      className={cn(
+        'flex w-full cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        selected
+          ? 'border-primary bg-primary/10'
+          : 'border-border hover:bg-secondary/40'
+      )}
+    >
+      <Button
+        variant="outline"
+        size="icon"
+        onClick={(e) => {
+          e.stopPropagation()
+          onToggle()
+        }}
+        disabled={loading}
+        title={
+          loading
+            ? 'Buffering audio…'
+            : playing
+              ? 'Pause audition'
+              : 'Audition this track'
+        }
+      >
+        {loading ? (
+          <Loader2 className="animate-spin" />
+        ) : playing ? (
+          <Pause />
+        ) : (
+          <Play />
+        )}
+      </Button>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">
+          {prettyFileName(track.fileName) || track.title || track.identifier}
+        </div>
+        <div className="truncate text-xs text-muted-foreground">
+          {track.creator ?? 'Unknown artist'}
+          {track.title && prettyFileName(track.fileName)
+            ? ` · ${track.title}`
+            : ''}
+        </div>
+      </div>
+      <div
+        className={cn(
+          'flex items-center gap-1 rounded-md border px-2 py-0.5 text-[10px] uppercase tracking-wide',
+          longEnough
+            ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+            : 'border-border text-muted-foreground'
+        )}
+        title={
+          longEnough
+            ? `Covers the full ${target | 0}s — no loop seam`
+            : `Only ${dur | 0}s — will loop to fill ${target | 0}s`
+        }
+      >
+        {longEnough ? <Check className="size-3" /> : <Clock className="size-3" />}
+        {dur ? `${dur.toFixed(0)}s` : '?'}
+      </div>
+    </div>
+  )
+}
+
+function SingleTrackCard({
+  asset,
+  playing,
+  loading,
+  onToggle,
+  provider,
+}: {
+  asset: AssetRef
+  playing: boolean
+  loading: boolean
+  onToggle: () => void
+  provider: string
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-md border p-3">
+      <Button variant="outline" size="icon" onClick={onToggle} disabled={loading}>
+        {loading ? <Loader2 className="animate-spin" /> : playing ? <Pause /> : <Play />}
+      </Button>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-medium">
+          {asset.source.attribution ?? asset.source.id ?? 'Track'}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {asset.durationSec ? `${asset.durationSec.toFixed(0)}s` : 'unknown duration'} ·{' '}
+          {provider}
+        </div>
+      </div>
+    </div>
   )
 }
