@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 
 const STORAGE_KEY = 'news-tok.inspector-width'
 const DEFAULT_PX = 320
@@ -22,52 +22,44 @@ const MAX_PX = 640
  * from localStorage on mount so the server-rendered markup matches
  * the first client render.
  */
-/**
- * Read the persisted width synchronously. Returns DEFAULT_PX on the
- * server (no `window`) and on cold clients with nothing in storage.
- */
-function readStoredWidth(): number {
-  if (typeof window === 'undefined') return DEFAULT_PX
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY)
-    if (!raw) return DEFAULT_PX
-    const parsed = Number.parseInt(raw, 10)
-    return Number.isFinite(parsed) ? clamp(parsed) : DEFAULT_PX
-  } catch {
-    return DEFAULT_PX
-  }
-}
-
 export function useResizableInspector(): {
   width: number
   isResizing: boolean
   beginResize: (startEvent: React.MouseEvent) => void
 } {
-  // SSR + first client hydrate both run with DEFAULT_PX so the
-  // server-rendered HTML and the initial client tree match (no
-  // hydration warning). Lazy useState initializer is NOT enough
-  // here — Next.js reuses the SSR-pinned initial state when
-  // hydrating the client tree.
   const [width, setWidth] = useState<number>(DEFAULT_PX)
   const [isResizing, setIsResizing] = useState(false)
+  // Block the persist effect until we've finished reading from
+  // localStorage — otherwise the first mount writes DEFAULT_PX over
+  // the user's saved value before the hydrate effect's setWidth() has
+  // landed.
   const [hydrated, setHydrated] = useState(false)
 
-  // useLayoutEffect commits the saved width BEFORE the browser
-  // paints the hydrated tree — so the user never sees the 320px
-  // flash that an ordinary useEffect would let through. Falls back
-  // to plain useEffect on the server where useLayoutEffect logs a
-  // warning (this hook is client-only, but Next.js may still
-  // invoke it during preview SSR).
-  const useIsoEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect
-  useIsoEffect(() => {
-    const stored = readStoredWidth()
-    if (stored !== DEFAULT_PX) setWidth(stored)
-    setHydrated(true)
+  // Hydrate from localStorage on mount. Done in useEffect so the
+  // SSR / first-client renders agree on DEFAULT_PX.
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      setHydrated(true)
+      return
+    }
+    try {
+      const raw = window.localStorage.getItem(STORAGE_KEY)
+      if (raw) {
+        const parsed = Number.parseInt(raw, 10)
+        if (Number.isFinite(parsed)) {
+          setWidth(clamp(parsed))
+        }
+      }
+    } catch {
+      // localStorage disabled (private browsing, quotas, etc.) — fall
+      // through to default; nothing to surface to the user.
+    } finally {
+      setHydrated(true)
+    }
   }, [])
 
-  // Persist whenever the user finishes a drag. Gated on `hydrated`
-  // so the first commit doesn't write DEFAULT_PX over the saved
-  // value before useLayoutEffect's setWidth lands.
+  // Persist whenever the user finishes a drag. Gated on `hydrated` so
+  // the initial render doesn't clobber the saved value.
   useEffect(() => {
     if (typeof window === 'undefined') return
     if (!hydrated) return
@@ -75,8 +67,7 @@ export function useResizableInspector(): {
     try {
       window.localStorage.setItem(STORAGE_KEY, String(width))
     } catch {
-      // localStorage disabled (private browsing, quota, etc.) — the
-      // session-local state still works; we just won't survive reload.
+      // ignore
     }
   }, [width, isResizing, hydrated])
 
