@@ -31,6 +31,18 @@ export type ProjectSummary = {
    * full storyboard to the client.
    */
   searchHaystack: string
+  /**
+   * Short blurb shown under the title on the projects page. Built from
+   * the first 1-2 keypoint segments (or title segment if no keypoints)
+   * up to ~280 chars. Mimics how YupClip-style project lists surface
+   * what each video is actually about.
+   */
+  description: string
+  /** Absolute path to the default output mp4 (`output.mp4` or the
+   *  first variant's `output-<id>.mp4`), or undefined if nothing has
+   *  rendered yet. Used by the Studio projects page to embed an inline
+   *  <video> preview via /api/asset. */
+  outputPath?: string
   createdAt: string
   updatedAt: string
 }
@@ -53,11 +65,30 @@ async function scanOutputs(projectId: string): Promise<string[]> {
   }
 }
 
+function buildDescription(project: Project): string {
+  // Prefer keypoint segments — those carry the article's actual beats.
+  // Fall back to the title segment, then to anything available. Cap at
+  // ~280 chars so the projects-page card doesn't grow unbounded.
+  const keypoints = project.segments
+    .filter((s) => s.scene === 'keypoint' || s.scene === 'title')
+    .slice(0, 2)
+    .map((s) => s.text.trim())
+    .filter(Boolean)
+  const text = keypoints.length > 0 ? keypoints.join(' ') : (project.segments[0]?.text ?? '')
+  if (text.length <= 280) return text
+  return text.slice(0, 277).trimEnd() + '...'
+}
+
 async function summarize(project: Project): Promise<ProjectSummary> {
   const outputVariantIds = await scanOutputs(project.id)
   const declaredVariantIds = (project.variants ?? []).map((v) => v.id)
-  const legacyOutput = existsSync(resolve(projectDir(project.id), 'output.mp4'))
+  const legacyPath = resolve(projectDir(project.id), 'output.mp4')
+  const legacyOutput = existsSync(legacyPath)
   const haystackParts = [project.title, ...project.segments.map((s) => s.text)]
+  const variantPath = outputVariantIds[0]
+    ? resolve(projectDir(project.id), `output-${outputVariantIds[0]}.mp4`)
+    : undefined
+  const outputPath = legacyOutput ? legacyPath : variantPath
   return {
     projectId: project.id,
     title: project.title,
@@ -68,6 +99,8 @@ async function summarize(project: Project): Promise<ProjectSummary> {
     outputVariantIds,
     declaredVariantIds,
     searchHaystack: haystackParts.join(' \n ').toLowerCase(),
+    description: buildDescription(project),
+    outputPath,
     createdAt: project.createdAt,
     updatedAt: project.updatedAt,
   }
