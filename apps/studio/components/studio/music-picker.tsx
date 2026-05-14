@@ -37,6 +37,38 @@ type TrackCandidate = {
   licenseurl?: string
 }
 
+/**
+ * Stable key for a single audio file. `identifier` alone is NOT unique:
+ * one archive.org item often contains many mp3s (intro / loop / 30s /
+ * 60s variants), so all 8 candidates from the same album share the
+ * identifier. Pair it with the fileName to disambiguate — otherwise
+ * clicking Play on one row would flip every same-identifier row's icon
+ * to Pause, and selecting one would highlight all of its siblings.
+ */
+function trackKey(track: Pick<TrackCandidate, 'identifier' | 'fileName'>): string {
+  return `${track.identifier}::${track.fileName}`
+}
+
+/**
+ * Turn an archive.org filename into something readable in a list row.
+ * Strips the .mp3 extension, decodes %20 spaces, normalises underscores,
+ * and trims overly long names so the row doesn't push the duration
+ * badge off-screen. Returns an empty string for hash-only / opaque
+ * names so callers can fall back to the item title.
+ */
+function prettyFileName(fileName: string): string {
+  const stem = fileName.replace(/\.[a-z0-9]+$/i, '')
+  const cleaned = stem
+    .replace(/_/g, ' ')
+    .replace(/%20/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  // Drop names that look like hashes / opaque ids (no letters or only
+  // digit-heavy) so we don't show "01_track_03_final_v2" as the only label.
+  if (!/[a-z]{3}/i.test(cleaned)) return ''
+  return cleaned.length > 60 ? cleaned.slice(0, 57) + '…' : cleaned
+}
+
 export function MusicPicker({
   defaultMood,
   defaultDurationSec,
@@ -129,7 +161,8 @@ export function MusicPicker({
   }
 
   const togglePlayTrack = (track: TrackCandidate) => {
-    const isSame = playingTrackId === track.identifier
+    const key = trackKey(track)
+    const isSame = playingTrackId === key
     if (isSame) {
       audioRef.current?.pause()
       setPlayingTrackId(null)
@@ -146,7 +179,7 @@ export function MusicPicker({
       setPlayingTrackId(null)
     })
     audioRef.current = audio
-    audio.play().then(() => setPlayingTrackId(track.identifier)).catch((err) =>
+    audio.play().then(() => setPlayingTrackId(key)).catch((err) =>
       setError(err instanceof Error ? err.message : String(err))
     )
   }
@@ -347,17 +380,20 @@ export function MusicPicker({
                   Green check = covers the target duration; no loop seam needed.
                 </p>
                 <div className="max-h-[320px] space-y-1 overflow-y-auto pr-1">
-                  {tracks.map((track) => (
-                    <TrackRow
-                      key={track.identifier}
-                      track={track}
-                      selected={selectedTrack?.identifier === track.identifier}
-                      playing={playingTrackId === track.identifier}
-                      target={duration}
-                      onSelect={() => setSelectedTrack(track)}
-                      onToggle={() => togglePlayTrack(track)}
-                    />
-                  ))}
+                  {tracks.map((track) => {
+                    const key = trackKey(track)
+                    return (
+                      <TrackRow
+                        key={key}
+                        track={track}
+                        selected={selectedTrack ? trackKey(selectedTrack) === key : false}
+                        playing={playingTrackId === key}
+                        target={duration}
+                        onSelect={() => setSelectedTrack(track)}
+                        onToggle={() => togglePlayTrack(track)}
+                      />
+                    )
+                  })}
                 </div>
               </div>
             ) : null}
@@ -465,10 +501,13 @@ function TrackRow({
       </Button>
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-medium">
-          {track.title ?? track.identifier}
+          {prettyFileName(track.fileName) || track.title || track.identifier}
         </div>
         <div className="truncate text-xs text-muted-foreground">
           {track.creator ?? 'Unknown artist'}
+          {track.title && prettyFileName(track.fileName)
+            ? ` · ${track.title}`
+            : ''}
         </div>
       </div>
       <div
