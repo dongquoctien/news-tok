@@ -21,6 +21,7 @@ export const AssetRefSchema = z.object({
       'pixabay',
       'unsplash',
       'openverse',
+      'wikimedia',
       'archive',
       'jamendo',
       'freesound',

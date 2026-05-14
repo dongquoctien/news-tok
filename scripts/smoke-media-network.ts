@@ -6,7 +6,7 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { resolve } from 'node:path'
-import { archive, pexels, pixabay, unsplash } from '@news-tok/media'
+import { archive, openverse, pexels, pixabay, unsplash, wikimedia } from '@news-tok/media'
 
 function loadDotEnv() {
   const path = resolve(process.cwd(), '.env')
@@ -65,6 +65,34 @@ async function main() {
     const music = await archive.searchMusic({ mood: 'ambient', durationSec: 60 })
     const size = statSync(music.path).size
     return { path: music.path, sec: music.durationSec, kb: (size / 1024) | 0, by: music.source.attribution }
+  })
+
+  // Wikimedia + Openverse need no key — exercise both with a proper
+  // noun so we catch regressions in their JSON shape (the entity that
+  // most differentiates them from Pexels/Unsplash).
+  await tryRun('wikimedia.searchImage("Eiffel Tower", landscape)', async () => {
+    const img = await wikimedia.searchImage({
+      query: 'Eiffel Tower',
+      orientation: 'landscape',
+    })
+    const size = statSync(img.path).size
+    return {
+      path: img.path,
+      dim: `${img.width}x${img.height}`,
+      kb: (size / 1024) | 0,
+      by: img.source.attribution,
+    }
+  })
+
+  await tryRun('openverse.searchImage("Hoang Sa")', async () => {
+    const img = await openverse.searchImage({ query: 'Hoang Sa' })
+    const size = statSync(img.path).size
+    return {
+      path: img.path,
+      dim: `${img.width}x${img.height}`,
+      kb: (size / 1024) | 0,
+      by: img.source.attribution,
+    }
   })
 
   console.log('[media-net] done')
