@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ProjectActions } from '@/components/studio/project-actions'
+import { ProjectVideoCard } from '@/components/studio/project-video-card'
 import { assetUrl } from '@/lib/asset-url'
 import { cn } from '@/lib/utils'
 
@@ -248,36 +249,16 @@ function ProjectRow({
       <div className="flex flex-col gap-6 p-4 md:flex-row md:p-6">
         {/* Video lane */}
         <div className={cn('shrink-0', videoWidthClass(project.aspect))}>
-          {videoSrc ? (
-            <video
-              src={videoSrc}
-              controls
-              preload="metadata"
-              className="block w-full rounded-md bg-black"
-              style={{
-                aspectRatio:
-                  project.aspect === '16:9'
-                    ? '16 / 9'
-                    : project.aspect === '1:1'
-                      ? '1 / 1'
-                      : '9 / 16',
-              }}
-            />
-          ) : (
-            <div
-              className="flex items-center justify-center rounded-md border border-dashed bg-muted/40 text-xs text-muted-foreground"
-              style={{
-                aspectRatio:
-                  project.aspect === '16:9'
-                    ? '16 / 9'
-                    : project.aspect === '1:1'
-                      ? '1 / 1'
-                      : '9 / 16',
-              }}
-            >
-              Not rendered yet
-            </div>
-          )}
+          <ProjectVideoCard
+            projectId={project.projectId}
+            videoSrc={videoSrc}
+            thumbnailSrc={
+              isRendered(project)
+                ? `/api/projects/${encodeURIComponent(project.projectId)}/downloads/thumbnail`
+                : null
+            }
+            aspect={project.aspect}
+          />
         </div>
 
         {/* Meta lane */}
