@@ -591,7 +591,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr_320px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr_360px]">
         <aside className="overflow-y-auto border-r p-3">
           {project.segments.length === 0 ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">
@@ -811,6 +811,19 @@ function SegmentEditor({
 }) {
   const [synthStatus, setSynthStatus] = useState<'idle' | 'running' | 'error'>('idle')
   const [synthError, setSynthError] = useState<string | null>(null)
+  /**
+   * Right-aside inspector is split into 4 tabs so users aren't scrolling
+   * through 11 stacked sections to find a single control. The grouping
+   * is concern-driven:
+   *   - Content: text, narration timing, scene kind, voice, speed, image
+   *   - Style: layout (+ slots), text style, font, colour
+   *   - Audio: SFX overrides
+   *   - Variants: per-variant override + render of that segment
+   * "Content" is the default open tab because narration / image are the
+   * fields users touch on every segment.
+   */
+  type InspectorTab = 'content' | 'style' | 'audio' | 'variants'
+  const [tab, setTab] = useState<InspectorTab>('content')
 
   const resynth = async () => {
     setSynthStatus('running')
@@ -904,8 +917,44 @@ function SegmentEditor({
     ? colorChannels.filter((c) => typeof resolvedColor[c] === 'string')
     : []
 
+  // Tab bar config — single source of truth for both the rendered
+  // strip and the conditional section wrappers below.
+  const tabs: { id: InspectorTab; label: string }[] = [
+    { id: 'content', label: 'Content' },
+    { id: 'style', label: 'Style' },
+    { id: 'audio', label: 'Audio' },
+    { id: 'variants', label: 'Variants' },
+  ]
+
   return (
     <div className="space-y-4">
+      {/* Tab bar — pinned at top of inspector so the user always knows
+          which slice of segment state they're editing. Tab labels stay
+          short (one word each) so the strip fits comfortably in the
+          ~280px aside without wrapping. */}
+      <div className="flex border-b text-[11px] uppercase tracking-wide">
+        {tabs.map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setTab(t.id)}
+            className={cn(
+              'relative flex-1 px-2 py-2 font-semibold transition-colors',
+              tab === t.id
+                ? 'bg-primary/15 text-primary'
+                : 'text-muted-foreground hover:bg-secondary/40 hover:text-foreground'
+            )}
+          >
+            {t.label}
+            {tab === t.id ? (
+              <span className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-primary" />
+            ) : null}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'content' ? (
+        <>
       <div>
         <Label htmlFor="segment-text">Narration</Label>
         <Textarea
@@ -1040,7 +1089,11 @@ function SegmentEditor({
           }}
         />
       </div>
+        </>
+      ) : null}
 
+      {tab === 'style' ? (
+        <>
       <div>
         <Label>Layout</Label>
         <div className="mt-1 space-y-2">
@@ -1242,7 +1295,11 @@ function SegmentEditor({
           </p>
         </div>
       </div>
+        </>
+      ) : null}
 
+      {tab === 'audio' ? (
+        <>
       <div>
         <Label>Sound effect</Label>
         <div className="mt-1 space-y-2">
@@ -1314,7 +1371,10 @@ function SegmentEditor({
           Segment override wins over the resolved style. Adjust master volume in Settings.
         </p>
       </div>
+        </>
+      ) : null}
 
+      {tab === 'content' ? (
       <div>
         <Label>Background image</Label>
         <div className="mt-1 space-y-2">
@@ -1345,6 +1405,58 @@ function SegmentEditor({
           />
         </div>
       </div>
+      ) : null}
+
+      {tab === 'variants' ? (
+        <div className="space-y-2">
+          {variants && variants.length > 0 ? (
+            <>
+              <p className="text-[10px] text-muted-foreground">
+                Each variant declares its own text-style mapping per scene
+                kind. Pick a variant to preview that mix in the player;
+                use the variant-scoped pickers in the Style tab to pin a
+                style on this segment for one variant only.
+              </p>
+              <ul className="space-y-1.5">
+                {variants.map((v) => (
+                  <li
+                    key={v.id}
+                    className={cn(
+                      'rounded-md border px-3 py-2 text-xs',
+                      activeVariantId === v.id
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border'
+                    )}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium">
+                        {v.id}
+                        {v.label ? ` · ${v.label}` : ''}
+                      </span>
+                      {activeVariantId === v.id ? (
+                        <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-primary">
+                          Active
+                        </span>
+                      ) : null}
+                    </div>
+                    <p className="mt-1 text-[10px] text-muted-foreground">
+                      {Object.entries(v.textStyleBySceneKind ?? {})
+                        .map(([k, v]) => `${k}=${v}`)
+                        .join(' · ') || 'No scene-kind mapping declared.'}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              No variants declared. Add variants via Claude orchestrator
+              or by editing the storyboard directly to render multiple
+              looks of the same project.
+            </p>
+          )}
+        </div>
+      ) : null}
     </div>
   )
 }

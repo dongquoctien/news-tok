@@ -302,6 +302,13 @@ export function StylePicker({
     segmentRefs: string[]
     variantRefs: Array<{ variantId: string; sceneKind?: string; segmentId?: string }>
   } | null>(null)
+  /** Pre-flight confirmation: show this dialog before the first
+   *  DELETE call, regardless of whether the style is referenced.
+   *  The existing `pendingDeleteForce` flow still fires afterwards
+   *  if the API returns 409 because the style is in use. */
+  const [pendingDeleteConfirm, setPendingDeleteConfirm] = useState<TextStyle | null>(
+    null
+  )
 
   const fetchStyles = (signal?: AbortSignal) => {
     const url = projectId
@@ -507,7 +514,7 @@ export function StylePicker({
                         aspect={aspect}
                         onEdited={() => refresh()}
                         onUserStyleSaved={onUserStyleSaved}
-                        onDelete={() => deleteUserStyle(s.id)}
+                        onDelete={() => setPendingDeleteConfirm(s)}
                       />
                     </div>
                   ))}
@@ -582,6 +589,30 @@ export function StylePicker({
           </Button>
         </DialogFooter>
       </DialogContent>
+      {/* Pre-flight confirm — fires for every Delete click regardless
+          of whether the style is in use. If the API later reports 409
+          (style is referenced), the secondary `pendingDeleteForce`
+          dialog below adds a second confirm with the impact list. */}
+      <ConfirmDialog
+        open={!!pendingDeleteConfirm}
+        onOpenChange={(o) => (o ? null : setPendingDeleteConfirm(null))}
+        title={`Delete "${pendingDeleteConfirm?.name ?? 'style'}"?`}
+        description={
+          <p>
+            This removes the custom text style from the project. The
+            action can&apos;t be undone — you&apos;ll need to recreate
+            the style from scratch if you want it back.
+          </p>
+        }
+        confirmLabel="Delete style"
+        destructive
+        onConfirm={async () => {
+          const target = pendingDeleteConfirm
+          if (!target) return
+          setPendingDeleteConfirm(null)
+          await deleteUserStyle(target.id)
+        }}
+      />
       <ConfirmDialog
         open={!!pendingDeleteForce}
         onOpenChange={(o) => (o ? null : setPendingDeleteForce(null))}
