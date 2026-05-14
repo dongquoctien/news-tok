@@ -8,6 +8,7 @@ import { useEntranceSpring } from '../effects/timing.js'
 import { KenBurns } from '../effects/KenBurns.js'
 import { TextBlock } from '../effects/text/TextBlock.js'
 import { useResponsive } from './sizing.js'
+import { resolveLayout } from '../layouts/registry.js'
 
 const CLASSIC = findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
@@ -23,6 +24,29 @@ export const TitleCard = ({
   const bg = segment.visuals.background
   const narration = segment.audio?.narration
   const style = textStyle ?? CLASSIC
+
+  // When the segment opts into a layout, hand off the entire render
+  // to that layout component. The scene wrapper's KenBurns + badge
+  // belong to the legacy "scene-owns-everything" path and don't
+  // apply when a layout is in charge — the layout owns its own
+  // chrome.
+  if (segment.layoutId) {
+    const Layout = resolveLayout(segment.layoutId)
+    return (
+      <Layout
+        text={segment.text}
+        eyebrow={segment.eyebrow}
+        chips={segment.chips}
+        fileId={segment.fileId}
+        media={segment.visuals.background}
+        textStyle={style}
+        fontOverride={fontOverride}
+        colorOverride={colorOverride}
+        segment={segment}
+        project={project}
+      />
+    )
+  }
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>

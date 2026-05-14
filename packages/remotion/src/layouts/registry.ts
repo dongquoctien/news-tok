@@ -1,15 +1,29 @@
 import type { LayoutComponent } from './types.js'
+import { Card } from './Card.js'
+import { DossierCard } from './DossierCard.js'
 import { FullBleed } from './FullBleed.js'
+import { MagazineCover } from './MagazineCover.js'
+import { SplitVertical } from './SplitVertical.js'
+import { StatHero } from './StatHero.js'
 
 /**
  * Built-in layouts shipped in the source code. The id namespace matches
  * `LayoutMetaSchema.id`'s regex (`/^(user|builtin)-[a-z0-9-]+$/`).
  *
- * PR-A ships only `builtin-fullBleed` — the rest land in PR-B once the
- * foundation is proven backward-compatible.
+ * PR-B adds 5 layouts beyond `builtin-fullBleed`. Each carries its own
+ * visual identity (media-led card, top-bottom split, magazine cover,
+ * type-hero stat callout, dossier folder with chips). The remaining
+ * P0 layouts from the plan (polaroid, browserWindow, phoneMockup,
+ * neonFrame, gradientMeshHero) land in PR-D once the pattern is
+ * validated.
  */
 const BUILT_IN_LAYOUTS: Record<string, LayoutComponent> = {
   'builtin-fullBleed': FullBleed,
+  'builtin-card': Card,
+  'builtin-splitVertical': SplitVertical,
+  'builtin-magazineCover': MagazineCover,
+  'builtin-statHero': StatHero,
+  'builtin-dossierCard': DossierCard,
 }
 
 /**
