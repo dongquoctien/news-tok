@@ -38,6 +38,8 @@ import { VariantsPanel } from '@/components/studio/variants-panel'
 import { VoicePicker } from '@/components/studio/voice-picker'
 import { ImagePicker } from '@/components/studio/image-picker'
 import { MusicPicker } from '@/components/studio/music-picker'
+import { LayoutPicker } from '@/components/studio/layout-picker'
+import { layoutNeedsSlot } from '@/lib/layouts-catalog'
 import { StylePicker } from '@/components/studio/style-picker'
 import { FontPicker } from '@/components/studio/font-picker'
 import { ColorPicker } from '@/components/studio/color-picker'
@@ -1038,6 +1040,96 @@ function SegmentEditor({
           }}
         />
       </div>
+
+      <div>
+        <Label>Layout</Label>
+        <div className="mt-1 space-y-2">
+          <div className="flex items-center gap-2">
+            <code className="flex-1 truncate rounded-md border bg-muted px-2 py-1.5 font-mono text-xs">
+              {segment.layoutId ?? 'scene default'}
+            </code>
+            <LayoutPicker
+              currentId={segment.layoutId}
+              onApply={(id) => onChange({ layoutId: id })}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Layers />
+                  Change
+                </Button>
+              }
+            />
+          </div>
+          <p className="text-[10px] text-muted-foreground">
+            Layout decides where the headline, eyebrow, chips, and media
+            sit. Without one, the scene falls back to its built-in
+            full-bleed rendering.
+          </p>
+        </div>
+      </div>
+
+      {layoutNeedsSlot(segment.layoutId, 'eyebrow') ? (
+        <div>
+          <Label htmlFor={`eyebrow-${segment.id}`}>Eyebrow</Label>
+          <Input
+            id={`eyebrow-${segment.id}`}
+            className="mt-1"
+            value={segment.eyebrow ?? ''}
+            maxLength={40}
+            placeholder='e.g. "CASE FILE", "ISSUE 04", "BREAKING"'
+            onChange={(e) =>
+              onChange({ eyebrow: e.target.value || undefined })
+            }
+          />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Short uppercase label rendered above the headline. Hard-styled
+            by the layout — typography isn't user-controlled in v1.
+          </p>
+        </div>
+      ) : null}
+
+      {layoutNeedsSlot(segment.layoutId, 'chips') ? (
+        <div>
+          <Label htmlFor={`chips-${segment.id}`}>Chips</Label>
+          <Input
+            id={`chips-${segment.id}`}
+            className="mt-1"
+            value={(segment.chips ?? []).join(' · ')}
+            placeholder='e.g. "ARRESTED 2024 · 12 COUNTRIES · $1B LOSS"'
+            onChange={(e) => {
+              // Split on " · " (the same separator we render with) plus
+              // a couple of forgiving alternates so users can paste from
+              // anywhere.
+              const raw = e.target.value
+              const chips = raw
+                .split(/\s*[·•|]\s*/u)
+                .map((s) => s.trim().slice(0, 30))
+                .filter(Boolean)
+                .slice(0, 5)
+              onChange({ chips: chips.length > 0 ? chips : undefined })
+            }}
+          />
+          <p className="mt-1 text-[10px] text-muted-foreground">
+            Up to 5 short pills, separated by " · ". Each capped at 30
+            characters by the schema.
+          </p>
+        </div>
+      ) : null}
+
+      {layoutNeedsSlot(segment.layoutId, 'fileId') ? (
+        <div>
+          <Label htmlFor={`fileId-${segment.id}`}>File ID</Label>
+          <Input
+            id={`fileId-${segment.id}`}
+            className="mt-1"
+            value={segment.fileId ?? ''}
+            maxLength={20}
+            placeholder='e.g. "FILE 07", "VOL. 12"'
+            onChange={(e) =>
+              onChange({ fileId: e.target.value || undefined })
+            }
+          />
+        </div>
+      ) : null}
 
       <div>
         <Label>Text style</Label>
