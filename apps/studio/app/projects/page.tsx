@@ -17,7 +17,7 @@ export default async function ProjectsListPage() {
   const projects = await listProjects()
 
   return (
-    <main className="mx-auto max-w-5xl p-8">
+    <main className="mx-auto max-w-6xl p-8">
       <div className="mb-6 flex items-center justify-between">
         <Link
           href="/"
@@ -28,9 +28,14 @@ export default async function ProjectsListPage() {
         </Link>
         <ThemeToggle />
       </div>
-      <div className="mb-6 flex items-baseline justify-between">
-        <h2 className="text-2xl font-semibold">Projects</h2>
-        <span className="text-sm text-muted-foreground">{projects.length} total</span>
+      <div className="mb-6">
+        <h2 className="text-3xl font-bold tracking-tight">
+          {projects.length} project{projects.length === 1 ? '' : 's'}
+        </h2>
+        <p className="mt-1 text-sm text-muted-foreground">
+          The system will delete videos and projects after 30 days. After your
+          video is finished, please download it.
+        </p>
       </div>
 
       {projects.length === 0 ? (

@@ -3,39 +3,45 @@
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
+  ArrowUpRight,
   CheckCircle2,
-  Film,
-  Layers,
-  Languages,
+  Download,
+  FileText,
+  Image as ImageIcon,
+  Mic,
   Search,
-  Sparkles,
   X,
 } from 'lucide-react'
 import type { ProjectSummary } from '@news-tok/render'
+import { Button } from '@/components/ui/button'
 import {
   Card,
-  CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { ProjectActions } from '@/components/studio/project-actions'
+import { ProjectVideoCard } from '@/components/studio/project-video-card'
+import { assetUrl } from '@/lib/asset-url'
 import { cn } from '@/lib/utils'
 
 type StatusFilter = 'all' | 'rendered' | 'draft'
 type LangFilter = 'all' | 'vi' | 'en'
 type AspectFilter = 'all' | '9:16' | '16:9' | '1:1'
 
-function relativeTime(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime()
-  const min = Math.floor(ms / 60_000)
-  if (min < 1) return 'just now'
-  if (min < 60) return `${min} min ago`
-  const hr = Math.floor(min / 60)
-  if (hr < 24) return `${hr} h ago`
-  const d = Math.floor(hr / 24)
-  return `${d} d ago`
+function formatDate(iso: string): string {
+  const d = new Date(iso)
+  // Format like YupClip: "5/14/2026, 13:04 GMT+7"
+  const date = `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`
+  const time = `${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const offset = -d.getTimezoneOffset() / 60
+  const sign = offset >= 0 ? '+' : ''
+  return `${date}, ${time} GMT${sign}${offset}`
+}
+
+function pad(n: number): string {
+  return String(n).padStart(2, '0')
 }
 
 function isRendered(p: ProjectSummary): boolean {
@@ -83,6 +89,17 @@ function PillGroup<T extends string>({
   )
 }
 
+/**
+ * Width budget for the inline <video> based on the project aspect.
+ * 9:16 portrait gets a narrow column so the rest of the meta has
+ * room to breathe; 16:9 needs a wider lane; 1:1 sits between.
+ */
+function videoWidthClass(aspect: ProjectSummary['aspect']): string {
+  if (aspect === '16:9') return 'w-[360px]'
+  if (aspect === '1:1') return 'w-[280px]'
+  return 'w-[260px]' // 9:16 default
+}
+
 export function ProjectsGrid({ projects }: { projects: ProjectSummary[] }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState<StatusFilter>('all')
@@ -103,7 +120,6 @@ export function ProjectsGrid({ projects }: { projects: ProjectSummary[] }) {
         if (status === 'draft' && isRendered(p)) return false
         if (lang !== 'all' && p.language !== lang) return false
         if (aspect !== 'all' && p.aspect !== aspect) return false
-        // matchesTitle stays around so the card can flag "matched in body".
         void matchesTitle
         return true
       })
@@ -189,70 +205,184 @@ export function ProjectsGrid({ projects }: { projects: ProjectSummary[] }) {
           </CardHeader>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="flex flex-col gap-4">
           {filtered.map(({ project: p, matchesTitle }) => (
-            <Card
-              key={p.projectId}
-              className="group relative h-full transition-colors hover:border-primary/60"
-            >
-              <Link href={`/projects/${p.projectId}`} className="block">
-                <CardHeader>
-                  <CardTitle className="line-clamp-2 break-words pr-20 text-base">
-                    {p.title}
-                  </CardTitle>
-                  <CardDescription className="flex items-center gap-2">
-                    <span>{relativeTime(p.updatedAt)}</span>
-                    {query.trim() !== '' && !matchesTitle ? (
-                      <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
-                        matched in text
-                      </span>
-                    ) : null}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-sm text-muted-foreground">
-                  <span className="inline-flex items-center gap-1">
-                    <Film className="size-4" />
-                    {p.aspect}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Layers className="size-4" />
-                    {p.segmentCount} segs
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Languages className="size-4" />
-                    {p.language}
-                  </span>
-                  {p.outputVariantIds.length > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-400">
-                      <CheckCircle2 className="size-4" />
-                      {p.outputVariantIds.length}
-                      {p.declaredVariantIds.length > 0
-                        ? `/${p.declaredVariantIds.length}`
-                        : ''}{' '}
-                      rendered
-                    </span>
-                  ) : p.hasOutput ? (
-                    <span className="inline-flex items-center gap-1 text-emerald-400">
-                      <CheckCircle2 className="size-4" />
-                      rendered
-                    </span>
-                  ) : p.declaredVariantIds.length > 0 ? (
-                    <span className="inline-flex items-center gap-1 text-muted-foreground/80">
-                      <Sparkles className="size-4" />
-                      {p.declaredVariantIds.length} variants
-                    </span>
-                  ) : (
-                    <span />
-                  )}
-                </CardContent>
-              </Link>
-              <div className="absolute right-3 top-3">
-                <ProjectActions projectId={p.projectId} title={p.title} />
-              </div>
-            </Card>
+            <ProjectRow key={p.projectId} project={p} matchedInTitle={matchesTitle} />
           ))}
         </div>
       )}
     </>
+  )
+}
+
+/**
+ * One row in the projects list. Left = inline <video> playing
+ * `output.mp4` (or the first variant). Right = meta + downloads +
+ * publish placeholder + close X. Aspect drives the video lane width
+ * so the row looks balanced across 9:16 / 16:9 / 1:1.
+ */
+function ProjectRow({
+  project,
+  matchedInTitle,
+}: {
+  project: ProjectSummary
+  matchedInTitle: boolean
+}) {
+  const videoSrc = project.outputPath ? assetUrl(project.outputPath) : null
+
+  return (
+    <Card className="relative overflow-hidden">
+      {/* Top-right action cluster — both buttons live in one absolute
+          group so they share a stacking context and never collide.
+          The meta header below reserves matching right padding so the
+          title can't run underneath them at any title length. */}
+      <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/projects/${project.projectId}`}>
+            <ArrowUpRight />
+            Open in Studio
+          </Link>
+        </Button>
+        <ProjectActions projectId={project.projectId} title={project.title} />
+      </div>
+
+      <div className="flex flex-col gap-6 p-4 md:flex-row md:p-6">
+        {/* Video lane */}
+        <div className={cn('shrink-0', videoWidthClass(project.aspect))}>
+          <ProjectVideoCard
+            projectId={project.projectId}
+            videoSrc={videoSrc}
+            thumbnailSrc={
+              isRendered(project)
+                ? `/api/projects/${encodeURIComponent(project.projectId)}/downloads/thumbnail`
+                : null
+            }
+            aspect={project.aspect}
+          />
+        </div>
+
+        {/* Meta lane */}
+        <div className="flex min-w-0 flex-1 flex-col gap-3">
+          {/* Title gets its own padding-right so it clears the
+              absolute action cluster (Open in Studio + Duplicate +
+              Delete). Description / downloads / publish below run
+              full width because the action cluster sits next to the
+              title vertically, not on top of every line of meta. */}
+          <h3 className="break-words pr-[210px] text-xl font-semibold leading-tight">
+            {project.title}
+          </h3>
+
+          {project.description ? (
+            <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
+              {project.description}
+            </p>
+          ) : null}
+
+          <p className="text-xs text-muted-foreground/80">
+            <span
+              className={cn(
+                'mr-2 inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] uppercase tracking-wide',
+                isRendered(project)
+                  ? 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-300'
+                  : 'bg-muted text-muted-foreground'
+              )}
+            >
+              {isRendered(project) ? (
+                <>
+                  <CheckCircle2 className="size-3" />
+                  Done
+                </>
+              ) : (
+                'Draft'
+              )}
+            </span>
+            {formatDate(project.updatedAt)}
+            {query(matchedInTitle)}
+          </p>
+
+          {isRendered(project) ? (
+            <div>
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Downloads
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <DownloadPill
+                  href={
+                    project.outputPath
+                      ? assetUrl(project.outputPath) ?? '#'
+                      : '#'
+                  }
+                  filename={`${project.projectId}.mp4`}
+                  icon={<Download />}
+                  label="MP4"
+                />
+                <DownloadPill
+                  href={`/api/projects/${encodeURIComponent(project.projectId)}/downloads/thumbnail`}
+                  icon={<ImageIcon />}
+                  label="Thumbnail"
+                />
+                <DownloadPill
+                  href={`/api/projects/${encodeURIComponent(project.projectId)}/downloads/voice`}
+                  icon={<Mic />}
+                  label="Voice"
+                />
+                <DownloadPill
+                  href={`/api/projects/${encodeURIComponent(project.projectId)}/downloads/subtitles`}
+                  icon={<FileText />}
+                  label="Subtitles"
+                />
+              </div>
+            </div>
+          ) : null}
+
+          <div>
+            <div className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Publish to platforms
+            </div>
+            <p className="text-sm text-muted-foreground/80">
+              Connect at least one social platform first.
+            </p>
+          </div>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
+/** Tiny helper: a pill-shaped link that triggers a file download.
+ *  Using `download` plus `target` makes the browser fetch the URL with
+ *  the streaming response Content-Disposition we set server-side. */
+function DownloadPill({
+  href,
+  filename,
+  icon,
+  label,
+}: {
+  href: string
+  filename?: string
+  icon: React.ReactNode
+  label: string
+}) {
+  return (
+    <a
+      href={href}
+      download={filename ?? ''}
+      className="inline-flex items-center gap-1.5 rounded-full border border-input px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-secondary"
+    >
+      {icon}
+      {label}
+    </a>
+  )
+}
+
+/** Pull "matched in text" pill out of the row meta line so the
+ *  template above stays readable. Returns a Fragment, not a string,
+ *  so it can carry markup. */
+function query(matchedInTitle: boolean): React.ReactNode {
+  if (matchedInTitle) return null
+  return (
+    <span className="ml-2 rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-primary">
+      matched in text
+    </span>
   )
 }
