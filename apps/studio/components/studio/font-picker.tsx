@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Type } from 'lucide-react'
+import { Check, Type } from 'lucide-react'
 import { ALLOWED_FONT_IDS } from '@news-tok/shared/text-styles'
 import { Button } from '@/components/ui/button'
 import {
@@ -69,10 +69,19 @@ function FontCard({
       type="button"
       onClick={onSelect}
       className={cn(
-        'group flex h-32 flex-col justify-between overflow-hidden rounded-md border bg-secondary/30 p-3 text-left transition-all hover:bg-secondary/60',
-        selected ? 'border-primary ring-1 ring-primary' : 'border-border'
+        'group relative flex h-32 flex-col justify-between overflow-hidden rounded-md border bg-secondary/30 p-3 text-left transition-all hover:bg-secondary/60',
+        selected
+          ? 'border-primary ring-2 ring-primary/50'
+          : 'border-border'
       )}
     >
+      {/* Check badge mirrors LayoutPicker / StylePicker for a
+          consistent "active pick" affordance across all pickers. */}
+      {selected ? (
+        <div className="pointer-events-none absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+          <Check className="size-3.5" strokeWidth={3} />
+        </div>
+      ) : null}
       <div
         className="flex flex-1 items-center"
         style={{

@@ -1272,6 +1272,10 @@ function SegmentEditor({
               current={resolvedColor}
               activeVariantId={activeVariantId}
               onApply={onApplyColor}
+              resolvedStyle={resolvedStyle ?? null}
+              sampleText={segment.text}
+              aspect={aspect}
+              previewBackground={segment.visuals.background?.path}
               trigger={
                 <Button variant="outline" size="sm">
                   <Palette />
