@@ -429,12 +429,24 @@ function TrackRow({
 }) {
   const dur = track.durationSec ?? 0
   const longEnough = dur >= target
+  // Row is a focusable div (NOT a button) so the Play <Button> nested
+  // inside is valid HTML. Buttons-inside-buttons render in Chrome but
+  // their click delegation is non-deterministic — Play would trigger
+  // both `onToggle` and the row's `onSelect`, which made the audition
+  // never start.
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onSelect}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onSelect()
+        }
+      }}
       className={cn(
-        'flex w-full items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors',
+        'flex w-full cursor-pointer items-center gap-3 rounded-md border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         selected
           ? 'border-primary bg-primary/10'
           : 'border-border hover:bg-secondary/40'
@@ -475,7 +487,7 @@ function TrackRow({
         {longEnough ? <Check className="size-3" /> : <Clock className="size-3" />}
         {dur ? `${dur.toFixed(0)}s` : '?'}
       </div>
-    </button>
+    </div>
   )
 }
 
