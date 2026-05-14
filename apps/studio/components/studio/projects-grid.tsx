@@ -231,10 +231,17 @@ function ProjectRow({
 
   return (
     <Card className="relative overflow-hidden">
-      {/* Top-right close affordance — uses the existing delete action.
-          ProjectActions ships a confirm dialog, so this isn't a
-          single-click destructive button. */}
-      <div className="absolute right-3 top-3 z-10">
+      {/* Top-right action cluster — both buttons live in one absolute
+          group so they share a stacking context and never collide.
+          The meta header below reserves matching right padding so the
+          title can't run underneath them at any title length. */}
+      <div className="absolute right-3 top-3 z-10 flex items-center gap-2">
+        <Button asChild variant="outline" size="sm">
+          <Link href={`/projects/${project.projectId}`}>
+            <ArrowUpRight />
+            Open in Studio
+          </Link>
+        </Button>
         <ProjectActions projectId={project.projectId} title={project.title} />
       </div>
 
@@ -275,17 +282,14 @@ function ProjectRow({
 
         {/* Meta lane */}
         <div className="flex min-w-0 flex-1 flex-col gap-3">
-          <div className="flex flex-wrap items-start justify-between gap-2 pr-10">
-            <h3 className="break-words text-xl font-semibold leading-tight">
-              {project.title}
-            </h3>
-            <Button asChild variant="outline" size="sm">
-              <Link href={`/projects/${project.projectId}`}>
-                <ArrowUpRight />
-                Open in Studio
-              </Link>
-            </Button>
-          </div>
+          {/* Title gets its own padding-right so it clears the
+              absolute action cluster (Open in Studio + Duplicate +
+              Delete). Description / downloads / publish below run
+              full width because the action cluster sits next to the
+              title vertically, not on top of every line of meta. */}
+          <h3 className="break-words pr-[210px] text-xl font-semibold leading-tight">
+            {project.title}
+          </h3>
 
           {project.description ? (
             <p className="line-clamp-3 text-sm leading-relaxed text-muted-foreground">
