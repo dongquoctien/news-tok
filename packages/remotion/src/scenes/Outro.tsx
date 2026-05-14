@@ -8,15 +8,34 @@ import { KenBurns } from '../effects/KenBurns.js'
 import { useEntranceSpring } from '../effects/timing.js'
 import { TextBlock } from '../effects/text/TextBlock.js'
 import { useResponsive } from './sizing.js'
+import { resolveLayout } from '../layouts/registry.js'
 
 const CLASSIC = findTextStyle('cinematic', []) ?? findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
-export const Outro = ({ segment, textStyle, fontOverride, colorOverride }: SceneProps) => {
+export const Outro = ({ segment, project, textStyle, fontOverride, colorOverride }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 12 })
   const r = useResponsive()
   const bg = segment.visuals.background
   const narration = segment.audio?.narration
   const style = textStyle ?? CLASSIC
+
+  if (segment.layoutId) {
+    const Layout = resolveLayout(segment.layoutId)
+    return (
+      <Layout
+        text={segment.text}
+        eyebrow={segment.eyebrow}
+        chips={segment.chips}
+        fileId={segment.fileId}
+        media={segment.visuals.background}
+        textStyle={style}
+        fontOverride={fontOverride}
+        colorOverride={colorOverride}
+        segment={segment}
+        project={project}
+      />
+    )
+  }
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>

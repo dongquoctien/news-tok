@@ -7,14 +7,33 @@ import { Fade } from '../effects/Fade.js'
 import { useEntranceSpring } from '../effects/timing.js'
 import { TextBlock } from '../effects/text/TextBlock.js'
 import { useResponsive } from './sizing.js'
+import { resolveLayout } from '../layouts/registry.js'
 
 const CLASSIC = findTextStyle('quote-soft', []) ?? findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
-export const Quote = ({ segment, textStyle, fontOverride, colorOverride }: SceneProps) => {
+export const Quote = ({ segment, project, textStyle, fontOverride, colorOverride }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 14 })
   const r = useResponsive()
   const narration = segment.audio?.narration
   const style = textStyle ?? CLASSIC
+
+  if (segment.layoutId) {
+    const Layout = resolveLayout(segment.layoutId)
+    return (
+      <Layout
+        text={segment.text}
+        eyebrow={segment.eyebrow}
+        chips={segment.chips}
+        fileId={segment.fileId}
+        media={segment.visuals.background}
+        textStyle={style}
+        fontOverride={fontOverride}
+        colorOverride={colorOverride}
+        segment={segment}
+        project={project}
+      />
+    )
+  }
 
   return (
     <AbsoluteFill
