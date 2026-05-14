@@ -87,15 +87,16 @@ export function LayoutPicker({
                       : 'border-border hover:border-muted-foreground/40 hover:bg-secondary/40'
                   )}
                 >
-                  {/* Cap thumbnail height so 9:16 portraits don't grow
-                      past ~180px on tall monitors. With 3 columns the
-                      grid stays compact and 6 cards fit one screen. */}
-                  <div className="relative h-44 overflow-hidden bg-black">
+                  {/* Full 9:16 thumbnail so users can read the actual
+                      layout at a glance. The dialog body scrolls when
+                      the grid overflows so this size doesn't push the
+                      header / footer off-screen. */}
+                  <div className="relative aspect-[9/16] overflow-hidden bg-black">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={layout.thumbnail}
                       alt={layout.name}
-                      className="absolute inset-0 size-full object-contain"
+                      className="absolute inset-0 size-full object-cover"
                     />
                     {selected ? (
                       <div className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
