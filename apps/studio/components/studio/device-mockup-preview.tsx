@@ -49,13 +49,19 @@ export function DeviceMockupPreview({
   const bgUrl = background ? assetUrl(background) : null
   const innerStyle: React.CSSProperties = {
     aspectRatio: aspectToCss(aspect),
-    maxWidth: maxWidth ? `${maxWidth}px` : undefined,
     backgroundImage: bgUrl
       ? `linear-gradient(180deg, rgba(11,11,15,0.18) 0%, rgba(11,11,15,0.55) 60%, rgba(11,11,15,0.85) 100%), url(${bgUrl})`
       : 'linear-gradient(135deg, #15151b 0%, #1d1d25 100%)',
     backgroundSize: 'cover',
     backgroundPosition: 'center',
   }
+  // Outer wrapper width override — wins over the default frame caps
+  // (`max-w-md` for laptop, `max-w-[320px]` for square, `max-w-[260px]`
+  // for phone) so callers can shrink the preview to fit a narrower
+  // column without forking the chrome.
+  const frameStyle: React.CSSProperties | undefined = maxWidth
+    ? { maxWidth: `${maxWidth}px` }
+    : undefined
 
   // Three chrome variants. Each wraps the same inner content + style.
   if (aspect === '16:9') {
@@ -64,7 +70,7 @@ export function DeviceMockupPreview({
         {label ? <PreviewLabel>{label}</PreviewLabel> : null}
         {/* Laptop chrome: thin bezel, base bar, hinge nub. Sized via
             inline width so the parent column can clamp it. */}
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md" style={frameStyle}>
           <div className="rounded-t-md border-2 border-b-0 border-zinc-800 bg-zinc-900 p-1.5 dark:border-zinc-700">
             <div
               className="relative overflow-hidden rounded-sm bg-black"
@@ -86,7 +92,10 @@ export function DeviceMockupPreview({
     return (
       <div className={cn('flex w-full flex-col items-center gap-2', className)}>
         {label ? <PreviewLabel>{label}</PreviewLabel> : null}
-        <div className="w-full max-w-[320px] rounded-md border-2 border-zinc-800 bg-zinc-950 p-2 dark:border-zinc-700">
+        <div
+          className="w-full max-w-[320px] rounded-md border-2 border-zinc-800 bg-zinc-950 p-2 dark:border-zinc-700"
+          style={frameStyle}
+        >
           <div
             className="relative overflow-hidden rounded-sm bg-black"
             style={innerStyle}
@@ -103,7 +112,7 @@ export function DeviceMockupPreview({
   return (
     <div className={cn('flex w-full flex-col items-center gap-2', className)}>
       {label ? <PreviewLabel>{label}</PreviewLabel> : null}
-      <div className="relative w-full max-w-[260px]">
+      <div className="relative w-full max-w-[260px]" style={frameStyle}>
         {/* Side buttons */}
         <span className="absolute -left-[3px] top-[15%] h-[8%] w-[3px] rounded-l-sm bg-zinc-700" />
         <span className="absolute -left-[3px] top-[26%] h-[10%] w-[3px] rounded-l-sm bg-zinc-700" />

@@ -12,6 +12,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { previewFontStack } from '@/lib/text-style-preview'
 import { cn } from '@/lib/utils'
 import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
@@ -611,18 +618,20 @@ function PlacementControls({
 
       <div className="space-y-1">
         <Label className="text-xs uppercase tracking-wide">Applies to</Label>
-        <select
+        <Select
           value={placement.appliesTo}
-          onChange={(e) => onPatch({ appliesTo: e.target.value as typeof placement.appliesTo })}
-          className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring [color-scheme:light_dark]"
+          onValueChange={(v) =>
+            onPatch({ appliesTo: v as typeof placement.appliesTo })
+          }
         >
-          <option value="all" className="bg-background text-foreground">
-            Every segment
-          </option>
-          <option value="intro-outro-only" className="bg-background text-foreground">
-            Only intro and outro
-          </option>
-        </select>
+          <SelectTrigger className="h-9 text-sm">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Every segment</SelectItem>
+            <SelectItem value="intro-outro-only">Only intro and outro</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
     </div>
   )

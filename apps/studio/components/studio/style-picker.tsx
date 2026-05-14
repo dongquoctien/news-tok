@@ -155,7 +155,7 @@ function UserAwareCard({
     )
   }
   return (
-    <div className="group relative">
+    <div className="group relative w-full">
       <StyleCard style={style} selected={selected} onSelect={onSelect} sampleText={sampleText} />
       <div className="pointer-events-none absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
         <TextStyleBuilder
@@ -213,7 +213,7 @@ function StyleCard({
       type="button"
       onClick={onSelect}
       className={cn(
-        'group relative flex h-32 flex-col justify-between overflow-hidden rounded-md border bg-secondary/30 p-3 text-left transition-all hover:bg-secondary/60',
+        'group relative flex h-[200px] w-full flex-col justify-between overflow-hidden rounded-md border bg-secondary/30 p-3 text-left transition-all hover:bg-secondary/60',
         selected ? 'border-primary ring-1 ring-primary' : 'border-border'
       )}
     >
@@ -492,12 +492,13 @@ export function StylePicker({
                 </div>
               ) : (
                 <div
-                  className="grid grid-cols-2 gap-2 xl:grid-cols-3"
+                  className="grid grid-cols-3 gap-2"
                   onMouseLeave={() => setHoveredId(null)}
                 >
                   {visibleStyles.map((s) => (
                     <div
                       key={s.id}
+                      className="w-full"
                       onMouseEnter={() => setHoveredId(s.id)}
                       onFocus={() => setHoveredId(s.id)}
                     >
@@ -528,6 +529,7 @@ export function StylePicker({
             <DeviceMockupPreview
               aspect={previewAspect}
               background={previewBackground}
+              maxWidth={300}
               label={
                 previewedStyle
                   ? `${previewedStyle.name} · ${FAMILY_LABEL[previewedStyle.family]}`
