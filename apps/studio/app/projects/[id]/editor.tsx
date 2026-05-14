@@ -40,6 +40,7 @@ import { ImagePicker } from '@/components/studio/image-picker'
 import { MusicPicker } from '@/components/studio/music-picker'
 import { LayoutPicker } from '@/components/studio/layout-picker'
 import { layoutNeedsSlot } from '@/lib/layouts-catalog'
+import { useResizableInspector } from '@/lib/use-resizable-inspector'
 import { StylePicker } from '@/components/studio/style-picker'
 import { FontPicker } from '@/components/studio/font-picker'
 import { ColorPicker } from '@/components/studio/color-picker'
@@ -87,6 +88,11 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   const isDirty = currentSig !== lastSavedSig
 
   const selected = project.segments.find((s) => s.id === selectedId) ?? null
+
+  // Right-aside width is user-resizable + persisted to localStorage.
+  // Avoids the "too narrow on widescreen, too wide on laptop" trade-off
+  // a fixed value would force.
+  const { width: inspectorWidth, isResizing, beginResize } = useResizableInspector()
 
   const updateSegment = useCallback(
     (id: string, patch: Partial<Segment>) => {
@@ -591,7 +597,10 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr_320px]">
+      <div
+        className="grid min-h-0 flex-1"
+        style={{ gridTemplateColumns: `260px 1fr 6px ${inspectorWidth}px` }}
+      >
         <aside className="overflow-y-auto border-r p-3">
           {project.segments.length === 0 ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">
@@ -645,6 +654,26 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             />
           </div>
         </section>
+
+        {/* Drag handle between centre player and right inspector. Set
+            cursor on the body during resize via useResizableInspector
+            so the cursor doesn't flicker back to default when the
+            pointer leaves the 6px handle bounds mid-drag. */}
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          onMouseDown={beginResize}
+          className={cn(
+            'group relative cursor-col-resize select-none',
+            isResizing ? 'bg-primary/40' : 'hover:bg-primary/20'
+          )}
+          title="Drag to resize the inspector"
+        >
+          {/* Skinny visual hairline + a wider invisible hit area via
+              padding on a child so the actual mousedown target is
+              forgiving (6px feels stingy; 12px effective grab). */}
+          <span className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border group-hover:bg-primary/60" />
+        </div>
 
         <aside className="overflow-y-auto border-l p-4">
           {/* PROJECT scope controls — always visible regardless of
