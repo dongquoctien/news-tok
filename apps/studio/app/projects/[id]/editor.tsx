@@ -591,7 +591,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </div>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr_320px]">
+      <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr_360px]">
         <aside className="overflow-y-auto border-r p-3">
           {project.segments.length === 0 ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">
