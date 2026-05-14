@@ -38,16 +38,77 @@ type StartBody = {
   source: { type: 'url' | 'text' | 'file'; value: string }
   language: 'vi' | 'en'
   aspect: '9:16' | '16:9' | '1:1'
+  /** How many style variants to render: 1 (just A), 2 (A+B), or 3 (A+B+C).
+   *  More variants = more disk + render time but lets users compare looks. */
+  variants?: 1 | 2 | 3
+  /** Cap on total video duration in seconds. Planner aims for the
+   *  natural length of the article but never exceeds this. Default 90s. */
+  maxDurationSec?: number
+  /** Cap on number of segments (intro + body + outro combined). Default 7. */
+  maxSegments?: number
+}
+
+const DEFAULTS = {
+  variants: 1 as 1 | 2 | 3,
+  maxDurationSec: 90,
+  maxSegments: 7,
+} as const
+
+const LIMITS = {
+  maxDurationSec: { min: 20, max: 120 },
+  maxSegments: { min: 3, max: 15 },
+} as const
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n))
+}
+
+function normalizeOptions(body: StartBody) {
+  const variants = ([1, 2, 3] as const).includes(body.variants as 1 | 2 | 3)
+    ? (body.variants as 1 | 2 | 3)
+    : DEFAULTS.variants
+  const maxDurationSec = Number.isFinite(body.maxDurationSec)
+    ? clamp(
+        Math.round(body.maxDurationSec!),
+        LIMITS.maxDurationSec.min,
+        LIMITS.maxDurationSec.max
+      )
+    : DEFAULTS.maxDurationSec
+  const maxSegments = Number.isFinite(body.maxSegments)
+    ? clamp(
+        Math.round(body.maxSegments!),
+        LIMITS.maxSegments.min,
+        LIMITS.maxSegments.max
+      )
+    : DEFAULTS.maxSegments
+  return { variants, maxDurationSec, maxSegments }
+}
+
+function variantPicksToRender(variants: 1 | 2 | 3): string {
+  // Render step receives the ids the renderer should produce.
+  if (variants === 1) return '["A"]'
+  if (variants === 2) return '["A", "B"]'
+  return '["A", "B", "C"]'
 }
 
 function buildPrompt(body: StartBody): string {
   const { source, language, aspect } = body
+  const { variants, maxDurationSec, maxSegments } = normalizeOptions(body)
   const sourceLine =
     source.type === 'url'
       ? `Source URL: ${source.value}`
       : source.type === 'file'
         ? `Source file path: ${source.value}`
         : `Source text (treat as article body, do not call extractArticle):\n"""\n${source.value}\n"""`
+
+  // Body segment budget = total segments - intro - outro. Floor at 2 so the
+  // planner always has room for at least 2 body beats.
+  const bodyMin = 2
+  const bodyMax = Math.max(bodyMin, maxSegments - 2)
+  const perSegmentTargetSec = Math.max(
+    4,
+    Math.min(8, Math.round(maxDurationSec / maxSegments))
+  )
 
   return [
     'You are creating a news-tok short-video project. Follow CLAUDE.md exactly.',
@@ -56,17 +117,24 @@ function buildPrompt(body: StartBody): string {
     `Language: ${language}`,
     `Aspect: ${aspect}`,
     '',
+    'User-picked limits (HARD caps — do not exceed):',
+    `- Total video duration: at most ${maxDurationSec}s.`,
+    `- Total segments: at most ${maxSegments} (intro + body + outro).`,
+    `- Body segments: between ${bodyMin} and ${bodyMax}.`,
+    `- Aim for ~${perSegmentTargetSec}s per segment so the total fits.`,
+    `- Render exactly ${variants} variant${variants === 1 ? '' : 's'}.`,
+    '',
     'Workflow:',
     '1. Call mcp__news-tok__createProject with the source / language / aspect above.',
     source.type === 'url'
       ? '2. Call mcp__news-tok__extractArticle on the URL.'
       : '2. Skip extractArticle — use the text provided above as the article body.',
-    '3. Call mcp__news-tok__researchProjectAesthetic and use the recommended preset trio (variantPicks) as project.variants.',
-    '4. Draft a three-part storyboard (intro + 2-5 body + outro), 5-8s per segment. Pick the default voice for the language. Do NOT ask the user — this is a headless run.',
+    '3. Call mcp__news-tok__researchProjectAesthetic and use the recommended preset trio (variantPicks) as project.variants. Keep all 3 variants in the storyboard even when rendering fewer — the user can render the rest later.',
+    `4. Draft a three-part storyboard (intro + body + outro). Use at most ${maxSegments} segments total. Each segment ~${perSegmentTargetSec}s. Pick the default voice for the language. Do NOT ask the user — this is a headless run.`,
     '5. For each segment, call searchImage + synthesizeVoice in parallel. Set segment.durationSec = recommendedSegmentDurationSec.',
     '6. Call searchMusic using the musicMood from research, set bgMusic.',
     '7. Call updateStoryboard to persist.',
-    '8. Call renderProject with variants: ["A"] (single variant for speed).',
+    `8. Call renderProject with variants: ${variantPicksToRender(variants)}.`,
     '9. Report the absolute output path.',
     '',
     'Important: this is non-interactive. Make sensible defaults whenever CLAUDE.md says to ask — never call AskUserQuestion.',
