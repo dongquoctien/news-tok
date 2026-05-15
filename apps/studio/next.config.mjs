@@ -1,3 +1,24 @@
+// `@next/env` is shipped as CommonJS — named exports don't survive
+// the ESM bridge, so we have to take the default and destructure.
+import nextEnv from '@next/env'
+import { fileURLToPath } from 'node:url'
+import { dirname, resolve } from 'node:path'
+const { loadEnvConfig } = nextEnv
+
+// Load monorepo-root .env BEFORE Next's own env loader runs, so
+// values defined at /news-tok/.env propagate into apps/studio's
+// runtime alongside any local apps/studio/.env. Next normally
+// only reads env files from its own working directory, so without
+// this step our root .env (shared by mcp-server + scripts + the
+// Studio API routes) wouldn't reach process.env.
+//
+// loadEnvConfig is idempotent — passing `false` for `dev` matches
+// how Next itself invokes it. Vars already set on process.env
+// (e.g. user-passed VAR=x npm run studio) take precedence.
+const here = dirname(fileURLToPath(import.meta.url))
+const repoRoot = resolve(here, '..', '..')
+loadEnvConfig(repoRoot)
+
 const NATIVE_OR_HEAVY_PACKAGES = [
   'ffmpeg-static',
   '@remotion/bundler',
