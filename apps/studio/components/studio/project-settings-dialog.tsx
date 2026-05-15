@@ -13,6 +13,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 
 /**
  * Settings dialog for the project-level knobs that live in the header
@@ -61,27 +68,22 @@ export function ProjectSettingsDialog({
           {/* Export preset */}
           <div className="space-y-2">
             <Label htmlFor="settings-preset">Export preset</Label>
-            <select
-              id="settings-preset"
+            <Select
               value={exportPreset}
-              onChange={(e) =>
-                onChangePreset(e.target.value as Project['exportPreset'])
+              onValueChange={(v) =>
+                onChangePreset(v as Project['exportPreset'])
               }
-              className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm font-medium [color-scheme:light_dark]"
             >
-              <option value="standard" className="bg-background text-foreground">
-                Standard (30fps)
-              </option>
-              <option value="tiktok" className="bg-background text-foreground">
-                TikTok (60fps)
-              </option>
-              <option value="youtube-shorts" className="bg-background text-foreground">
-                YouTube Shorts
-              </option>
-              <option value="reels" className="bg-background text-foreground">
-                Reels
-              </option>
-            </select>
+              <SelectTrigger id="settings-preset" className="h-9 text-sm font-medium">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="standard">Standard (30fps)</SelectItem>
+                <SelectItem value="tiktok">TikTok (60fps)</SelectItem>
+                <SelectItem value="youtube-shorts">YouTube Shorts</SelectItem>
+                <SelectItem value="reels">Reels</SelectItem>
+              </SelectContent>
+            </Select>
             <p className="text-xs text-muted-foreground">
               Picks the fps + format hints used when rendering the final mp4.
             </p>

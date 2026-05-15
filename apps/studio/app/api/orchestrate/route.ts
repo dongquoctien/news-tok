@@ -9,7 +9,32 @@ import {
   readOrchestrateJob,
   writeOrchestrateJob,
   type OrchestrateJob,
+  type OrchestratePhase,
 } from '@/lib/orchestrate-jobs'
+
+/**
+ * Map MCP tool names → phase + Vietnamese-friendly step label. Drives
+ * the home loading checklist. Tools not in the map fall back to a
+ * generic "Đang xử lý…" with no phase advance.
+ */
+const TOOL_TO_PHASE: Record<string, { phase: OrchestratePhase; label: string }> = {
+  createProject: { phase: 'starting', label: 'Tạo dự án mới…' },
+  extractArticle: { phase: 'extract', label: 'Đang đọc bài báo…' },
+  researchProjectAesthetic: { phase: 'research', label: 'Chọn phong cách thị giác…' },
+  searchImage: { phase: 'assets', label: 'Tìm ảnh minh hoạ…' },
+  searchMusic: { phase: 'assets', label: 'Chọn nhạc nền…' },
+  synthesizeVoice: { phase: 'assets', label: 'Tạo giọng đọc…' },
+  listVoices: { phase: 'assets', label: 'Tải danh sách giọng…' },
+  // updateStoryboard is the LAST tool Claude calls (after every asset is
+  // attached), so it advances to a dedicated 'finalize' phase rather than
+  // back to 'plan' — otherwise the checklist would visually rewind.
+  updateStoryboard: {
+    phase: 'finalize',
+    label: 'Xây dựng bố cục và điều chỉnh âm thanh…',
+  },
+  renderSegment: { phase: 'render', label: 'Dựng từng đoạn video…' },
+  renderProject: { phase: 'render', label: 'Ghép video hoàn chỉnh…' },
+}
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,16 +63,89 @@ type StartBody = {
   source: { type: 'url' | 'text' | 'file'; value: string }
   language: 'vi' | 'en'
   aspect: '9:16' | '16:9' | '1:1'
+  /** How many style variants to plan: 1 (just A), 2 (A+B), or 3 (A+B+C).
+   *  When `skipRender` is true (the home default) this only affects
+   *  which `project.variants[]` entries the planner declares — no mp4
+   *  is rendered until the user clicks Render in Studio. */
+  variants?: 1 | 2 | 3
+  /** Cap on total video duration in seconds. Planner aims for the
+   *  natural length of the article but never exceeds this. Default 90s. */
+  maxDurationSec?: number
+  /** Cap on number of segments (intro + body + outro combined). Default 7. */
+  maxSegments?: number
+  /** When true (the default for home), Claude finishes after
+   *  `updateStoryboard` and never calls `renderProject`. The user
+   *  lands in Studio with a ready-to-render project, which is much
+   *  faster (no ~30-60s ffmpeg pass) and lets them tweak before
+   *  committing to a render. */
+  skipRender?: boolean
+}
+
+const DEFAULTS = {
+  variants: 1 as 1 | 2 | 3,
+  maxDurationSec: 90,
+  maxSegments: 7,
+  skipRender: true,
+} as const
+
+const LIMITS = {
+  maxDurationSec: { min: 20, max: 120 },
+  maxSegments: { min: 3, max: 15 },
+} as const
+
+function clamp(n: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, n))
+}
+
+function normalizeOptions(body: StartBody) {
+  const variants = ([1, 2, 3] as const).includes(body.variants as 1 | 2 | 3)
+    ? (body.variants as 1 | 2 | 3)
+    : DEFAULTS.variants
+  const maxDurationSec = Number.isFinite(body.maxDurationSec)
+    ? clamp(
+        Math.round(body.maxDurationSec!),
+        LIMITS.maxDurationSec.min,
+        LIMITS.maxDurationSec.max
+      )
+    : DEFAULTS.maxDurationSec
+  const maxSegments = Number.isFinite(body.maxSegments)
+    ? clamp(
+        Math.round(body.maxSegments!),
+        LIMITS.maxSegments.min,
+        LIMITS.maxSegments.max
+      )
+    : DEFAULTS.maxSegments
+  const skipRender =
+    typeof body.skipRender === 'boolean' ? body.skipRender : DEFAULTS.skipRender
+  return { variants, maxDurationSec, maxSegments, skipRender }
+}
+
+function variantPicksToRender(variants: 1 | 2 | 3): string {
+  // Render step receives the ids the renderer should produce.
+  if (variants === 1) return '["A"]'
+  if (variants === 2) return '["A", "B"]'
+  return '["A", "B", "C"]'
 }
 
 function buildPrompt(body: StartBody): string {
   const { source, language, aspect } = body
+  const { variants, maxDurationSec, maxSegments, skipRender } =
+    normalizeOptions(body)
   const sourceLine =
     source.type === 'url'
       ? `Source URL: ${source.value}`
       : source.type === 'file'
         ? `Source file path: ${source.value}`
         : `Source text (treat as article body, do not call extractArticle):\n"""\n${source.value}\n"""`
+
+  // Body segment budget = total segments - intro - outro. Floor at 2 so the
+  // planner always has room for at least 2 body beats.
+  const bodyMin = 2
+  const bodyMax = Math.max(bodyMin, maxSegments - 2)
+  const perSegmentTargetSec = Math.max(
+    4,
+    Math.min(8, Math.round(maxDurationSec / maxSegments))
+  )
 
   return [
     'You are creating a news-tok short-video project. Follow CLAUDE.md exactly.',
@@ -56,18 +154,29 @@ function buildPrompt(body: StartBody): string {
     `Language: ${language}`,
     `Aspect: ${aspect}`,
     '',
+    'User-picked limits (HARD caps — do not exceed):',
+    `- Total video duration: at most ${maxDurationSec}s.`,
+    `- Total segments: at most ${maxSegments} (intro + body + outro).`,
+    `- Body segments: between ${bodyMin} and ${bodyMax}.`,
+    `- Aim for ~${perSegmentTargetSec}s per segment so the total fits.`,
+    skipRender
+      ? `- Plan ${variants} variant${variants === 1 ? '' : 's'} in the storyboard but DO NOT render — the user will trigger render from Studio later.`
+      : `- Render exactly ${variants} variant${variants === 1 ? '' : 's'}.`,
+    '',
     'Workflow:',
     '1. Call mcp__news-tok__createProject with the source / language / aspect above.',
     source.type === 'url'
-      ? '2. Call mcp__news-tok__extractArticle on the URL.'
-      : '2. Skip extractArticle — use the text provided above as the article body.',
-    '3. Call mcp__news-tok__researchProjectAesthetic and use the recommended preset trio (variantPicks) as project.variants.',
-    '4. Draft a three-part storyboard (intro + 2-5 body + outro), 5-8s per segment. Pick the default voice for the language. Do NOT ask the user — this is a headless run.',
-    '5. For each segment, call searchImage + synthesizeVoice in parallel. Set segment.durationSec = recommendedSegmentDurationSec.',
+      ? '2. Call mcp__news-tok__extractArticle on the URL. Keep the returned `mediaAssets` array — you will write it into project.library at step 7 so the user sees the article photos in Studio.'
+      : '2. Skip extractArticle — use the text provided above as the article body. There are no article images for this run.',
+    '3. Call mcp__news-tok__researchProjectAesthetic and use the recommended preset trio (variantPicks) as project.variants. Keep all 3 variants in the storyboard even when rendering fewer — the user can render the rest later.',
+    `4. Draft a three-part storyboard (intro + body + outro). Use at most ${maxSegments} segments total. Each segment ~${perSegmentTargetSec}s. Pick the default voice for the language. Do NOT ask the user — this is a headless run.`,
+    '5. For each segment, call searchImage + synthesizeVoice in parallel — ALWAYS use searchImage for backgrounds, NEVER use article mediaAssets here. Set segment.durationSec = recommendedSegmentDurationSec.',
     '6. Call searchMusic using the musicMood from research, set bgMusic.',
-    '7. Call updateStoryboard to persist.',
-    '8. Call renderProject with variants: ["A"] (single variant for speed).',
-    '9. Report the absolute output path.',
+    '7. Build the project payload with `library` set to the `mediaAssets` array from step 2 (or `[]` if step 2 was skipped or returned no images). updateStoryboard automatically mirrors every segment background into library, so you only need to seed it with the article media here — the stock backgrounds will be added by the sanitiser. Then call updateStoryboard to persist.',
+    skipRender
+      ? '8. DO NOT call renderProject. The user will trigger render from Studio when ready. Report the project path and stop.'
+      : `8. Call renderProject with variants: ${variantPicksToRender(variants)}.`,
+    skipRender ? '9. Done — return the project id and absolute project directory path.' : '9. Report the absolute output path.',
     '',
     'Important: this is non-interactive. Make sensible defaults whenever CLAUDE.md says to ask — never call AskUserQuestion.',
   ].join('\n')
@@ -86,6 +195,7 @@ export async function POST(req: NextRequest) {
     }
 
     const jobId = newOrchestrateJobId()
+    const { skipRender } = normalizeOptions(body)
     const job: OrchestrateJob = {
       jobId,
       status: 'running',
@@ -93,7 +203,9 @@ export async function POST(req: NextRequest) {
       source: body.source,
       language: body.language,
       aspect: body.aspect,
-      step: 'Starting Claude…',
+      phase: 'starting',
+      step: 'Đang khởi động AI…',
+      willRender: !skipRender,
     }
     await writeOrchestrateJob(job)
 
@@ -191,18 +303,52 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     stdio: ['ignore', 'pipe', 'pipe'],
   })
 
-  await writeOrchestrateJob({ ...job, pid: child.pid, step: 'Claude started…' })
+  await writeOrchestrateJob({ ...job, pid: child.pid, step: 'AI đã sẵn sàng…' })
 
   let buffer = ''
   let lastStep = job.step
+  let lastPhase: OrchestratePhase | undefined = job.phase
   let projectId: string | undefined
 
-  const updateStep = async (step: string) => {
-    if (step === lastStep) return
+  // Strict checklist order. Used by updateStep to refuse phase regressions
+  // (e.g. a late searchImage call after updateStoryboard must NOT pull the
+  // UI back to 'assets'). Keep in sync with PHASE_ORDER in
+  // components/home/create-prompt.tsx.
+  const PHASE_RANK: Record<OrchestratePhase, number> = {
+    starting: 0,
+    extract: 1,
+    'collect-media': 2,
+    research: 3,
+    plan: 4,
+    assets: 5,
+    finalize: 6,
+    render: 7,
+    done: 8,
+  }
+
+  const updateStep = async (
+    step: string,
+    phase?: OrchestratePhase
+  ): Promise<void> => {
+    if (step === lastStep && phase === lastPhase) return
+    // Refuse to rewind the checklist. If Claude fires an out-of-order tool
+    // call (e.g. another searchImage after updateStoryboard), keep the
+    // higher phase but still surface the fresh step text so the user sees
+    // activity.
+    const nextPhase: OrchestratePhase | undefined =
+      phase && lastPhase && PHASE_RANK[phase] < PHASE_RANK[lastPhase]
+        ? lastPhase
+        : phase
     lastStep = step
+    if (nextPhase) lastPhase = nextPhase
     const current = await readOrchestrateJob(job.jobId)
     if (!current || current.status !== 'running') return
-    await writeOrchestrateJob({ ...current, step, projectId: projectId ?? current.projectId })
+    await writeOrchestrateJob({
+      ...current,
+      step,
+      phase: nextPhase ?? current.phase,
+      projectId: projectId ?? current.projectId,
+    })
   }
 
   child.stdout.on('data', (chunk: Buffer) => {
@@ -234,14 +380,54 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     try {
       const evt = JSON.parse(line) as {
         type?: string
-        message?: { content?: Array<{ type?: string; name?: string; text?: string }> }
+        message?: {
+          content?: Array<{
+            type?: string
+            name?: string
+            text?: string
+            content?: Array<{ type?: string; text?: string }>
+          }>
+        }
       }
       const content = evt?.message?.content
       if (Array.isArray(content)) {
         for (const block of content) {
           if (block?.type === 'tool_use' && block.name) {
             const short = block.name.replace(/^mcp__news-tok__/, '')
-            await updateStep(`Running ${short}…`)
+            const mapped = TOOL_TO_PHASE[short]
+            if (mapped) {
+              await updateStep(mapped.label, mapped.phase)
+            } else {
+              // Unknown MCP tool — keep the user informed without
+              // advancing the phase checklist.
+              await updateStep('Đang xử lý…')
+            }
+          }
+          // extractArticle internally does both Readability + image
+          // download. We surface that as two checklist rows: the
+          // tool_use above lights up `extract`, and detecting the
+          // `mediaAssets` field in the tool_result advances to
+          // `collect-media` so the user knows article media just
+          // landed in the cache (and will appear in Library).
+          if (block?.type === 'tool_result') {
+            const inner = Array.isArray(block.content) ? block.content : []
+            const text = inner
+              .map((c) => (typeof c?.text === 'string' ? c.text : ''))
+              .join('')
+            if (
+              text.includes('"mediaAssets"') ||
+              text.includes('\\"mediaAssets\\"')
+            ) {
+              // Count downloaded assets so the label is informative.
+              const matches = text.match(/"path"\s*:\s*"/g) ?? []
+              const count = matches.length
+              await updateStep(
+                count > 0
+                  ? `Đã lấy ${count} ảnh từ bài báo cho Library…`
+                  : 'Bài báo không có ảnh — bỏ qua bước Library…',
+                'collect-media'
+              )
+            }
           }
         }
       }
@@ -270,7 +456,8 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     status: projectId ? 'completed' : 'failed',
     endedAt: new Date().toISOString(),
     projectId,
-    step: projectId ? 'Done' : 'Finished without creating a project',
+    phase: projectId ? 'done' : final?.phase,
+    step: projectId ? 'Hoàn tất — đang mở Studio…' : 'Không tạo được dự án',
     error: projectId ? undefined : 'No projectId detected in Claude output',
   })
 }

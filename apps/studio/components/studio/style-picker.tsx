@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Pencil, Plus, Trash2, Type } from 'lucide-react'
+import { Check, Loader2, Pencil, Plus, Trash2, Type } from 'lucide-react'
 import type { SceneKind, TextStyle } from '@news-tok/shared/schema'
 import { Button } from '@/components/ui/button'
 import {
@@ -155,9 +155,17 @@ function UserAwareCard({
     )
   }
   return (
-    <div className="group relative">
+    <div className="group relative w-full">
       <StyleCard style={style} selected={selected} onSelect={onSelect} sampleText={sampleText} />
-      <div className="pointer-events-none absolute right-1 top-1 flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100">
+      {/* Edit/Delete float on hover. Shift down when the check
+          badge is visible (selected card) so the two clusters
+          don't collide in the top-right. */}
+      <div
+        className={cn(
+          'pointer-events-none absolute right-1 flex gap-1 opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100',
+          selected ? 'top-10' : 'top-1'
+        )}
+      >
         <TextStyleBuilder
           projectId={projectId}
           initial={style}
@@ -213,10 +221,19 @@ function StyleCard({
       type="button"
       onClick={onSelect}
       className={cn(
-        'group relative flex h-32 flex-col justify-between overflow-hidden rounded-md border bg-secondary/30 p-3 text-left transition-all hover:bg-secondary/60',
-        selected ? 'border-primary ring-1 ring-primary' : 'border-border'
+        'group relative flex h-[200px] w-full flex-col justify-between overflow-hidden rounded-md border bg-secondary/30 p-3 text-left transition-all hover:bg-secondary/60',
+        selected
+          ? 'border-primary ring-2 ring-primary/50'
+          : 'border-border'
       )}
     >
+      {/* Check badge mirrors LayoutPicker so the "this is the active
+          pick" affordance is consistent across both pickers. */}
+      {selected ? (
+        <div className="pointer-events-none absolute right-2 top-2 z-10 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm">
+          <Check className="size-3.5" strokeWidth={3} />
+        </div>
+      ) : null}
       <div className="flex flex-1 items-center justify-center">
         <div style={plate}>
           <span style={textCss(style)}>{sampleText}</span>
@@ -293,10 +310,6 @@ export function StylePicker({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<TextStyle['family'] | 'all' | 'custom'>('all')
   const [picked, setPicked] = useState<string | null>(currentStyleId ?? null)
-  // Hover overrides the picked id for the right-pane preview only — that
-  // way users can scrub through styles to see them on the segment without
-  // clicking, and the apply buttons still target whatever was last clicked.
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [pendingDeleteForce, setPendingDeleteForce] = useState<{
     id: string
     segmentRefs: string[]
@@ -402,12 +415,12 @@ export function StylePicker({
 
   const previewAspect = aspect ?? '9:16'
   const split = splitRatioFor(previewAspect)
-  // Right pane previews whichever style the user is currently inspecting.
-  // Hover wins over picked so users can scrub through cards before
-  // committing — once they click, picked sticks until they hover elsewhere.
-  const previewedId = hoveredId ?? picked
+  // Right pane previews only the style the user has clicked. Earlier
+  // versions used hover for preview, which flickered as the cursor
+  // crossed cards and made it impossible to read the device-mockup
+  // preview without freezing the mouse — explicit click is steadier.
   const previewedStyle =
-    visibleStyles.find((s) => s.id === previewedId) ?? null
+    visibleStyles.find((s) => s.id === picked) ?? null
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -419,8 +432,8 @@ export function StylePicker({
             Pick a text style
           </DialogTitle>
           <DialogDescription className="mt-1 text-xs">
-            Hover a card to preview on the right; click to lock the pick,
-            then choose how widely to apply it.
+            Click a card to preview it on the right, then choose how
+            widely to apply the pick.
           </DialogDescription>
         </div>
 
@@ -491,16 +504,9 @@ export function StylePicker({
                   <Loader2 className="size-4 animate-spin" /> Loading styles…
                 </div>
               ) : (
-                <div
-                  className="grid grid-cols-2 gap-2 xl:grid-cols-3"
-                  onMouseLeave={() => setHoveredId(null)}
-                >
+                <div className="grid grid-cols-3 gap-2">
                   {visibleStyles.map((s) => (
-                    <div
-                      key={s.id}
-                      onMouseEnter={() => setHoveredId(s.id)}
-                      onFocus={() => setHoveredId(s.id)}
-                    >
+                    <div key={s.id} className="w-full">
                       <UserAwareCard
                         style={s}
                         selected={picked === s.id}
@@ -528,10 +534,11 @@ export function StylePicker({
             <DeviceMockupPreview
               aspect={previewAspect}
               background={previewBackground}
+              maxWidth={300}
               label={
                 previewedStyle
                   ? `${previewedStyle.name} · ${FAMILY_LABEL[previewedStyle.family]}`
-                  : 'Hover a style'
+                  : 'Pick a style'
               }
             >
               {previewedStyle ? (
@@ -541,7 +548,7 @@ export function StylePicker({
                 />
               ) : (
                 <span className="text-[10px] uppercase tracking-wide text-white/50">
-                  No style hovered
+                  No style picked yet
                 </span>
               )}
             </DeviceMockupPreview>

@@ -44,6 +44,9 @@ pnpm-debug.log*
 # Test
 coverage/
 
+# Verify screenshots (chrome-devtools MCP)
+.verify/
+
 # Remotion bundle cache and generated entry files
 .remotion-cache/
 .entry-cache/

@@ -30,13 +30,25 @@ export function VoicePicker({
   currentVoiceId,
   onSelect,
   trigger,
+  open: openProp,
+  onOpenChange,
 }: {
   language: Language
   currentVoiceId: string
   onSelect: (voiceId: string) => void
-  trigger: React.ReactNode
+  /** Optional when the dialog is controlled — pass `open` + `onOpenChange`
+   *  to drive it from outside (e.g. opening from a dropdown menu item). */
+  trigger?: React.ReactNode
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [uncontrolledOpen, setUncontrolledOpen] = useState(false)
+  const isControlled = openProp !== undefined
+  const open = isControlled ? openProp : uncontrolledOpen
+  const setOpen = (next: boolean) => {
+    if (!isControlled) setUncontrolledOpen(next)
+    onOpenChange?.(next)
+  }
   const [voices, setVoices] = useState<Voice[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [preview, setPreview] = useState<PreviewState>({ voiceId: '', status: 'idle' })
@@ -117,7 +129,7 @@ export function VoicePicker({
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger ? <DialogTrigger asChild>{trigger}</DialogTrigger> : null}
       <DialogContent className="max-w-xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

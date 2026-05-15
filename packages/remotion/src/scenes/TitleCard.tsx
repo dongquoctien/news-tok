@@ -50,7 +50,16 @@ export const TitleCard = ({
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
-      {bg ? <KenBurns src={bg.path} from={1.08} to={1.18} panX={0.04} panY={-0.04} /> : null}
+      {bg ? (
+        <KenBurns
+          src={bg.path}
+          from={1.08}
+          to={1.18}
+          panX={0.04}
+          panY={-0.04}
+          edits={segment.backgroundEdits}
+        />
+      ) : null}
       <AbsoluteFill
         style={{
           background:

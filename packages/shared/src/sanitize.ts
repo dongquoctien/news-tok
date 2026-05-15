@@ -1,5 +1,5 @@
 import emojiRegex from 'emoji-regex'
-import type { Project, Segment } from './schema.js'
+import type { AssetRef, Project, Segment } from './schema.js'
 
 const EMOJI_RE = emojiRegex()
 
@@ -101,4 +101,130 @@ export function recommendSegmentDurationSec(
     return round1(Math.max(plannedSec, needed))
   }
   return round1(needed)
+}
+
+// --- Scene name normalisation -------------------------------------------
+
+/**
+ * Map common PascalCase typos back to the lowercase scene kinds the
+ * renderer registers. AI orchestrators sometimes read the component
+ * filenames in `packages/remotion/src/scenes/` and assume those are
+ * scene values; this table catches the obvious cases so the bug never
+ * lands on disk.
+ *
+ * Keys are case-folded; values are the canonical kind. If a name maps
+ * to itself after `toLowerCase()`, it's already correct and we leave
+ * it alone (`normalizeSceneNames` short-circuits that path).
+ */
+const SCENE_NAME_MAP: Record<string, string> = {
+  titlecard: 'title',
+  keypoint: 'keypoint',
+  outro: 'outro',
+  quote: 'quote',
+  missingscene: 'title',
+  title: 'title',
+}
+
+export type SceneNameAdjustment = {
+  segmentId: string
+  before: string
+  after: string
+}
+
+export type NormalizeScenesResult = {
+  project: Project
+  adjustments: SceneNameAdjustment[]
+}
+
+/**
+ * Normalize every segment's `scene` field. Lowercases first, then maps
+ * known PascalCase component names back to their canonical kinds. A
+ * name that doesn't appear in `SCENE_NAME_MAP` is left as the
+ * lowercased original — that's still potentially a custom scene
+ * filename, which the caller's validator can decide whether to accept.
+ *
+ * Pure function. Returns the new project plus a log of mutations so
+ * MCP / Studio can tell the user what changed.
+ */
+// --- Library reconciliation ---------------------------------------------
+
+export type LibraryReconcileResult = {
+  project: Project
+  /** Library entries added because a segment uses them but they weren't already listed. */
+  added: number
+  /** Duplicate library entries (same `path`) collapsed. */
+  deduped: number
+}
+
+/**
+ * Reconcile `project.library` with what the project actually uses:
+ *   1. Mirror every `segment.visuals.background` (and any foreground
+ *      images) into the library so the Studio Library tab reflects
+ *      "all media currently in this project" — regardless of whether
+ *      the asset came from `searchImage` (stock), `extractArticle`
+ *      (article photo seeded by the orchestrator), or a manual user
+ *      upload.
+ *   2. Collapse duplicate library entries by `AssetRef.path`.
+ *
+ * Pure function, idempotent. Library entries the orchestrator already
+ * seeded (article media that the user hasn't applied to any segment
+ * yet) survive: step 1 is additive, never removing.
+ */
+export function reconcileLibrary(p: Project): LibraryReconcileResult {
+  const existing = p.library ?? []
+  const seen = new Set<string>()
+  const out: AssetRef[] = []
+  let deduped = 0
+
+  // Phase 1: dedupe existing entries first so the original order is
+  // preserved (article-seeded entries usually come first; stock that
+  // a segment uses lands at the tail).
+  for (const a of existing) {
+    if (seen.has(a.path)) {
+      deduped += 1
+      continue
+    }
+    seen.add(a.path)
+    out.push(a)
+  }
+
+  // Phase 2: walk segments, append anything not already in the library.
+  let added = 0
+  const collect = (asset: AssetRef | undefined) => {
+    if (!asset) return
+    if (asset.kind !== 'image') return // library is image-only for now
+    if (seen.has(asset.path)) return
+    seen.add(asset.path)
+    out.push(asset)
+    added += 1
+  }
+  for (const seg of p.segments) {
+    collect(seg.visuals.background)
+    if (seg.visuals.foreground) {
+      for (const fg of seg.visuals.foreground) collect(fg)
+    }
+  }
+
+  if (added === 0 && deduped === 0) {
+    return { project: p, added: 0, deduped: 0 }
+  }
+  return {
+    project: { ...p, library: out },
+    added,
+    deduped,
+  }
+}
+
+export function normalizeSceneNames(p: Project): NormalizeScenesResult {
+  const adjustments: SceneNameAdjustment[] = []
+  const segments = p.segments.map((seg) => {
+    const before = String(seg.scene)
+    const lower = before.toLowerCase()
+    const mapped = SCENE_NAME_MAP[lower] ?? lower
+    if (mapped === before) return seg
+    adjustments.push({ segmentId: seg.id, before, after: mapped })
+    return { ...seg, scene: mapped }
+  })
+  if (!adjustments.length) return { project: p, adjustments: [] }
+  return { project: { ...p, segments }, adjustments }
 }

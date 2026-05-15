@@ -5,6 +5,37 @@ import { dataDir } from '@news-tok/render'
 
 export type OrchestrateStatus = 'running' | 'completed' | 'failed' | 'cancelled'
 
+/**
+ * High-level phases the home loading UI renders as a checklist.
+ * Mapping from MCP tool name → phase is in route.ts.
+ *
+ * - 'starting'   — Claude CLI booting + reading CLAUDE.md
+ * - 'extract'    — pulling article text from URL (extractArticle)
+ * - 'collect-media' — downloading article images into the cache so
+ *                  they can populate project.library. Happens inside
+ *                  the same extractArticle call but surfaced as its
+ *                  own checklist row so the user sees what's going on.
+ * - 'research'   — picking aesthetic / variant trio
+ * - 'plan'       — drafting segments + writing storyboard
+ * - 'assets'     — searching images, synthesizing voice, fetching music
+ * - 'finalize'   — persisting storyboard (updateStoryboard): laying out
+ *                  scenes + fitting durations to narration. Comes AFTER
+ *                  assets because Claude calls updateStoryboard last,
+ *                  once every segment has its image + voice + music.
+ * - 'render'     — running ffmpeg (only when skipRender = false)
+ * - 'done'       — terminal state, redirecting to Studio
+ */
+export type OrchestratePhase =
+  | 'starting'
+  | 'extract'
+  | 'collect-media'
+  | 'research'
+  | 'plan'
+  | 'assets'
+  | 'finalize'
+  | 'render'
+  | 'done'
+
 export type OrchestrateJob = {
   jobId: string
   status: OrchestrateStatus
@@ -18,6 +49,11 @@ export type OrchestrateJob = {
   projectId?: string
   /** Last human-readable status line for the UI. */
   step?: string
+  /** Current high-level phase — drives the checklist UI in CreatePrompt. */
+  phase?: OrchestratePhase
+  /** Whether the render phase should appear in the timeline (false when
+   *  the caller asked to skip render, e.g. the home generate flow). */
+  willRender?: boolean
   error?: string
 }
 

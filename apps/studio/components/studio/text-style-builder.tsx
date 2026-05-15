@@ -21,6 +21,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { fontLabel } from '@/lib/font-label'
 import { plateCss, previewFontStack, textCss } from '@/lib/text-style-preview'
 import { PREVIEW_KEYFRAMES, previewAnimationStyle } from '@/lib/text-style-anim'
@@ -525,30 +532,33 @@ function IdentityTab({
   onPatch: (p: Partial<TextStyle>) => void
   onReplaceDraft: (next: TextStyle) => void
 }) {
+  // Bump to remount the preset picker after each pick, resetting it
+  // back to the placeholder. Radix Select is controlled — without this
+  // the trigger would keep showing the last-forked preset name.
+  const [presetKey, setPresetKey] = useState(0)
   return (
     <>
       {!isEdit ? (
         <Field label="Start from preset">
-          <select
-            defaultValue=""
-            onChange={(e) => {
-              const id = e.target.value
-              if (!id) return
+          <Select
+            key={presetKey}
+            onValueChange={(id) => {
               const preset = BUILT_IN_TEXT_STYLES.find((s) => s.id === id)
               if (preset) onReplaceDraft(cloneFromPreset(preset, language))
-              e.currentTarget.value = ''
+              setPresetKey((k) => k + 1)
             }}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring [color-scheme:light_dark]"
           >
-            <option value="" className="bg-background text-foreground">
-              — fork a built-in style —
-            </option>
-            {BUILT_IN_TEXT_STYLES.map((s) => (
-              <option key={s.id} value={s.id} className="bg-background text-foreground">
-                {s.name} · {s.family}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue placeholder="— fork a built-in style —" />
+            </SelectTrigger>
+            <SelectContent>
+              {BUILT_IN_TEXT_STYLES.map((s) => (
+                <SelectItem key={s.id} value={s.id}>
+                  {s.name} · {s.family}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <p className="mt-1 text-[10px] text-muted-foreground">
             <Sparkles className="mr-1 inline size-3" />
             Forks the preset's typography + decorators into your draft. You
@@ -944,30 +954,38 @@ function MotionTab({
     <>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Enter">
-          <select
+          <Select
             value={draft.enter}
-            onChange={(e) => onPatch({ enter: e.target.value as TextMotion })}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring [color-scheme:light_dark]"
+            onValueChange={(v) => onPatch({ enter: v as TextMotion })}
           >
-            {ENTER_MOTIONS.map((m) => (
-              <option key={m} value={m} className="bg-background text-foreground">
-                {m}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {ENTER_MOTIONS.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
         <Field label="Exit">
-          <select
+          <Select
             value={draft.exit}
-            onChange={(e) => onPatch({ exit: e.target.value as TextStyle['exit'] })}
-            className="h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm focus:outline-none focus:ring-1 focus:ring-ring [color-scheme:light_dark]"
+            onValueChange={(v) => onPatch({ exit: v as TextStyle['exit'] })}
           >
-            {EXIT_MOTIONS.map((m) => (
-              <option key={m} value={m} className="bg-background text-foreground">
-                {m}
-              </option>
-            ))}
-          </select>
+            <SelectTrigger className="h-9 text-sm">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {EXIT_MOTIONS.map((m) => (
+                <SelectItem key={m} value={m}>
+                  {m}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </Field>
       </div>
       <div className="grid grid-cols-2 gap-3">

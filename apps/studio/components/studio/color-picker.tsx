@@ -2,20 +2,29 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { Palette, X } from 'lucide-react'
-import type { ColorOverride } from '@news-tok/shared/schema'
+import type {
+  Aspect,
+  ColorOverride,
+  TextStyle,
+} from '@news-tok/shared/schema'
+import { findTextStyle } from '@news-tok/shared/text-styles'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
-  DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import {
+  plateCss as libPlateCss,
+  textCss as libTextCss,
+} from '@/lib/text-style-preview'
+import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
 
 /**
  * Curated accent palette — 12 swatches matching the topic-flavoured
@@ -183,6 +192,18 @@ export type ColorPickerProps = {
     scope: 'segmentInVariant' | 'segment' | 'all'
   }) => void
   trigger: React.ReactNode
+  /** Resolved style for this segment (variant > segment > scene default).
+   *  Drives the right-pane preview so users see the colour overrides
+   *  layered onto the real typography + plate. Omit to fall back to a
+   *  plain text preview. */
+  resolvedStyle?: TextStyle | null
+  /** Sample text rendered in the preview — usually the segment headline. */
+  sampleText?: string
+  /** Project aspect — drives the device frame (phone / laptop / square). */
+  aspect?: Aspect
+  /** Optional segment background image path. Drawn under the text so
+   *  light-on-dark overrides look the same as the final render. */
+  previewBackground?: string
 }
 
 export function ColorPicker({
@@ -190,6 +211,10 @@ export function ColorPicker({
   activeVariantId,
   onApply,
   trigger,
+  resolvedStyle,
+  sampleText,
+  aspect,
+  previewBackground,
 }: ColorPickerProps) {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<ColorOverride>(current ?? {})
@@ -220,33 +245,88 @@ export function ColorPicker({
     setOpen(false)
   }
 
+  const previewAspect = aspect ?? '9:16'
+  const split = splitRatioFor(previewAspect)
+  // Always show the preview pane: fall back to the built-in 'classic'
+  // text style when the caller didn't pass one (variant=default
+  // segments). The user still sees the override layered on a real
+  // headline shape, even if it's the generic fallback shape.
+  const previewStyle =
+    resolvedStyle ?? findTextStyle('classic', []) ?? null
+  const showPreview = !!previewStyle
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+      <DialogContent
+        className={cn(
+          'grid max-h-[92vh] w-full gap-0 overflow-hidden p-0',
+          showPreview
+            ? 'max-w-5xl grid-rows-[auto_1fr_auto]'
+            : 'max-w-2xl grid-rows-[auto_1fr_auto]'
+        )}
+      >
+        <div className="border-b px-4 py-3">
+          <DialogTitle className="flex items-center gap-2 text-base">
             <Palette className="size-5" />
             Customise colours
           </DialogTitle>
-          <DialogDescription>
+          <DialogDescription className="mt-1 text-xs">
             Override one or more colour channels for this segment without forking
             the text style. Leave a channel off to keep the preset's value.
           </DialogDescription>
-        </DialogHeader>
-
-        <div className="grid auto-rows-fr grid-cols-2 gap-3">
-          {(['primary', 'accent', 'stroke', 'idle'] as const).map((c) => (
-            <ChannelRow
-              key={c}
-              channel={c}
-              value={draft[c]}
-              onChange={(v) => setField(c, v)}
-            />
-          ))}
         </div>
 
-        <DialogFooter className="flex-wrap gap-2 sm:flex-wrap sm:space-x-0">
+        <div
+          className="grid min-h-0 overflow-hidden"
+          style={
+            showPreview
+              ? { gridTemplateColumns: `${split.left} ${split.right}` }
+              : undefined
+          }
+        >
+          {/* LEFT — channel form */}
+          <div className="overflow-y-auto p-4">
+            <div className="grid auto-rows-fr grid-cols-2 gap-3">
+              {(['primary', 'accent', 'stroke', 'idle'] as const).map((c) => (
+                <ChannelRow
+                  key={c}
+                  channel={c}
+                  value={draft[c]}
+                  onChange={(v) => setField(c, v)}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* RIGHT — device mockup preview, only when a style was provided */}
+          {showPreview ? (
+            <div className="flex min-h-0 items-center justify-center overflow-y-auto border-l bg-secondary/20 p-4">
+              <DeviceMockupPreview
+                aspect={previewAspect}
+                background={previewBackground}
+                maxWidth={300}
+                label={
+                  resolvedStyle
+                    ? 'Live preview'
+                    : 'Live preview · using classic fallback'
+                }
+              >
+                <ColorPreviewText
+                  style={previewStyle!}
+                  override={draft}
+                  text={
+                    (sampleText && sampleText.length > 64
+                      ? sampleText.slice(0, 60) + '…'
+                      : sampleText) || 'Aa Đêm khuya'
+                  }
+                />
+              </DeviceMockupPreview>
+            </div>
+          ) : null}
+        </div>
+
+        <DialogFooter className="flex-wrap gap-2 border-t px-4 py-3 sm:flex-wrap sm:space-x-0">
           <Button variant="outline" onClick={() => setOpen(false)}>
             Cancel
           </Button>
@@ -278,5 +358,59 @@ export function ColorPicker({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Renders the preview headline using the resolved style, with the
+ * draft colour overrides layered on top. Mirrors how the renderer
+ * picks colours: override > style.color / style.textStroke.color etc.
+ *
+ * Sized for a 300px-wide device frame — we scale fontSize down from
+ * the logical 1080px canvas via libTextCss's default `scale=3.5`.
+ */
+function ColorPreviewText({
+  style,
+  override,
+  text,
+}: {
+  style: TextStyle
+  override: ColorOverride
+  text: string
+}) {
+  // Clone the style and apply overrides so libTextCss naturally
+  // renders with the new fills / stroke colour. When the style has no
+  // textStroke and the user adds a stroke colour override, synthesize
+  // a minimal stroke (3px outside) so the override is visible in the
+  // preview — matches the renderer's behaviour of treating an
+  // override on a missing channel as "enable it".
+  const effective: TextStyle = {
+    ...style,
+    color: override.primary ?? style.color,
+    textStroke: override.stroke
+      ? {
+          color: override.stroke,
+          widthPx: style.textStroke?.widthPx ?? 3,
+          side: style.textStroke?.side ?? 'outside',
+        }
+      : style.textStroke,
+  }
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '8%',
+        pointerEvents: 'none',
+      }}
+    >
+      <div style={libPlateCss(effective)}>
+        <span style={libTextCss(effective)}>{text}</span>
+      </div>
+    </div>
   )
 }

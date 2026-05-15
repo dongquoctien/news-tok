@@ -232,6 +232,61 @@ export const ColorOverrideSchema = z.object({
 })
 export type ColorOverride = z.infer<typeof ColorOverrideSchema>
 
+/**
+ * Non-destructive image edits applied to a segment's background photo.
+ * The original file under `library/` or the cache stays untouched —
+ * the renderer composes these as CSS `transform`, `clip-path`, and
+ * overlay layers at draw time. That keeps editing instant in the
+ * Studio preview, makes the same library image reusable across
+ * segments with different crops, and avoids pulling in a server-side
+ * image-processing library.
+ *
+ * Coordinates are 0..100 percents so they survive the 1080w → 1920w
+ * scaling the renderer does for different aspect presets.
+ */
+export const BackgroundEditsSchema = z.object({
+  /**
+   * Optional rectangular crop. Origin is the image's own top-left.
+   * Width/height are in % of the source image; an absent field keeps
+   * the full image.
+   */
+  crop: z
+    .object({
+      xPct: z.number().min(0).max(100),
+      yPct: z.number().min(0).max(100),
+      widthPct: z.number().min(1).max(100),
+      heightPct: z.number().min(1).max(100),
+    })
+    .optional(),
+  /** Free-angle rotation in degrees (-180..180). Default 0. */
+  rotateDeg: z.number().min(-180).max(180).default(0),
+  /** Mirror horizontally — useful when the subject faces the wrong way. */
+  flipH: z.boolean().default(false),
+  /** Mirror vertically — rarely needed but cheap to support. */
+  flipV: z.boolean().default(false),
+  /**
+   * Radial darken intensity, 0..1. 0 = no vignette; 1 = corners are
+   * pure black. Big legibility win for white-on-photo headlines.
+   */
+  vignette: z.number().min(0).max(1).default(0),
+  /**
+   * Solid color overlay — most common use is a 30% black plate to
+   * push back a busy background. Blend modes are restricted to the
+   * handful that are predictable across browsers and Remotion's
+   * Chromium renderer.
+   */
+  overlay: z
+    .object({
+      color: z.string(),
+      opacity: z.number().min(0).max(1).default(0.4),
+      blendMode: z
+        .enum(['normal', 'multiply', 'screen', 'overlay', 'soft-light'])
+        .default('normal'),
+    })
+    .optional(),
+})
+export type BackgroundEdits = z.infer<typeof BackgroundEditsSchema>
+
 export const SegmentSchema = z.object({
   id: z.string().min(1),
   durationSec: z.number().positive(),
@@ -242,6 +297,13 @@ export const SegmentSchema = z.object({
     background: AssetRefSchema.optional(),
     foreground: z.array(AssetRefSchema).optional(),
   }),
+  /**
+   * Optional non-destructive edits applied to `visuals.background` at
+   * render time (crop / rotate / flip / vignette / overlay). Stored
+   * on the segment rather than the AssetRef so the same library
+   * image can be cropped differently across two segments.
+   */
+  backgroundEdits: BackgroundEditsSchema.optional(),
   effects: z.array(EffectSpecSchema).default([]),
   audio: z
     .object({
@@ -482,6 +544,17 @@ export const ProjectSchema = z.object({
    * so existing projects render unchanged.
    */
   logo: LogoMarkerSchema.default({ kind: 'none' }),
+  /**
+   * Per-project image library — the user drag-drops a whole folder of
+   * images once, then any segment can pull a background from this list
+   * with one click instead of re-uploading or re-searching.
+   *
+   * Files live under `data/projects/<id>/library/<contenthash>.<ext>`
+   * (hash-deduped so re-dropping the same folder is safe). The renderer
+   * never reads this list; it's purely an editor convenience that
+   * survives reloads via `storyboard.json`.
+   */
+  library: z.array(AssetRefSchema).default([]),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 })

@@ -43,7 +43,14 @@ export function DossierCard({
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
       {media ? (
-        <KenBurns src={media.path} from={1.1} to={1.0} panX={0.02} panY={-0.02} />
+        <KenBurns
+          src={media.path}
+          from={1.1}
+          to={1.0}
+          panX={0.02}
+          panY={-0.02}
+          edits={segment.backgroundEdits}
+        />
       ) : (
         <AbsoluteFill
           style={{

@@ -2,6 +2,13 @@
 
 Replace `<id>` with a project ID under `data/projects/`.
 
+> **Note for the orchestrator:** when you mutate `segment.scene`, use
+> the lowercase kinds (`title` / `keypoint` / `quote` / `outro`) for
+> built-ins, OR the PascalCase filename (without extension) of a
+> custom scene under `data/projects/<id>/scenes/`. Never use
+> `TitleCard` / `KeyPoint` / `Outro` as a built-in scene value — those
+> are component filenames, not scene kinds.
+
 ## Change the narration text of one segment
 
 ```

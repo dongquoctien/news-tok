@@ -41,7 +41,14 @@ export function MagazineCover({
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
       {/* Full-bleed media with slow push-in. */}
       {media ? (
-        <KenBurns src={media.path} from={1.0} to={1.08} panX={0} panY={-0.02} />
+        <KenBurns
+          src={media.path}
+          from={1.0}
+          to={1.08}
+          panX={0}
+          panY={-0.02}
+          edits={segment.backgroundEdits}
+        />
       ) : (
         <AbsoluteFill
           style={{

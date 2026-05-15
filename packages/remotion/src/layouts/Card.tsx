@@ -65,7 +65,14 @@ export function Card({
           }}
         >
           {media ? (
-            <KenBurns src={media.path} from={1.05} to={1.12} panX={0.02} panY={0.02} />
+            <KenBurns
+              src={media.path}
+              from={1.05}
+              to={1.12}
+              panX={0.02}
+              panY={0.02}
+              edits={segment.backgroundEdits}
+            />
           ) : (
             <div
               style={{

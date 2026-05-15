@@ -35,7 +35,14 @@ export function SplitVertical({
         {/* Top: media region (60% height) */}
         <div style={{ position: 'relative', flex: '0 0 60%', overflow: 'hidden' }}>
           {media ? (
-            <KenBurns src={media.path} from={1.06} to={1.0} panX={0} panY={0.02} />
+            <KenBurns
+              src={media.path}
+              from={1.06}
+              to={1.0}
+              panX={0}
+              panY={0.02}
+              edits={segment.backgroundEdits}
+            />
           ) : (
             <div
               style={{
