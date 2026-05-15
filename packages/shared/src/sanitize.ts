@@ -1,6 +1,40 @@
 import emojiRegex from 'emoji-regex'
 import type { AssetRef, Project, Segment } from './schema.js'
 
+/**
+ * Tiny absolute-path predicate that doesn't import `node:path`. Webpack
+ * refuses to bundle `node:*` modules into client bundles in Next 14
+ * even when the function never runs in the browser, so importing
+ * `node:path` from sanitize.ts breaks `import { stripEmoji } from
+ * '@news-tok/shared/sanitize'` in any client component. The regex
+ * matches the same shape `path.isAbsolute` does on Windows + POSIX.
+ */
+function isAbsolutePathLike(p: string): boolean {
+  return /^([A-Za-z]:[\\/]|\\\\|\/)/.test(p)
+}
+
+/**
+ * Inline copy of the relativiser from `@news-tok/shared/paths` —
+ * importing the real one pulls `node:url` + `node:path` into the
+ * dependency graph, which webpack refuses to bundle for client code.
+ * Sanitize.ts is the only consumer that needs this in its hot path,
+ * so we duplicate ~10 lines instead of fragmenting the module graph.
+ *
+ * The DATA_DIR prefix is recomputed on every call so we don't have to
+ * share state with paths.ts; the cost is one regex + one toLowerCase
+ * per AssetRef, which is negligible at storyboard scale (≤30 refs).
+ */
+function toRelativeDataPathInline(p: string, dataDirAbs: string): string {
+  if (!p) return p
+  if (!isAbsolutePathLike(p)) return p
+  const normalized = p.replace(/\\/g, '/')
+  const dataPrefix = dataDirAbs.replace(/\\/g, '/') + '/'
+  if (normalized.toLowerCase().startsWith(dataPrefix.toLowerCase())) {
+    return normalized.slice(dataPrefix.length)
+  }
+  return p
+}
+
 const EMOJI_RE = emojiRegex()
 
 export function stripEmoji(text: string): string {
@@ -146,6 +180,154 @@ export type NormalizeScenesResult = {
  * Pure function. Returns the new project plus a log of mutations so
  * MCP / Studio can tell the user what changed.
  */
+// --- Asset path normalisation -------------------------------------------
+
+export type AssetPathNormalizeResult = {
+  project: Project
+  /** Number of AssetRef.path fields that were rewritten. */
+  converted: number
+}
+
+/**
+ * Rewrite every AssetRef.path in a project from its absolute form to
+ * the new relative-to-`data/` form. Tolerates already-relative paths
+ * (no-op) and paths that aren't under `data/` at all (leaves them as
+ * the absolute form so foreign uploads outside the cache aren't
+ * silently broken).
+ *
+ * Walks every place an AssetRef can live in `ProjectSchema`:
+ *   - segment.visuals.background
+ *   - segment.visuals.foreground[]
+ *   - segment.audio.narration
+ *   - segment.audio.sfx[]
+ *   - bgMusic
+ *   - library[]
+ *   - customSfx[].path (string, not AssetRef but stored under data/)
+ *   - logo.path (when kind === 'image')
+ *
+ * This is part of the sanitisation chain that runs on every write so
+ * old absolute-form storyboards get migrated lazily the first time
+ * they pass through Studio PATCH or MCP updateStoryboard. The
+ * `scripts/migrate-paths.ts` one-shot does the same in bulk for users
+ * who want all projects updated immediately.
+ */
+export function normalizeAssetPaths(
+  p: Project,
+  /**
+   * Absolute path to the `data/` directory used to detect "is this
+   * AssetRef under data/?". Defaults to `process.cwd()/data` so
+   * server callers can call `normalizeAssetPaths(p)` without
+   * threading the directory through. Tests + scripts that need a
+   * specific root pass it explicitly.
+   *
+   * Optional so the function stays callable without importing the
+   * server-only `paths` module — see comments above
+   * `toRelativeDataPathInline` for why this matters.
+   */
+  dataDirAbs?: string
+): AssetPathNormalizeResult {
+  let converted = 0
+  const dataDir =
+    dataDirAbs ??
+    (typeof process !== 'undefined' && process.cwd
+      ? `${process.cwd()}/data`
+      : '/data')
+
+  const fixAsset = <T extends AssetRef | undefined>(asset: T): T => {
+    if (!asset) return asset
+    const next = toRelativeDataPathInline(asset.path, dataDir)
+    if (next === asset.path) return asset
+    converted += 1
+    return { ...asset, path: next } as T
+  }
+
+  const fixAssetArray = (arr: AssetRef[] | undefined): AssetRef[] | undefined => {
+    if (!arr) return arr
+    let mutated = false
+    const out = arr.map((a) => {
+      const next = fixAsset(a)
+      if (next !== a) mutated = true
+      return next!
+    })
+    return mutated ? out : arr
+  }
+
+  const fixString = (s: string | undefined): string | undefined => {
+    if (!s) return s
+    const next = toRelativeDataPathInline(s, dataDir)
+    if (next === s) return s
+    converted += 1
+    return next
+  }
+
+  let segmentsMutated = false
+  const segments = p.segments.map((seg): Segment => {
+    const fixedBg = fixAsset(seg.visuals.background)
+    const fixedFg = fixAssetArray(seg.visuals.foreground)
+    const fixedNarration = fixAsset(seg.audio?.narration)
+    const fixedSfx = fixAssetArray(seg.audio?.sfx)
+
+    const visualsChanged =
+      fixedBg !== seg.visuals.background || fixedFg !== seg.visuals.foreground
+    const audioChanged =
+      fixedNarration !== seg.audio?.narration || fixedSfx !== seg.audio?.sfx
+    if (!visualsChanged && !audioChanged) return seg
+
+    segmentsMutated = true
+    const visuals = visualsChanged
+      ? { ...seg.visuals, background: fixedBg, foreground: fixedFg }
+      : seg.visuals
+    const audio = audioChanged
+      ? { ...(seg.audio ?? {}), narration: fixedNarration, sfx: fixedSfx }
+      : seg.audio
+    return { ...seg, visuals, audio }
+  })
+
+  const bgMusic = fixAsset(p.bgMusic)
+  const library = fixAssetArray(p.library) ?? p.library
+
+  // customSfx entries store a raw string path (not AssetRef shape) plus
+  // metadata. Still part of the same data/ tree so worth normalising.
+  let customSfxMutated = false
+  const customSfx = p.customSfx.map((entry) => {
+    const next = fixString(entry.path)
+    if (next === entry.path) return entry
+    customSfxMutated = true
+    return { ...entry, path: next! }
+  })
+
+  // logo only has a path when kind === 'image'.
+  let logo = p.logo
+  if (p.logo.kind === 'image') {
+    const next = fixString(p.logo.path)
+    if (next !== p.logo.path) {
+      logo = { ...p.logo, path: next! }
+    }
+  }
+
+  if (
+    !segmentsMutated &&
+    bgMusic === p.bgMusic &&
+    library === p.library &&
+    !customSfxMutated &&
+    logo === p.logo
+  ) {
+    return { project: p, converted: 0 }
+  }
+
+  return {
+    project: {
+      ...p,
+      segments: segmentsMutated ? segments : p.segments,
+      bgMusic,
+      library,
+      customSfx: customSfxMutated ? customSfx : p.customSfx,
+      logo,
+    },
+    converted,
+  }
+}
+
 // --- Library reconciliation ---------------------------------------------
 
 export type LibraryReconcileResult = {
