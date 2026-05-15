@@ -29,9 +29,13 @@ jobs:
         with:
           version: 11.0.9
 
+      # pnpm 11.0.9 requires Node ≥ 22.13. The repo's engines.node says
+      # ">=20" which makes local Node 20 still acceptable, but CI has to
+      # run pnpm itself and 22 is the lowest version that satisfies its
+      # internal `node:sqlite` import.
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
