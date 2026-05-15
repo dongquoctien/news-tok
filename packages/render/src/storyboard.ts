@@ -1,8 +1,19 @@
 import { readFile, writeFile, mkdir, rename } from 'node:fs/promises'
 import { dirname } from 'node:path'
 import { ProjectSchema, type Project } from '@news-tok/shared/schema'
-import { projectStoryboardPath } from './paths.js'
+import { normalizeAssetPaths } from '@news-tok/shared/sanitize'
+import { dataDir, projectStoryboardPath } from './paths.js'
 
+/**
+ * Load a project storyboard, validate against schema, and lazily
+ * migrate legacy absolute asset paths to the relative-to-`data/`
+ * form. The path conversion is **in-memory only**: it lets the renderer
+ * + Studio surface old projects without throwing on absolute paths,
+ * but does NOT write the migrated shape back to disk until the user
+ * saves through Studio PATCH / MCP updateStoryboard (both of which
+ * run the same sanitiser). Use `scripts/migrate-paths.ts` to bulk-
+ * rewrite every project at once.
+ */
 export async function readStoryboard(projectId: string): Promise<Project> {
   const path = projectStoryboardPath(projectId)
   const raw = await readFile(path, 'utf8')
@@ -12,7 +23,8 @@ export async function readStoryboard(projectId: string): Promise<Project> {
       `Invalid storyboard at ${path}: ${parsed.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}`
     )
   }
-  return parsed.data
+  const { project } = normalizeAssetPaths(parsed.data, dataDir())
+  return project
 }
 
 export async function writeStoryboard(projectId: string, project: Project): Promise<void> {

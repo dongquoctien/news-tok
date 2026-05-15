@@ -8,6 +8,7 @@ import {
   type Project,
   type Segment,
 } from '@news-tok/shared/schema'
+import { resolveDataPath } from '@news-tok/shared/paths'
 import { bundleForProject } from './bundle.js'
 import {
   dataDir,
@@ -20,15 +21,21 @@ import { collectUsedSfxIds, stageSfxFiles } from './sfx-staging.js'
 import { stageLogoImage } from './logo-staging.js'
 
 /**
- * Convert an absolute path inside data/ into a `/`-prefixed URL that
- * Remotion serves from publicDir (set to dataDir() in bundle.ts). Paths
- * outside data/ are left untouched (the asset will still fail to load,
- * but the rewrite is conservative).
+ * Convert an AssetRef.path into a `/`-prefixed URL that Remotion serves
+ * from publicDir (set to dataDir() in bundle.ts). Accepts both the new
+ * relative-to-data/ form ("cache/images/abc.jpg") and the legacy
+ * absolute form ("D:\Github\news-tok\data\cache\images\abc.jpg") so
+ * unmigrated storyboards keep rendering.
+ *
+ * Paths that don't resolve under data/ are returned unchanged — the
+ * asset will still fail to load, but the rewrite is conservative
+ * rather than dropping the path silently.
  */
-function toPublicUrl(absPath: string): string {
-  const rel = relative(dataDir(), absPath)
+function toPublicUrl(p: string): string {
+  const abs = resolveDataPath(p)
+  const rel = relative(dataDir(), abs)
   if (rel.startsWith('..') || rel.startsWith(sep) || /^[a-zA-Z]:/.test(rel)) {
-    return absPath
+    return abs
   }
   return '/public/' + rel.split(sep).join('/')
 }

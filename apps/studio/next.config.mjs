@@ -24,6 +24,9 @@ const nextConfig = {
   experimental: {
     serverActions: { allowedOrigins: ['localhost:3000'] },
     serverComponentsExternalPackages: NATIVE_OR_HEAVY_PACKAGES,
+    // Required by Next 14 to invoke `instrumentation.ts → register()`
+    // at server boot. We use that for one-shot env auditing.
+    instrumentationHook: true,
   },
   webpack: (config, { isServer }) => {
     config.resolve.extensionAlias = {
