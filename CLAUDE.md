@@ -82,7 +82,7 @@ news-tok/
                                           Edge TTS, Readability, ffmpeg, Playwright crawler fallbacks)
     remotion/src/
       compositions/NewsTokComposition.tsx  ← root composition
-      scenes/                            ← built-in scenes (TitleCard, KeyPoint, Quote, Outro, MissingScene)
+      scenes/                            ← built-in scenes (filenames are PascalCase: TitleCard.tsx, KeyPoint.tsx, Quote.tsx, Outro.tsx, MissingScene.tsx — but the scene `kind` values written into storyboard.json are LOWERCASE: title / keypoint / quote / outro)
       effects/                           ← KenBurns, Typewriter, Fade, Subtitles
     render/src/                          (programmatic Remotion render: bundle, jobs, storyboard)
     mcp-server/src/                      (the MCP server that exposes media + render tools)
@@ -130,6 +130,35 @@ a project. Its schema lives at `packages/shared/src/schema.ts` (`ProjectSchema`)
 Validate against that schema before saving.
 
 When in doubt about field shapes, Read the schema file.
+
+### Scene `kind` values (STRICT)
+
+Every `segment.scene` MUST be one of these **lowercase** values — never the
+PascalCase React component filename:
+
+| `segment.scene` value | Renders via component file |
+|---|---|
+| `"title"` | `packages/remotion/src/scenes/TitleCard.tsx` |
+| `"keypoint"` | `packages/remotion/src/scenes/KeyPoint.tsx` |
+| `"quote"` | `packages/remotion/src/scenes/Quote.tsx` |
+| `"outro"` | `packages/remotion/src/scenes/Outro.tsx` |
+| `"<PascalCaseName>"` | `data/projects/<id>/scenes/<PascalCaseName>.tsx` (custom forked scene — see "Custom scene" below) |
+
+Wrong (will fail render with `Unknown scene: TitleCard`):
+
+```json
+{ "scene": "TitleCard" }
+```
+
+Right:
+
+```json
+{ "scene": "title" }
+```
+
+The `updateStoryboard` MCP tool auto-corrects the four common PascalCase
+typos for safety, but **don't rely on it** — write the canonical lowercase
+value in the first place.
 
 ## MCP tools available
 
@@ -231,7 +260,7 @@ per segment.
 ## Common task: create video from a URL
 
 1. Call `createProject({ source: { type: 'url', value: <url> }, language, aspect })`.
-2. Call `extractArticle({ url })` to get the body text.
+2. Call `extractArticle({ url })` to get the body text **and the article's own images**. The tool returns both `media` (raw URLs found in the article DOM) and `mediaAssets` (already-downloaded AssetRefs cached locally). **Do not use these as segment backgrounds** — keep using `searchImage` (Pexels/Unsplash/Wikimedia) for that, exactly as before. Instead, copy `mediaAssets` into `project.library` so the user can browse the article's own photos in Studio and swap one into a segment manually if they want. Easiest way: append the AssetRefs to the `library` array right before you call `updateStoryboard` at step 7.
 3. **Research the project aesthetic.** First call
    `researchProjectAesthetic({ articleTitle, articleText, language })`
    to classify the topic (crime / finance / tech / health / sports /
@@ -279,15 +308,23 @@ per segment.
 5. Use Write/Edit to update `data/projects/<id>/storyboard.json`. Make sure
    the final JSON validates against `ProjectSchema`.
 6. For each segment, in parallel: call `searchImage({ query })` and
-   `synthesizeVoice({ text, voiceId })`. Update the segment's `visuals` and
-   `audio.narration` with the returned paths. **Always set
-   `segment.durationSec = recommendedSegmentDurationSec`** from the
-   `synthesizeVoice` response — Edge TTS read length is content-driven
-   (Vietnamese sentences with polysyllabic words frequently run 7–8s when
-   estimated 5–6s) and the renderer will otherwise cut the audio when the
-   slot is shorter than the clip. If `recommendedSegmentDurationSec` is
-   missing (older MCP servers), compute it as `Math.max(plannedSec,
-   narrationDurationSec + 0.4)` yourself.
+   `synthesizeVoice({ text, voiceId })`. **Always use `searchImage` for
+   segment backgrounds** — stock photos via Pexels / Unsplash /
+   Wikimedia are framed for short-form video and consistently more
+   reliable than the article's own embedded images. The article's
+   media is preserved separately (`project.library`, populated at
+   step 7) so the user can override individual backgrounds from
+   Studio if they prefer the bài báo's photo.
+
+   Update the segment's `visuals` and `audio.narration` with the
+   returned paths. **Always set `segment.durationSec =
+   recommendedSegmentDurationSec`** from the `synthesizeVoice`
+   response — Edge TTS read length is content-driven (Vietnamese
+   sentences with polysyllabic words frequently run 7–8s when
+   estimated 5–6s) and the renderer will otherwise cut the audio when
+   the slot is shorter than the clip. If `recommendedSegmentDurationSec`
+   is missing (older MCP servers), compute it as
+   `Math.max(plannedSec, narrationDurationSec + 0.4)` yourself.
 7. Call `searchMusic({ mood, durationSec })` for the project background
    music and set `bgMusic`. **Use the `musicMood` returned by
    `researchProjectAesthetic` in step 3**. If that mood produces no
@@ -295,7 +332,18 @@ per segment.
    `durationSec` = project total — the Remotion composition loops the
    track when it is shorter and fades out the last ~1.2s when it is
    longer, so an exact match is not required.
-8. **Ask how many variants to render** before calling `renderProject`. Use
+8. **Seed the Library with article media.** Take the `mediaAssets`
+   array from step 2's `extractArticle` result and assign it to
+   `project.library`. This is purely additive — it makes the
+   article's own photos available in Studio's Library tab so the user
+   can swap a stock background for the bài báo's photo manually if
+   they want. The sanitiser inside `updateStoryboard` will also
+   mirror every `segment.visuals.background` into the library
+   automatically (so Library = "all media this project uses"), so you
+   don't need to add the searchImage results yourself — only seed
+   `library` with `mediaAssets`. If `mediaAssets` is empty, leave
+   `library` as `[]`. Then call `updateStoryboard` to persist.
+9. **Ask how many variants to render** before calling `renderProject`. Use
    `AskUserQuestion` with these options (default-first):
    - **1 video (recommended)** — render only variant `A` (Classic).
      Fastest, smallest disk footprint, easiest to compare against any
@@ -306,9 +354,9 @@ per segment.
    When the user picks 1 video, call `renderProject({ projectId, variants:
    ['A'] })` (or omit `variants` for the legacy single output). When the
    user picks all 3, call `renderProject({ projectId, variants: 'all' })`.
-9. Report the absolute path(s) to the output file(s) so the user can open
-   them — for multi-variant renders, list every output explicitly.
-10. **Generate + rewrite social captions** (REQUIRED — do not skip).
+10. Report the absolute path(s) to the output file(s) so the user can open
+    them — for multi-variant renders, list every output explicitly.
+11. **Generate + rewrite social captions** (REQUIRED — do not skip).
     Call `generateSocialCaption({ projectId })` to pull the template
     baseline. The template glues every keypoint into the caption body
     so it reads like a transcript — DO NOT paste it verbatim. Rewrite

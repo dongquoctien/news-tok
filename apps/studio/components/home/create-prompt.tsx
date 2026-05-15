@@ -51,9 +51,11 @@ const SEGMENTS_MAX = 15
 type Phase =
   | 'starting'
   | 'extract'
+  | 'collect-media'
   | 'research'
   | 'plan'
   | 'assets'
+  | 'finalize'
   | 'render'
   | 'done'
 
@@ -77,9 +79,11 @@ const PHASE_ORDER: ReadonlyArray<{
 }> = [
   { phase: 'starting', label: 'Khởi động AI' },
   { phase: 'extract', label: 'Đọc bài báo' },
+  { phase: 'collect-media', label: 'Lấy media từ bài báo cho Library' },
   { phase: 'research', label: 'Chọn phong cách thị giác' },
   { phase: 'plan', label: 'Lên kịch bản từng đoạn' },
   { phase: 'assets', label: 'Tìm ảnh, nhạc & tạo giọng đọc' },
+  { phase: 'finalize', label: 'Xây dựng bố cục và điều chỉnh âm thanh' },
   { phase: 'render', label: 'Dựng video hoàn chỉnh' },
   { phase: 'done', label: 'Mở Studio' },
 ]

@@ -21,11 +21,17 @@ const TOOL_TO_PHASE: Record<string, { phase: OrchestratePhase; label: string }> 
   createProject: { phase: 'starting', label: 'Tạo dự án mới…' },
   extractArticle: { phase: 'extract', label: 'Đang đọc bài báo…' },
   researchProjectAesthetic: { phase: 'research', label: 'Chọn phong cách thị giác…' },
-  updateStoryboard: { phase: 'plan', label: 'Lên kịch bản từng đoạn…' },
   searchImage: { phase: 'assets', label: 'Tìm ảnh minh hoạ…' },
   searchMusic: { phase: 'assets', label: 'Chọn nhạc nền…' },
   synthesizeVoice: { phase: 'assets', label: 'Tạo giọng đọc…' },
   listVoices: { phase: 'assets', label: 'Tải danh sách giọng…' },
+  // updateStoryboard is the LAST tool Claude calls (after every asset is
+  // attached), so it advances to a dedicated 'finalize' phase rather than
+  // back to 'plan' — otherwise the checklist would visually rewind.
+  updateStoryboard: {
+    phase: 'finalize',
+    label: 'Xây dựng bố cục và điều chỉnh âm thanh…',
+  },
   renderSegment: { phase: 'render', label: 'Dựng từng đoạn video…' },
   renderProject: { phase: 'render', label: 'Ghép video hoàn chỉnh…' },
 }
@@ -160,13 +166,13 @@ function buildPrompt(body: StartBody): string {
     'Workflow:',
     '1. Call mcp__news-tok__createProject with the source / language / aspect above.',
     source.type === 'url'
-      ? '2. Call mcp__news-tok__extractArticle on the URL.'
-      : '2. Skip extractArticle — use the text provided above as the article body.',
+      ? '2. Call mcp__news-tok__extractArticle on the URL. Keep the returned `mediaAssets` array — you will write it into project.library at step 7 so the user sees the article photos in Studio.'
+      : '2. Skip extractArticle — use the text provided above as the article body. There are no article images for this run.',
     '3. Call mcp__news-tok__researchProjectAesthetic and use the recommended preset trio (variantPicks) as project.variants. Keep all 3 variants in the storyboard even when rendering fewer — the user can render the rest later.',
     `4. Draft a three-part storyboard (intro + body + outro). Use at most ${maxSegments} segments total. Each segment ~${perSegmentTargetSec}s. Pick the default voice for the language. Do NOT ask the user — this is a headless run.`,
-    '5. For each segment, call searchImage + synthesizeVoice in parallel. Set segment.durationSec = recommendedSegmentDurationSec.',
+    '5. For each segment, call searchImage + synthesizeVoice in parallel — ALWAYS use searchImage for backgrounds, NEVER use article mediaAssets here. Set segment.durationSec = recommendedSegmentDurationSec.',
     '6. Call searchMusic using the musicMood from research, set bgMusic.',
-    '7. Call updateStoryboard to persist.',
+    '7. Build the project payload with `library` set to the `mediaAssets` array from step 2 (or `[]` if step 2 was skipped or returned no images). updateStoryboard automatically mirrors every segment background into library, so you only need to seed it with the article media here — the stock backgrounds will be added by the sanitiser. Then call updateStoryboard to persist.',
     skipRender
       ? '8. DO NOT call renderProject. The user will trigger render from Studio when ready. Report the project path and stop.'
       : `8. Call renderProject with variants: ${variantPicksToRender(variants)}.`,
@@ -304,19 +310,43 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
   let lastPhase: OrchestratePhase | undefined = job.phase
   let projectId: string | undefined
 
+  // Strict checklist order. Used by updateStep to refuse phase regressions
+  // (e.g. a late searchImage call after updateStoryboard must NOT pull the
+  // UI back to 'assets'). Keep in sync with PHASE_ORDER in
+  // components/home/create-prompt.tsx.
+  const PHASE_RANK: Record<OrchestratePhase, number> = {
+    starting: 0,
+    extract: 1,
+    'collect-media': 2,
+    research: 3,
+    plan: 4,
+    assets: 5,
+    finalize: 6,
+    render: 7,
+    done: 8,
+  }
+
   const updateStep = async (
     step: string,
     phase?: OrchestratePhase
   ): Promise<void> => {
     if (step === lastStep && phase === lastPhase) return
+    // Refuse to rewind the checklist. If Claude fires an out-of-order tool
+    // call (e.g. another searchImage after updateStoryboard), keep the
+    // higher phase but still surface the fresh step text so the user sees
+    // activity.
+    const nextPhase: OrchestratePhase | undefined =
+      phase && lastPhase && PHASE_RANK[phase] < PHASE_RANK[lastPhase]
+        ? lastPhase
+        : phase
     lastStep = step
-    if (phase) lastPhase = phase
+    if (nextPhase) lastPhase = nextPhase
     const current = await readOrchestrateJob(job.jobId)
     if (!current || current.status !== 'running') return
     await writeOrchestrateJob({
       ...current,
       step,
-      phase: phase ?? current.phase,
+      phase: nextPhase ?? current.phase,
       projectId: projectId ?? current.projectId,
     })
   }
@@ -350,7 +380,14 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     try {
       const evt = JSON.parse(line) as {
         type?: string
-        message?: { content?: Array<{ type?: string; name?: string; text?: string }> }
+        message?: {
+          content?: Array<{
+            type?: string
+            name?: string
+            text?: string
+            content?: Array<{ type?: string; text?: string }>
+          }>
+        }
       }
       const content = evt?.message?.content
       if (Array.isArray(content)) {
@@ -364,6 +401,32 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
               // Unknown MCP tool — keep the user informed without
               // advancing the phase checklist.
               await updateStep('Đang xử lý…')
+            }
+          }
+          // extractArticle internally does both Readability + image
+          // download. We surface that as two checklist rows: the
+          // tool_use above lights up `extract`, and detecting the
+          // `mediaAssets` field in the tool_result advances to
+          // `collect-media` so the user knows article media just
+          // landed in the cache (and will appear in Library).
+          if (block?.type === 'tool_result') {
+            const inner = Array.isArray(block.content) ? block.content : []
+            const text = inner
+              .map((c) => (typeof c?.text === 'string' ? c.text : ''))
+              .join('')
+            if (
+              text.includes('"mediaAssets"') ||
+              text.includes('\\"mediaAssets\\"')
+            ) {
+              // Count downloaded assets so the label is informative.
+              const matches = text.match(/"path"\s*:\s*"/g) ?? []
+              const count = matches.length
+              await updateStep(
+                count > 0
+                  ? `Đã lấy ${count} ảnh từ bài báo cho Library…`
+                  : 'Bài báo không có ảnh — bỏ qua bước Library…',
+                'collect-media'
+              )
             }
           }
         }

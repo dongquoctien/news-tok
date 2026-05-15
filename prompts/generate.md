@@ -2,6 +2,12 @@
 
 Copy-paste any of these into `claude` running from the repo root.
 
+> **Note for the orchestrator:** when you write segments to
+> `storyboard.json`, the `scene` field must be one of the lowercase
+> kinds `title` / `keypoint` / `quote` / `outro` — never the React
+> component filename like `TitleCard`. See CLAUDE.md → "Scene `kind`
+> values" for the full mapping.
+
 ## From a URL (Vietnamese, 9:16)
 
 ```
