@@ -52,6 +52,55 @@ async function listUserLayouts(): Promise<{ name: string; path: string }[]> {
   return out
 }
 
+/**
+ * Hash the built-in Remotion layout + scene source files. Without
+ * this the bundle cache only invalidates on custom-scene or
+ * user-layout changes — adding a new file to
+ * `packages/remotion/src/layouts/` (a built-in registered in
+ * `registry.ts`) leaves the existing cache hit on disk, and the
+ * next render keeps using a stale bundle that has no idea the new
+ * layout exists. Symptom: segments with the new `layoutId` fall
+ * back to FullBleed silently and render only the headline.
+ *
+ * We hash the entire `layouts/` + `scenes/` directories so editing
+ * a single file invalidates the cache. Adds ~5ms to the bundle
+ * path; ignored when the dirs don't exist (e.g. running from a
+ * minimal fixture).
+ */
+async function hashBuiltInRemotion(): Promise<string> {
+  const targets = [
+    resolve(REPO_ROOT, 'packages', 'remotion', 'src', 'layouts'),
+    resolve(REPO_ROOT, 'packages', 'remotion', 'src', 'scenes'),
+  ]
+  const h = createHash('sha256')
+  let touched = false
+  for (const dir of targets) {
+    if (!existsSync(dir)) continue
+    const entries = await readdir(dir, { withFileTypes: true })
+    const files = entries
+      .filter((e) => e.isFile() && /\.tsx?$/.test(e.name))
+      .map((e) => e.name)
+      .sort()
+    for (const name of files) {
+      const full = resolve(dir, name)
+      try {
+        const st = await stat(full)
+        h.update(name)
+        h.update('|')
+        h.update(String(st.size))
+        h.update('|')
+        h.update(String(st.mtimeMs))
+        h.update('\n')
+        touched = true
+      } catch {
+        // file vanished between readdir and stat — skip
+      }
+    }
+  }
+  if (!touched) return ''
+  return h.digest('hex').slice(0, 16)
+}
+
 async function hashUserLayouts(layouts: { name: string; path: string }[]): Promise<string> {
   if (layouts.length === 0) return ''
   const h = createHash('sha256')
@@ -197,9 +246,20 @@ export async function bundleForProject(projectId: string): Promise<string> {
   const layouts = await listUserLayouts()
   const sceneHash = await hashScenes(scenes)
   const layoutHash = await hashUserLayouts(layouts)
+  // Built-in layouts + scenes — invalidates whenever a file in
+  // packages/remotion/src/layouts/ or scenes/ changes. Without this
+  // adding `BreakingNews.tsx` and registering it doesn't bust the
+  // cache, so renders use the previously-bundled layout list.
+  const builtInHash = await hashBuiltInRemotion()
   const assetsHash = await hashStoryboardAssets(projectId)
   const sfxHash = await hashSfxStaging()
-  const cacheKey = joinHashParts(sceneHash, layoutHash, assetsHash, sfxHash)
+  const cacheKey = joinHashParts(
+    sceneHash,
+    layoutHash,
+    builtInHash,
+    assetsHash,
+    sfxHash
+  )
   const outDir = resolve(bundleCacheRoot(), cacheKey)
 
   if (existsSync(resolve(outDir, 'index.html'))) {
