@@ -35,6 +35,11 @@ const LAYOUTS = [
   'builtin-gradientMesh',
   'builtin-crtTerminal',
   'builtin-comparisonSplit',
+  // News & journalism set (PR #39).
+  'builtin-breakingNews',
+  'builtin-portraitQuote',
+  'builtin-timestampedWar',
+  'builtin-healthCards',
 ] as const
 
 /**
@@ -114,6 +119,41 @@ const SAMPLES: Record<(typeof LAYOUTS)[number], {
     eyebrow: 'EVIDENCE OVERLAY',
     fileId: '15 NĂM SINH NGHIỆM',
     chips: ['Triệu ca bệnh', 'Kết quả bất ngờ', 'FDA duyệt thử nghiệm'],
+  },
+  // News & journalism set — copy chosen to exercise each layout's
+  // distinctive slot. eyebrow on breakingNews overrides the default
+  // "BREAKING NEWS" banner text.
+  'builtin-breakingNews': {
+    text: 'Vụ án oan mới: bị cáo được thả tự do',
+    eyebrow: 'TIN TỨC PHÁP LUẬT',
+  },
+  'builtin-portraitQuote': {
+    text: 'Quyền lợi của bị cáo là trên hết.',
+    eyebrow: 'CHUYÊN GIA PHÁP LUẬT',
+    // fileId capped at 20 chars by ProjectSchema — full name +
+    // affiliation goes elsewhere; here we use the short form that
+    // typically reads in the name-tag band.
+    fileId: 'LS. NGUYỄN T. MAI',
+  },
+  'builtin-timestampedWar': {
+    text: 'Cập nhật chiến sự miền Đông',
+    eyebrow: 'CHIẾN SỰ · LIVE',
+    chips: [
+      '04:30 AM: Giao tranh trung tâm',
+      '07:15 AM: Tiếng nổ lớn gần BV',
+      '09:00 AM: Sơ tán dân thường',
+    ],
+  },
+  'builtin-healthCards': {
+    text: '5 bước để cơ thể khỏe mạnh mỗi ngày',
+    eyebrow: 'SỨC KHỎE CỘNG ĐỒNG',
+    chips: [
+      'Uống đủ nước mỗi ngày',
+      'Ngủ đủ giấc 7-8 tiếng',
+      'Ăn xanh, sống sạch',
+      'Vận động 30 phút',
+      'Chăm sóc tim mạch',
+    ],
   },
 }
 
@@ -216,6 +256,12 @@ async function extractFramesWithFfmpeg(mp4Path: string, outDir: string): Promise
 }
 
 main().catch((err) => {
-  console.error('[layout-previews] failed:', err)
+  // Avoid Node 25's util.inspect crashing on certain error shapes —
+  // dump message + stack as plain strings so the actual upstream
+  // error reaches stderr.
+  const msg = err instanceof Error ? err.message : String(err)
+  const stack = err instanceof Error && err.stack ? err.stack : ''
+  process.stderr.write(`[layout-previews] failed: ${msg}\n`)
+  if (stack) process.stderr.write(stack + '\n')
   process.exit(1)
 })
