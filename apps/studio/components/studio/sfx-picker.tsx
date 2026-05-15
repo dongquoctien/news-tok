@@ -1,7 +1,16 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Loader2, Pause, Play, RotateCcw, Trash2, Upload, Volume2 } from 'lucide-react'
+import {
+  Loader2,
+  Pause,
+  Play,
+  RotateCcw,
+  Trash2,
+  Upload,
+  Volume2,
+  VolumeX,
+} from 'lucide-react'
 import {
   BUILT_IN_SFX,
   type CustomSfxEntry,
@@ -43,6 +52,7 @@ export function SfxPicker({
   override,
   resolvedFromStyle,
   onChange,
+  onApplyToAll,
   onCustomSfxChange,
   trigger,
 }: {
@@ -53,6 +63,13 @@ export function SfxPicker({
   /** What the renderer would play if override is cleared. */
   resolvedFromStyle: TextSfx | undefined
   onChange: (next: TextSfx | null) => void
+  /** When set, the dialog footer shows an "Apply to all segments"
+   *  action. The parent should write the passed TextSfx to every
+   *  segment's sfxOverride — including the "all-None" case, where an
+   *  empty-but-present override is what silences cues across the
+   *  project (clearing the override would let the text style's built-in
+   *  SFX leak through). */
+  onApplyToAll?: (next: TextSfx) => void
   /** Called after a successful upload or delete so the parent can refresh. */
   onCustomSfxChange: (next: CustomSfxEntry[]) => void
   trigger: React.ReactNode
@@ -140,6 +157,19 @@ export function SfxPicker({
     setOpen(false)
   }
 
+  const applyToAll = () => {
+    if (!onApplyToAll) return
+    // Always pass the draft as-is (never null). The renderer resolves
+    //   segment.sfxOverride ?? style.sfx
+    // — so a *present-but-empty* override is what silences a segment.
+    // Passing null would clear the override and let the text style's
+    // built-in SFX leak back through (most styles ship with default
+    // enterSoundId / perWordSoundId), which is exactly the "I picked
+    // None but other segments still play" bug.
+    onApplyToAll(draft)
+    setOpen(false)
+  }
+
   const clearOverride = () => {
     onChange(null)
     setOpen(false)
@@ -216,11 +246,21 @@ export function SfxPicker({
           <div className="text-xs text-muted-foreground">
             Current: <span className="font-medium text-foreground">{summary}</span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
             {override ? (
               <Button variant="outline" size="sm" onClick={clearOverride}>
                 <RotateCcw />
                 Use style default
+              </Button>
+            ) : null}
+            {onApplyToAll ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={applyToAll}
+                title="Áp dụng cùng cấu hình SFX cho mọi segment của project"
+              >
+                Apply to all segments
               </Button>
             ) : null}
             <Button size="sm" onClick={apply}>
@@ -308,20 +348,34 @@ function SlotPicker({
       </div>
 
       {tab === 'builtin' ? (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {BUILT_IN_SFX.map((entry) => (
-            <SfxTile
-              key={entry.id}
-              id={entry.id}
-              label={entry.label}
-              meta={`${entry.durationSec}s · ${entry.source}`}
-              selected={currentId === entry.id}
-              preview={preview}
-              onPlay={onPlay}
-              onStop={onStop}
-              onPick={onPick}
+        // Cap the visible area so a long bank (built-in 12 + None, or a
+        // future expansion) doesn't push the Apply / Cancel footer out
+        // of view. Internal scroll keeps the dialog height predictable.
+        <div className="max-h-64 overflow-y-auto rounded-md border bg-secondary/10 p-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {/* Explicit "None" tile so silencing this slot is a first-class
+                choice in the grid — not a tiny text link in the header. */}
+            <NoneTile
+              selected={!currentId}
+              onPick={() => {
+                onStop()
+                onPick(undefined)
+              }}
             />
-          ))}
+            {BUILT_IN_SFX.map((entry) => (
+              <SfxTile
+                key={entry.id}
+                id={entry.id}
+                label={entry.label}
+                meta={`${entry.durationSec}s · ${entry.source}`}
+                selected={currentId === entry.id}
+                preview={preview}
+                onPlay={onPlay}
+                onStop={onStop}
+                onPick={onPick}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <CustomBank
@@ -401,7 +455,9 @@ function CustomBank({
   preview: PreviewState
   onPlay: (sfxId: string) => void
   onStop: () => void
-  onPick: (sfxId: string) => void
+  // Accepts `undefined` so the None tile can clear the slot from this tab
+  // without forcing the caller to switch back to Built-in.
+  onPick: (sfxId: string | undefined) => void
   onCustomSfxChange: (next: CustomSfxEntry[]) => void
 }) {
   const inputRef = useRef<HTMLInputElement | null>(null)
@@ -493,24 +549,75 @@ function CustomBank({
       {customSfx.length === 0 && !uploading ? (
         <p className="text-xs text-muted-foreground">No custom cues yet.</p>
       ) : (
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {customSfx.map((entry) => (
-            <SfxTile
-              key={entry.id}
-              id={entry.id}
-              label={entry.label}
-              meta={`${entry.durationSec.toFixed(1)}s · user`}
-              selected={selected === entry.id}
-              preview={preview}
-              onPlay={onPlay}
-              onStop={onStop}
-              onPick={onPick}
-              onDelete={() => void remove(entry.id)}
+        // Same scroll wrapper as the built-in tab. Upload dropzone above
+        // stays sticky in view so users can drop a new file even when the
+        // bank already has many entries.
+        <div className="max-h-64 overflow-y-auto rounded-md border bg-secondary/10 p-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {/* Mirror the None tile from the built-in tab so the user can
+                silence this slot without switching tabs. */}
+            <NoneTile
+              selected={!selected}
+              onPick={() => {
+                onStop()
+                onPick(undefined)
+              }}
             />
-          ))}
+            {customSfx.map((entry) => (
+              <SfxTile
+                key={entry.id}
+                id={entry.id}
+                label={entry.label}
+                meta={`${entry.durationSec.toFixed(1)}s · user`}
+                selected={selected === entry.id}
+                preview={preview}
+                onPlay={onPlay}
+                onStop={onStop}
+                onPick={onPick}
+                onDelete={() => void remove(entry.id)}
+              />
+            ))}
+          </div>
         </div>
       )}
     </div>
+  )
+}
+
+/**
+ * A grid tile that, when picked, clears the slot's sfxId — i.e. silences
+ * this cue. Mirrors the visual weight of SfxTile so it reads as a
+ * first-class option in the grid (not a "negative" outlier).
+ */
+function NoneTile({
+  selected,
+  onPick,
+}: {
+  selected: boolean
+  onPick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onPick}
+      className={cn(
+        'flex items-center gap-2 rounded-md border px-2.5 py-2 text-left text-xs transition-colors',
+        selected
+          ? 'border-primary bg-primary/10'
+          : 'hover:border-muted-foreground/40 hover:bg-secondary/40'
+      )}
+      title="Silence this slot"
+    >
+      <span className="inline-flex size-7 shrink-0 items-center justify-center rounded-full border bg-background text-muted-foreground">
+        <VolumeX className="size-3.5" />
+      </span>
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate font-medium">None</span>
+        <span className="truncate text-[10px] text-muted-foreground">
+          không phát âm
+        </span>
+      </span>
+    </button>
   )
 }
 

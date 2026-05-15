@@ -160,6 +160,12 @@ export function PlayerPane({
           loop
           style={{ width: '100%' }}
           acknowledgeRemotionLicense
+          // Default cap is 5, but a single segment can already mount
+          // narration + bgMusic + enter SFX + per-word SFX (4), and the
+          // next segment pre-mounts ahead → easily breaches the limit.
+          // Bumped well above the worst case so adding overlays later
+          // doesn't reintroduce the crash.
+          numberOfSharedAudioTags={16}
         />
       </div>
       {segmentMarkers.length > 0 ? (
