@@ -168,23 +168,41 @@ export async function duplicateProject(sourceId: string): Promise<{ projectId: s
   // sfx/ directory (already copied above) instead of the source project.
   // Without this, deleting the source project would invalidate every
   // override on the duplicate.
+  //
+  // After the path-normalisation migration, AssetRef.path stores values
+  // like `projects/<id>/sfx/foo.mp3` (relative to data/). Replace the
+  // source project id segment with the new id. The same replace also
+  // works for the legacy absolute form (`...\\data\\projects\\<id>\\sfx`)
+  // because `srcDir` matches there too.
+  const rewriteProjectPath = (p: string): string => {
+    if (!p) return p
+    return p
+      .replace(srcDir, newDir) // legacy absolute form
+      .replace(`projects/${sourceId}/`, `projects/${newId}/`) // new relative form
+  }
   const customSfx = (src.customSfx ?? []).map((entry) => ({
     ...entry,
-    path: entry.path.replace(srcDir, newDir),
+    path: rewriteProjectPath(entry.path),
   }))
   // Same rewrite for the image watermark — the logo file was copied as
   // part of the recursive `cp` above, but the storyboard still points at
   // the source project's dir.
   const logo: Project['logo'] =
     src.logo && src.logo.kind === 'image'
-      ? { ...src.logo, path: src.logo.path.replace(srcDir, newDir) }
+      ? { ...src.logo, path: rewriteProjectPath(src.logo.path) }
       : src.logo
+  // Library entries can also live under the source project's library/.
+  const library = (src.library ?? []).map((a) => ({
+    ...a,
+    path: rewriteProjectPath(a.path),
+  }))
   const copy: Project = {
     ...src,
     id: newId,
     title: `${src.title} (copy)`,
     customSfx,
     logo,
+    library,
     createdAt: now,
     updatedAt: now,
   }

@@ -1,0 +1,45 @@
+# CI for news-tok — typecheck + tests on every PR + push to main.
+# Kept intentionally minimal: no smoke renders (they pull ffmpeg / network),
+# no full build (the Studio Next.js build is ~2 min and not yet needed for
+# correctness checks). When the test suite grows beyond `shared`, extend
+# the matrix or split into parallel jobs.
+
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight runs on a branch when a new commit lands.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: typecheck + test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.0.9
+
+      # pnpm 11.0.9 requires Node ≥ 22.13. The repo's engines.node says
+      # ">=20" which makes local Node 20 still acceptable, but CI has to
+      # run pnpm itself and 22 is the lowest version that satisfies its
+      # internal `node:sqlite` import.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm typecheck
+
+      - run: pnpm test

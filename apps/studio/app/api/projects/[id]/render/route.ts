@@ -6,9 +6,12 @@ import {
   renderSegmentMedia,
   writeJob,
 } from '@news-tok/render'
+import { createLogger } from '@news-tok/shared/logger'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+const log = createLogger('render')
 
 /**
  * Trigger a render asynchronously. Returns immediately with a jobId.
@@ -51,6 +54,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       startedAt: new Date().toISOString(),
     })
 
+    void log.info('render start', {
+      projectId: params.id,
+      jobId,
+      scope,
+      segmentId,
+      variant: variantParam,
+    })
+
     // Fire and forget — the Studio polls .job.json via GET.
     void runRender(params.id, jobId, scope, segmentId, variantParam).catch(async (err) => {
       const message = err instanceof Error ? err.message : String(err)
@@ -63,6 +74,15 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         startedAt: new Date().toISOString(),
         endedAt: new Date().toISOString(),
         error: message,
+      })
+      void log.error('render failed', {
+        projectId: params.id,
+        jobId,
+        scope,
+        message,
+        // Stack is non-fatal — fits in a meta line so DevOps can spot
+        // the file:line that threw without opening the source.
+        stack: err instanceof Error ? err.stack?.split('\n').slice(0, 6).join('\\n') : undefined,
       })
     })
 
@@ -115,6 +135,12 @@ async function runRender(
       endedAt: new Date().toISOString(),
       outputPath: outPath,
     })
+    void log.info('segment render done', {
+      projectId,
+      jobId,
+      segmentId,
+      durationMs: Date.now() - new Date(startedAt).getTime(),
+    })
     return
   }
 
@@ -139,5 +165,11 @@ async function runRender(
     // list is also stored so future Studio versions can show all variants.
     outputPath: outPaths[0],
     outputPaths: outPaths,
+  })
+  void log.info('project render done', {
+    projectId,
+    jobId,
+    outputs: outPaths.length,
+    durationMs: Date.now() - new Date(startedAt).getTime(),
   })
 }

@@ -4,8 +4,13 @@ import { existsSync } from 'node:fs'
 import { mkdir, rename, unlink, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { ProjectSchema, type AssetRef, type Project } from '@news-tok/shared/schema'
-import { projectLibraryDir, readStoryboard, writeStoryboard } from '@news-tok/render'
-import { fitSegmentDurations, stripEmoji } from '@news-tok/shared/sanitize'
+import { dataDir, projectLibraryDir, readStoryboard, writeStoryboard } from '@news-tok/render'
+import {
+  fitSegmentDurations,
+  normalizeAssetPaths,
+  stripEmoji,
+} from '@news-tok/shared/sanitize'
+import { resolveDataPath, toRelativeDataPath } from '@news-tok/shared/paths'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -101,7 +106,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const libDir = projectLibraryDir(params.id)
   await mkdir(libDir, { recursive: true })
 
-  const existingPaths = new Set((project.library ?? []).map((a) => a.path))
+  // Build the dedupe set using canonical relative form so existing
+  // entries stored as either absolute (legacy) or relative match
+  // against the new upload's relative path consistently.
+  const existingPaths = new Set(
+    (project.library ?? []).map((a) => toRelativeDataPath(a.path))
+  )
   const added: AssetRef[] = []
   const skipped: { name: string; reason: string }[] = []
 
@@ -133,14 +143,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       await rename(tmp, outPath)
     }
 
-    if (existingPaths.has(outPath)) {
+    // Store + dedupe by relative form. The normaliser in the sanitiser
+    // chain would rewrite this anyway, but emitting relative directly
+    // keeps the storyboard response we return to the client clean.
+    const relPath = toRelativeDataPath(outPath)
+    if (existingPaths.has(relPath)) {
       skipped.push({ name: fileName, reason: 'already in library' })
       continue
     }
-    existingPaths.add(outPath)
+    existingPaths.add(relPath)
     added.push({
       kind: 'image',
-      path: outPath,
+      path: relPath,
       source: { provider: 'local', id: fileName, attribution: fileName },
     })
   }
@@ -166,7 +180,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       { status: 500 }
     )
   }
-  const { project: stretched } = fitSegmentDurations(sanitizeProject(parsed.data))
+  const { project: fitted } = fitSegmentDurations(sanitizeProject(parsed.data))
+  // Normalise absolute paths to data/-relative before write so storyboards
+  // stay portable (matches Studio PATCH + MCP updateStoryboard chain).
+  const { project: stretched } = normalizeAssetPaths(fitted, dataDir())
   await writeStoryboard(params.id, stretched)
 
   return NextResponse.json({
@@ -201,9 +218,11 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!target) {
     return NextResponse.json({ error: 'Missing "path"' }, { status: 400 })
   }
-  // Confine deletes to this project's library dir.
+  // Confine deletes to this project's library dir. Accept both the new
+  // relative-to-data/ form ("projects/p1/library/abc.jpg") and the
+  // legacy absolute form so old client bookmarks still work.
   const libDir = projectLibraryDir(params.id)
-  const resolved = resolve(target)
+  const resolved = resolve(resolveDataPath(target))
   if (!resolved.startsWith(libDir)) {
     return NextResponse.json(
       { error: 'Path is not inside this project\'s library directory' },
@@ -221,8 +240,12 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     )
   }
 
+  // Library entries on disk now use the relative form, but legacy
+  // storyboards still have absolute paths. Match both shapes by
+  // comparing the canonical relative form.
+  const targetRel = toRelativeDataPath(resolved)
   const before = project.library ?? []
-  const after = before.filter((a) => a.path !== resolved)
+  const after = before.filter((a) => toRelativeDataPath(a.path) !== targetRel)
   if (after.length === before.length) {
     return NextResponse.json({ error: 'Entry not found in library' }, { status: 404 })
   }
@@ -239,7 +262,10 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       { status: 500 }
     )
   }
-  const { project: stretched } = fitSegmentDurations(sanitizeProject(parsed.data))
+  const { project: fitted } = fitSegmentDurations(sanitizeProject(parsed.data))
+  // Normalise absolute paths to data/-relative before write so storyboards
+  // stay portable (matches Studio PATCH + MCP updateStoryboard chain).
+  const { project: stretched } = normalizeAssetPaths(fitted, dataDir())
   await writeStoryboard(params.id, stretched)
 
   // Best-effort delete of the file. If another segment is still using

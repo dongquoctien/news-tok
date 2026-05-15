@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { NextResponse, type NextRequest } from 'next/server'
 import { REPO_ROOT } from '@news-tok/render'
+import { createLogger } from '@news-tok/shared/logger'
 import {
   findRunningJob,
   newOrchestrateJobId,
@@ -11,6 +12,8 @@ import {
   type OrchestrateJob,
   type OrchestratePhase,
 } from '@/lib/orchestrate-jobs'
+
+const log = createLogger('orchestrate')
 
 /**
  * Map MCP tool names → phase + Vietnamese-friendly step label. Drives
@@ -81,16 +84,25 @@ type StartBody = {
   skipRender?: boolean
 }
 
+// Backend defaults match the "Standard reel" UI preset — the
+// home page's recommended default. These are also the values the
+// API falls back to when callers omit length/segment fields. Sync
+// these with apps/studio/components/home/create-prompt.tsx
+// (LENGTH_PRESETS.standard) when changing.
 const DEFAULTS = {
   variants: 1 as 1 | 2 | 3,
-  maxDurationSec: 90,
-  maxSegments: 7,
+  maxDurationSec: 45,
+  maxSegments: 6,
   skipRender: true,
 } as const
 
+// Hard caps on the slider range. The upper bound on duration (90s)
+// is YouTube Shorts' limit + Reels/FB cap — past that the UI shows
+// a warning, but the API still accepts up to 90 in case the user
+// explicitly wants TikTok-only output.
 const LIMITS = {
-  maxDurationSec: { min: 20, max: 120 },
-  maxSegments: { min: 3, max: 15 },
+  maxDurationSec: { min: 15, max: 90 },
+  maxSegments: { min: 3, max: 12 },
 } as const
 
 function clamp(n: number, min: number, max: number): number {
@@ -142,9 +154,14 @@ function buildPrompt(body: StartBody): string {
   // planner always has room for at least 2 body beats.
   const bodyMin = 2
   const bodyMax = Math.max(bodyMin, maxSegments - 2)
+  // Per-beat target seconds. Floor 4 (snappier than that and the
+  // narration can't fit a full sentence); ceiling 7 (longer and the
+  // Ken Burns motion drags). The formula matches what each LENGTH
+  // preset declares in create-prompt.tsx, so the AI gets the same
+  // pacing target regardless of preset vs custom slider input.
   const perSegmentTargetSec = Math.max(
     4,
-    Math.min(8, Math.round(maxDurationSec / maxSegments))
+    Math.min(7, Math.round(maxDurationSec / maxSegments))
   )
 
   return [
@@ -208,6 +225,12 @@ export async function POST(req: NextRequest) {
       willRender: !skipRender,
     }
     await writeOrchestrateJob(job)
+    void log.info('job start', {
+      jobId,
+      sourceType: body.source.type,
+      language: body.language,
+      aspect: body.aspect,
+    })
 
     void runClaude(job, buildPrompt(body)).catch(async (err) => {
       const message = err instanceof Error ? err.message : String(err)
@@ -217,6 +240,11 @@ export async function POST(req: NextRequest) {
         status: 'failed',
         endedAt: new Date().toISOString(),
         error: message,
+      })
+      void log.error('job failed', {
+        jobId,
+        phase: (failed ?? job).phase,
+        message,
       })
     })
 
@@ -450,7 +478,10 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
   })
 
   const final = await readOrchestrateJob(job.jobId)
-  if (final?.status === 'cancelled') return
+  if (final?.status === 'cancelled') {
+    void log.warn('job cancelled', { jobId: job.jobId, projectId })
+    return
+  }
   await writeOrchestrateJob({
     ...(final ?? job),
     status: projectId ? 'completed' : 'failed',
@@ -460,4 +491,17 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     step: projectId ? 'Hoàn tất — đang mở Studio…' : 'Không tạo được dự án',
     error: projectId ? undefined : 'No projectId detected in Claude output',
   })
+  if (projectId) {
+    void log.info('job completed', {
+      jobId: job.jobId,
+      projectId,
+      durationMs: Date.now() - new Date(job.startedAt).getTime(),
+    })
+  } else {
+    void log.error('job ended without projectId', {
+      jobId: job.jobId,
+      lastPhase: final?.phase,
+      stderrTail: stderr.slice(-500),
+    })
+  }
 }

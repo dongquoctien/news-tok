@@ -37,16 +37,79 @@ type Language = 'vi' | 'en'
 type Aspect = '9:16' | '16:9' | '1:1'
 type Variants = 1 | 2 | 3
 
-/** Caps and defaults for the Advanced panel sliders. Must stay in sync
- *  with apps/studio/app/api/orchestrate/route.ts — the API clamps to
- *  the same limits and falls back to the same defaults. */
+/** Length + density presets the user picks before any fine-tune. Each
+ *  preset sets `maxDurationSec` + `maxSegments` to a combo that maps
+ *  cleanly to a real-world short-video format. The numbers below come
+ *  from the platform sweet-spots:
+ *
+ *   - 'short-hook' — TikTok native (≤30s = best retention curve);
+ *      3-4 beats means 1 hook + 2-3 facts.
+ *   - 'standard'   — TikTok / IG Reels / YT Shorts all fit; 45s is the
+ *      retention max where viewers consistently finish; 5-6 beats is
+ *      "1 hook + body + outro" without padding.
+ *   - 'explainer'  — Right at the YouTube Shorts 60s cap; 6-8 beats
+ *      lets news context land properly. Past 60s you lose the Shorts
+ *      shelf algorithm.
+ *
+ *  Each preset also pins `perSegmentTargetSec`, which the orchestrator
+ *  uses as the "aim for ~Ns per beat" instruction. Without that pin,
+ *  AI would default to `Math.round(maxDur/maxSeg)` which produces
+ *  too-long beats for short formats and too-short beats for explainer
+ *  formats. */
+const LENGTH_PRESETS = [
+  {
+    id: 'short-hook',
+    label: 'Short hook',
+    description: '20–30s · 3–4 beats',
+    tagline: 'TikTok native, snappy',
+    maxDurationSec: 30,
+    maxSegments: 4,
+    perSegmentTargetSec: 6,
+  },
+  {
+    id: 'standard',
+    label: 'Standard reel',
+    description: '30–45s · 5–6 beats',
+    tagline: 'Recommended — fits every major platform',
+    maxDurationSec: 45,
+    maxSegments: 6,
+    perSegmentTargetSec: 7,
+  },
+  {
+    id: 'explainer',
+    label: 'Explainer',
+    description: '45–60s · 6–8 beats',
+    tagline: 'YT Shorts max, more context',
+    maxDurationSec: 60,
+    maxSegments: 8,
+    perSegmentTargetSec: 7,
+  },
+] as const
+
+type PresetId = (typeof LENGTH_PRESETS)[number]['id']
+const DEFAULT_PRESET_ID: PresetId = 'standard'
+
+/** Hard caps for the fine-tune sliders. Wider than any individual
+ *  preset so power users can deviate but still inside the limits the
+ *  backend route enforces. Must stay in sync with LIMITS in
+ *  apps/studio/app/api/orchestrate/route.ts. */
 const VARIANTS_DEFAULT: Variants = 1
-const DURATION_DEFAULT_SEC = 90
-const DURATION_MIN_SEC = 20
-const DURATION_MAX_SEC = 120
-const SEGMENTS_DEFAULT = 7
+const DURATION_MIN_SEC = 15
+const DURATION_MAX_SEC = 90
 const SEGMENTS_MIN = 3
-const SEGMENTS_MAX = 15
+const SEGMENTS_MAX = 12
+
+/** Per-platform hard caps used by the inline compatibility banner.
+ *  Source: each platform's developer / creator docs as of 2026-05.
+ *  YouTube Shorts is the strictest at 60s — videos longer than that
+ *  get rejected from the Shorts shelf and uploaded as regular videos,
+ *  which wrecks discovery for short-form-focused content. */
+const PLATFORM_LIMITS: Array<{ id: string; label: string; maxSec: number }> = [
+  { id: 'yt-shorts', label: 'YouTube Shorts', maxSec: 60 },
+  { id: 'tiktok', label: 'TikTok', maxSec: 180 },
+  { id: 'ig-reels', label: 'IG Reels', maxSec: 90 },
+  { id: 'fb-reels', label: 'FB Reels', maxSec: 90 },
+]
 
 type Phase =
   | 'starting'
@@ -113,22 +176,70 @@ export function CreatePrompt() {
   const [value, setValue] = useState('')
   const [language, setLanguage] = useState<Language>('vi')
   const [aspect, setAspect] = useState<Aspect>('9:16')
+  // Preset is the user's primary control — selecting one writes
+  // matching values into maxDurationSec + maxSegments. Fine-tune
+  // sliders below can then deviate from the preset; we track the
+  // chosen presetId separately so the cards keep showing the right
+  // active state even after the user has tweaked individual numbers.
+  const [presetId, setPresetId] = useState<PresetId>(DEFAULT_PRESET_ID)
+  const defaultPreset =
+    LENGTH_PRESETS.find((p) => p.id === DEFAULT_PRESET_ID)!
   const [variants, setVariants] = useState<Variants>(VARIANTS_DEFAULT)
-  const [maxDurationSec, setMaxDurationSec] = useState<number>(DURATION_DEFAULT_SEC)
-  const [maxSegments, setMaxSegments] = useState<number>(SEGMENTS_DEFAULT)
+  const [maxDurationSec, setMaxDurationSec] = useState<number>(
+    defaultPreset.maxDurationSec
+  )
+  const [maxSegments, setMaxSegments] = useState<number>(
+    defaultPreset.maxSegments
+  )
   const [advancedOpen, setAdvancedOpen] = useState(false)
   const [job, setJob] = useState<Job | null>(null)
   const [error, setError] = useState<string | null>(null)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement | null>(null)
 
-  // Surface "advanced tweaked" so the trigger badge shows the user is
-  // running with non-default limits. Helps prevent the silent "why is
-  // my video only 30s" surprise.
+  // The active preset (if any) is identified by matching the current
+  // duration + segments against each preset definition. If the user
+  // has tweaked Fine-tune sliders the match goes null and the cards
+  // de-highlight — but the Fine-tune block stays anchored to the last
+  // explicitly-chosen `presetId` for the perSegmentTargetSec hint.
+  const matchingPreset =
+    LENGTH_PRESETS.find(
+      (p) =>
+        p.maxDurationSec === maxDurationSec && p.maxSegments === maxSegments
+    ) ?? null
+
+  /** Apply a preset: writes its numbers into the slider state AND
+   *  records which preset is active. */
+  const applyPreset = (id: PresetId) => {
+    const p = LENGTH_PRESETS.find((x) => x.id === id)
+    if (!p) return
+    setPresetId(id)
+    setMaxDurationSec(p.maxDurationSec)
+    setMaxSegments(p.maxSegments)
+  }
+
+  /** Per-segment beat seconds derived from current sliders. Surfaces
+   *  in the compat banner so the user can see whether their custom
+   *  combo would feel snappy (~4s) or sleepy (>10s). */
+  const perSegmentSec = Math.max(
+    1,
+    Math.round((maxDurationSec / Math.max(maxSegments, 1)) * 10) / 10
+  )
+
+  /** Which target platforms accept this length? Drives the inline
+   *  compat banner. Anything > 60s loses YouTube Shorts; > 90s loses
+   *  IG / FB Reels too. */
+  const platformFit = PLATFORM_LIMITS.map((pl) => ({
+    ...pl,
+    fits: maxDurationSec <= pl.maxSec,
+  }))
+
+  // "Advanced tweaked" is now derived from whether the current
+  // sliders deviate from the active preset's defaults, OR variants
+  // isn't the default — same idea, more honest about what counts as
+  // "tweaked" once presets exist.
   const advancedTouched =
-    variants !== VARIANTS_DEFAULT ||
-    maxDurationSec !== DURATION_DEFAULT_SEC ||
-    maxSegments !== SEGMENTS_DEFAULT
+    variants !== VARIANTS_DEFAULT || matchingPreset === null
 
   // Auto-grow textarea: reset height first so shrinking back works, then
   // expand to fit scrollHeight. Capped at ~14 lines so a giant paste
@@ -352,44 +463,82 @@ export function CreatePrompt() {
             id="create-prompt-advanced"
             className="mt-4 space-y-4 border-t pt-4"
           >
-            <SliderRow
-              label="Số kiểu video"
-              hint="Mỗi kiểu (A/B/C) là một bộ font + màu khác nhau cho cùng nội dung. Chọn 1 cho nhanh; chọn 3 nếu muốn so sánh phong cách."
-              min={1}
-              max={3}
-              step={1}
-              value={variants}
-              onChange={(n) => setVariants(n as Variants)}
-              format={(n) =>
-                n === 1
-                  ? '1 kiểu (A)'
-                  : n === 2
-                    ? '2 kiểu (A + B)'
-                    : '3 kiểu (A + B + C)'
-              }
-              disabled={running}
+            {/* Preset cards — the primary control. Each card sets
+                duration + segments + per-beat target in one click.
+                The card visually highlights when its (duration,
+                segments) tuple matches the current sliders. */}
+            <div>
+              <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                Định dạng video
+              </div>
+              <div className="grid gap-2 sm:grid-cols-3">
+                {LENGTH_PRESETS.map((p) => {
+                  const active =
+                    matchingPreset?.id === p.id ||
+                    (matchingPreset === null && p.id === presetId)
+                  return (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => applyPreset(p.id)}
+                      disabled={running}
+                      className={cn(
+                        'relative rounded-md border p-3 text-left transition-colors',
+                        // Active state: bump ring + bg + thicker primary
+                        // border so the chosen card stays visible in
+                        // dark-mode where a 1px primary border is almost
+                        // invisible against bg-card.
+                        active
+                          ? 'border-primary bg-primary/10 ring-2 ring-primary/40'
+                          : 'border-input bg-card hover:bg-secondary/50',
+                        running ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
+                      )}
+                    >
+                      {active ? (
+                        <span
+                          aria-hidden
+                          className="absolute right-2 top-2 inline-flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground"
+                        >
+                          ✓
+                        </span>
+                      ) : null}
+                      <div className="text-sm font-semibold">{p.label}</div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">
+                        {p.description}
+                      </div>
+                      <div className="mt-2 text-[10px] text-muted-foreground/80">
+                        {p.tagline}
+                      </div>
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Inline compatibility banner — tells the user which
+                platforms accept the current length. Updates live as
+                presets change or fine-tune sliders move. Most
+                important warning: YouTube Shorts caps at 60s; videos
+                past that fall off the Shorts shelf. */}
+            <PlatformCompatBanner
+              platforms={platformFit}
+              durationSec={maxDurationSec}
+              segmentCount={maxSegments}
+              perSegmentSec={perSegmentSec}
             />
-            <SliderRow
-              label="Thời lượng tối đa"
-              hint="Giới hạn cứng độ dài video. AI sẽ chọn thời lượng phù hợp với bài báo nhưng không vượt quá ngưỡng này."
-              min={DURATION_MIN_SEC}
-              max={DURATION_MAX_SEC}
-              step={5}
-              value={maxDurationSec}
-              onChange={setMaxDurationSec}
-              format={(n) => `${n} giây`}
-              disabled={running}
-            />
-            <SliderRow
-              label="Số đoạn"
-              hint="Tổng số đoạn (mở bài + thân bài + kết bài). Càng nhiều thì mỗi đoạn càng ngắn."
-              min={SEGMENTS_MIN}
-              max={SEGMENTS_MAX}
-              step={1}
-              value={maxSegments}
-              onChange={setMaxSegments}
-              format={(n) => `${n} đoạn`}
-              disabled={running}
+
+            {/* Fine-tune — collapsed by default, opens when the user
+                wants to deviate from a preset. The variant count
+                lives here too because it's an orthogonal axis (style
+                count, not length). */}
+            <FineTuneBlock
+              variants={variants}
+              setVariants={setVariants}
+              maxDurationSec={maxDurationSec}
+              setMaxDurationSec={setMaxDurationSec}
+              maxSegments={maxSegments}
+              setMaxSegments={setMaxSegments}
+              running={running}
             />
           </div>
         ) : null}
@@ -563,5 +712,158 @@ function SliderRow({
         </p>
       ) : null}
     </div>
+  )
+}
+
+/**
+ * Inline compatibility banner. Shows the user (a) one-line summary of
+ * the current length + density, (b) which target platforms accept
+ * this length, and (c) any warnings — chiefly YouTube Shorts > 60s
+ * losing the Shorts shelf. The banner is purely informational; it
+ * never blocks submission, since the user might legitimately want a
+ * long-form variant that they'll trim later.
+ */
+function PlatformCompatBanner({
+  platforms,
+  durationSec,
+  segmentCount,
+  perSegmentSec,
+}: {
+  platforms: Array<{ id: string; label: string; maxSec: number; fits: boolean }>
+  durationSec: number
+  segmentCount: number
+  perSegmentSec: number
+}) {
+  const fitting = platforms.filter((p) => p.fits)
+  const dropped = platforms.filter((p) => !p.fits)
+  const pace =
+    perSegmentSec <= 4
+      ? 'rất snappy'
+      : perSegmentSec <= 6
+        ? 'snappy'
+        : perSegmentSec <= 8
+          ? 'cân bằng'
+          : 'chậm rãi'
+
+  return (
+    <div className="rounded-md border bg-secondary/30 px-3 py-2 text-xs">
+      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+        <span className="font-medium">
+          ≤{durationSec}s · {segmentCount} đoạn · ~{perSegmentSec}s/đoạn
+        </span>
+        <span className="text-muted-foreground">({pace})</span>
+      </div>
+      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+        {fitting.length > 0 ? (
+          <>
+            <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
+              OK:
+            </span>
+            {fitting.map((p) => (
+              <span
+                key={p.id}
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300"
+              >
+                {p.label}
+              </span>
+            ))}
+          </>
+        ) : null}
+        {dropped.length > 0 ? (
+          <>
+            <span className="ml-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+              Vượt:
+            </span>
+            {dropped.map((p) => (
+              <span
+                key={p.id}
+                className="inline-flex items-center gap-1 rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] text-amber-700 dark:text-amber-300"
+                title={`${p.label} caps at ${p.maxSec}s`}
+              >
+                ⚠ {p.label} ≤{p.maxSec}s
+              </span>
+            ))}
+          </>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Collapsible fine-tune block. Holds the three sliders from the old
+ * design (variants, duration, segments) but opens only when the user
+ * explicitly clicks "Fine-tune" — most users will just pick a preset
+ * and move on. Wrapping `<details>` natively handles the toggle so
+ * we don't need extra state.
+ */
+function FineTuneBlock({
+  variants,
+  setVariants,
+  maxDurationSec,
+  setMaxDurationSec,
+  maxSegments,
+  setMaxSegments,
+  running,
+}: {
+  variants: Variants
+  setVariants: (n: Variants) => void
+  maxDurationSec: number
+  setMaxDurationSec: (n: number) => void
+  maxSegments: number
+  setMaxSegments: (n: number) => void
+  running: boolean
+}) {
+  return (
+    <details className="group rounded-md border bg-card">
+      <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-xs font-medium">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <Sliders className="size-3.5" />
+          Tinh chỉnh thêm
+        </span>
+        <ChevronDown className="size-3.5 transition-transform group-open:rotate-180" />
+      </summary>
+      <div className="space-y-4 border-t px-3 pb-3 pt-3">
+        <SliderRow
+          label="Số kiểu video"
+          hint="Mỗi kiểu (A/B/C) là một bộ font + màu khác nhau cho cùng nội dung. Chọn 1 cho nhanh; chọn 3 nếu muốn so sánh phong cách."
+          min={1}
+          max={3}
+          step={1}
+          value={variants}
+          onChange={(n) => setVariants(n as Variants)}
+          format={(n) =>
+            n === 1
+              ? '1 kiểu (A)'
+              : n === 2
+                ? '2 kiểu (A + B)'
+                : '3 kiểu (A + B + C)'
+          }
+          disabled={running}
+        />
+        <SliderRow
+          label="Thời lượng tối đa"
+          hint="Giới hạn cứng độ dài video. AI sẽ chọn thời lượng phù hợp với bài báo nhưng không vượt quá ngưỡng này."
+          min={DURATION_MIN_SEC}
+          max={DURATION_MAX_SEC}
+          step={5}
+          value={maxDurationSec}
+          onChange={setMaxDurationSec}
+          format={(n) => `${n} giây`}
+          disabled={running}
+        />
+        <SliderRow
+          label="Số đoạn"
+          hint="Tổng số đoạn (mở bài + thân bài + kết bài). Càng nhiều thì mỗi đoạn càng ngắn."
+          min={SEGMENTS_MIN}
+          max={SEGMENTS_MAX}
+          step={1}
+          value={maxSegments}
+          onChange={setMaxSegments}
+          format={(n) => `${n} đoạn`}
+          disabled={running}
+        />
+      </div>
+    </details>
   )
 }

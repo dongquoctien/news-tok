@@ -4,11 +4,13 @@ import { readdir } from 'node:fs/promises'
 import { ProjectSchema, type Project } from '@news-tok/shared/schema'
 import {
   fitSegmentDurations,
+  normalizeAssetPaths,
   normalizeSceneNames,
   reconcileLibrary,
   stripEmoji,
 } from '@news-tok/shared/sanitize'
 import {
+  dataDir,
   deleteProject,
   projectScenesDir,
   readStoryboard,
@@ -161,7 +163,12 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
     // backgrounds. Library tab in Studio = "all media this project
     // uses" (stock + article + manual upload). Back-fills old projects
     // the first time the user saves them.
-    const { project: next } = reconcileLibrary(fitted)
+    const { project: withLibrary } = reconcileLibrary(fitted)
+    // Final step: rewrite any absolute AssetRef paths to the new
+    // relative-to-data/ form so storyboards stay portable across
+    // machines. Runs LAST so paths added by reconcileLibrary's
+    // segment mirroring also get normalised.
+    const { project: next } = normalizeAssetPaths(withLibrary, dataDir())
     await writeStoryboard(params.id, next)
     return NextResponse.json(next)
   } catch (err) {

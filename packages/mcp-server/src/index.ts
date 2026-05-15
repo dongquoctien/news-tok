@@ -10,6 +10,7 @@ import {
 } from '@news-tok/shared/schema'
 import {
   fitSegmentDurations,
+  normalizeAssetPaths,
   normalizeSceneNames,
   reconcileLibrary,
   recommendSegmentDurationSec,
@@ -28,6 +29,7 @@ import {
   wikimedia,
 } from '@news-tok/media'
 import {
+  dataDir,
   deleteProject as deleteProjectFiles,
   projectScenesDir,
   projectStoryboardPath,
@@ -281,9 +283,17 @@ async function main() {
           added: libraryAdded,
           deduped: libraryDeduped,
         } = reconcileLibrary(fitted)
+        // Rewrite AssetRef paths to the relative-to-data/ form last,
+        // after reconcileLibrary's segment mirroring has had a chance
+        // to add new entries. AI orchestrators that call searchImage
+        // get back absolute paths (cache adapters still emit those);
+        // this is the chokepoint that converts them before they hit
+        // disk so the storyboard stays portable.
+        const { project: pathsNormalized, converted: pathsConverted } =
+          normalizeAssetPaths(withLibrary, dataDir())
         // Re-parse so the on-disk file is always schema-clean even if the
         // sanitisation step accidentally introduced an invalid shape.
-        const final = ProjectSchema.parse(withLibrary)
+        const final = ProjectSchema.parse(pathsNormalized)
         await writeStoryboard(projectId, final)
         return ok({
           project: final,
@@ -291,6 +301,7 @@ async function main() {
           sceneAdjustments,
           libraryAdded,
           libraryDeduped,
+          pathsConverted,
         })
       } catch (err) {
         return fail(err)

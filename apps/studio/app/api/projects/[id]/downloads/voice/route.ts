@@ -5,6 +5,7 @@ import { spawn } from 'node:child_process'
 import { NextResponse, type NextRequest } from 'next/server'
 import { readStoryboard, REPO_ROOT } from '@news-tok/render'
 import { ffmpegBinary } from '@news-tok/media'
+import { resolveDataPath } from '@news-tok/shared/paths'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -28,8 +29,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ error: 'project not found' }, { status: 404 })
   }
 
+  // AssetRef.path is stored relative to data/ (new convention) but the
+  // ffmpeg concat below needs absolute paths. resolveDataPath handles
+  // both the new and legacy absolute form so unmigrated storyboards
+  // still work.
   const narrationPaths = project.segments
     .map((s) => s.audio?.narration?.path)
+    .map((p) => (p ? resolveDataPath(p) : undefined))
     .filter((p): p is string => !!p && existsSync(p))
 
   if (narrationPaths.length === 0) {
