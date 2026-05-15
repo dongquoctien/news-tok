@@ -136,6 +136,44 @@ export const BUILT_IN_LAYOUTS: BuiltInLayoutMeta[] = [
     thumbnail: '/layout-previews/builtin-comparisonSplit.png',
     hint: '"Evidence overlay" — photo top, dot-list of facts beneath.',
   },
+  // News & journalism set — Gemini-inspired layouts tuned for VN
+  // press / pháp luật / chiến sự / sức khỏe content.
+  {
+    id: 'builtin-breakingNews',
+    name: 'Breaking news',
+    family: 'media-led',
+    slots: { media: true, eyebrow: true, chips: false, fileId: false },
+    thumbnail: '/layout-previews/builtin-breakingNews.png',
+    hint:
+      'Red "BREAKING" banner top, boxed media + LIVE dot, headline with blue drop-shadow.',
+  },
+  {
+    id: 'builtin-portraitQuote',
+    name: 'Portrait quote',
+    family: 'editorial',
+    slots: { media: true, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-portraitQuote.png',
+    hint:
+      'Subject portrait full-bleed + pull quote on a gold-rule plate; name tag along the bottom.',
+  },
+  {
+    id: 'builtin-timestampedWar',
+    name: 'Field report',
+    family: 'media-led',
+    slots: { media: true, eyebrow: true, chips: true, fileId: false },
+    thumbnail: '/layout-previews/builtin-timestampedWar.png',
+    hint:
+      'Olive + steel war-coverage tone; chips become "04:30 AM · event" chronology.',
+  },
+  {
+    id: 'builtin-healthCards',
+    name: 'Health cards',
+    family: 'design-forward',
+    slots: { media: true, eyebrow: true, chips: true, fileId: false },
+    thumbnail: '/layout-previews/builtin-healthCards.png',
+    hint:
+      'Clean medical palette; chips become icon cards (auto-picks water/sleep/leaf/heart).',
+  },
 ]
 
 /** Look up a layout meta by id; returns undefined for user layouts
