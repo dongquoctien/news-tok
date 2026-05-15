@@ -268,7 +268,7 @@ function ProjectRow({
               Delete). Description / downloads / publish below run
               full width because the action cluster sits next to the
               title vertically, not on top of every line of meta. */}
-          <h3 className="break-words pr-[210px] text-xl font-semibold leading-tight">
+          <h3 className="break-words pr-[250px] text-xl font-semibold leading-tight">
             {project.title}
           </h3>
 

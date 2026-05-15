@@ -39,7 +39,16 @@ export const KeyPoint = ({ segment, project, textStyle, fontOverride, colorOverr
 
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
-      {bg ? <KenBurns src={bg.path} from={1.12} to={1.0} panX={-0.05} panY={0.05} /> : null}
+      {bg ? (
+        <KenBurns
+          src={bg.path}
+          from={1.12}
+          to={1.0}
+          panX={-0.05}
+          panY={0.05}
+          edits={segment.backgroundEdits}
+        />
+      ) : null}
       <AbsoluteFill
         style={{
           background:

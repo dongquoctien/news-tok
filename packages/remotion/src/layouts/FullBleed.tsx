@@ -36,7 +36,14 @@ export function FullBleed({
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
       {media ? (
-        <KenBurns src={media.path} from={1.12} to={1.0} panX={-0.05} panY={0.05} />
+        <KenBurns
+          src={media.path}
+          from={1.12}
+          to={1.0}
+          panX={-0.05}
+          panY={0.05}
+          edits={segment.backgroundEdits}
+        />
       ) : null}
       <AbsoluteFill
         style={{

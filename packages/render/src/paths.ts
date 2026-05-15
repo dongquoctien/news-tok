@@ -16,6 +16,10 @@ export const projectStoryboardPath = (projectId: string) =>
   resolve(projectDir(projectId), 'storyboard.json')
 export const projectSfxDir = (projectId: string) =>
   resolve(projectDir(projectId), 'sfx')
+/** Per-project image library — bulk-imported backgrounds users can
+ *  pull from when editing segments. Hash-deduped by content. */
+export const projectLibraryDir = (projectId: string) =>
+  resolve(projectDir(projectId), 'library')
 /** Where the watermark image is staged inside publicDir for Remotion. */
 export const logoStagingDir = () => resolve(dataDir(), 'logo')
 export const bundleCacheRoot = () => resolve(REPO_ROOT, '.remotion-cache')

@@ -7,7 +7,9 @@ import {
   Captions,
   CaptionsOff,
   ChevronDown,
+  Crop,
   Film,
+  FolderOpen,
   Image as ImageIcon,
   Languages,
   Layers,
@@ -26,9 +28,11 @@ import {
 import {
   DEFAULT_VOICES,
   type AssetRef,
+  type BackgroundEdits,
   type ColorOverride,
   type Project,
   type Segment,
+  type TextSfx,
   type TextStyle,
 } from '@news-tok/shared/schema'
 import { findTextStyle } from '@news-tok/shared/text-styles'
@@ -37,6 +41,8 @@ import { PlayerPane } from '@/components/studio/player-pane'
 import { VariantsPanel } from '@/components/studio/variants-panel'
 import { VoicePicker } from '@/components/studio/voice-picker'
 import { ImagePicker } from '@/components/studio/image-picker'
+import { ImageLibrary } from '@/components/studio/image-library'
+import { ImageEditorDialog } from '@/components/studio/image-editor-dialog'
 import { MusicPicker } from '@/components/studio/music-picker'
 import { LayoutPicker } from '@/components/studio/layout-picker'
 import { layoutNeedsSlot } from '@/lib/layouts-catalog'
@@ -64,6 +70,7 @@ import { cn } from '@/lib/utils'
 
 type Status = 'idle' | 'saving' | 'saved' | 'error'
 type RenderStatus = 'idle' | 'running' | 'completed' | 'failed'
+type GenVoiceStatus = 'idle' | 'running' | 'success' | 'error'
 
 function projectSignature(p: Project): string {
   // Exclude `updatedAt` from dirty check — it changes on every patch.
@@ -89,6 +96,16 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   const [renderingVariantId, setRenderingVariantId] = useState<string | null>(null)
   /** variantId → output mp4 absolute path from the latest render. */
   const [outputsByVariant, setOutputsByVariant] = useState<Record<string, string>>({})
+  /** State of the batch "Gen voice tất cả" toolbar action. */
+  const [genVoiceStatus, setGenVoiceStatus] = useState<GenVoiceStatus>('idle')
+  const [genVoiceError, setGenVoiceError] = useState<string | null>(null)
+  /** Human-readable summary of the last batch run (shown briefly). */
+  const [genVoiceSummary, setGenVoiceSummary] = useState<string | null>(null)
+  /** When set, opens the VoicePicker for a batch-gen flow. The string
+   *  is the mode the picker should run on completion. null = closed. */
+  const [voicePickerMode, setVoicePickerMode] = useState<'missing' | 'all' | null>(null)
+  /** Brief feedback for the "Open folder" toolbar action. */
+  const [openFolderError, setOpenFolderError] = useState<string | null>(null)
 
   const currentSig = useMemo(() => projectSignature(project), [project])
   const isDirty = currentSig !== lastSavedSig
@@ -123,6 +140,70 @@ export function ProjectEditor({ initial }: { initial: Project }) {
 
   const updateProject = useCallback((patch: Partial<Project>) => {
     setProject((p) => ({ ...p, ...patch, updatedAt: new Date().toISOString() }))
+  }, [])
+
+  /**
+   * Broadcast a single SFX configuration to every segment in the
+   * project. The picker always passes a concrete TextSfx (even an
+   * "all-None" one) because the renderer resolves
+   *   segment.sfxOverride ?? style.sfx
+   * — so a present-but-empty override is what truly silences cues
+   * (clearing the override would let the style's default SFX leak
+   * back through, which is the exact bug this codepath fixes).
+   */
+  const applySfxToAll = useCallback((next: TextSfx) => {
+    setProject((p) => ({
+      ...p,
+      segments: p.segments.map((s) => ({
+        ...s,
+        sfxOverride: next,
+      })),
+      updatedAt: new Date().toISOString(),
+    }))
+  }, [])
+
+  /**
+   * Replace the project.library list. Called by ImageLibrary after a
+   * successful POST/DELETE so the client mirrors disk without needing
+   * a full project reload. Marks the lastSavedSig so the toolbar's
+   * "Save*" badge doesn't light up — the library endpoint already
+   * persisted the new list.
+   */
+  const onLibraryChange = useCallback((nextLibrary: AssetRef[]) => {
+    setProject((p) => {
+      const merged: Project = {
+        ...p,
+        library: nextLibrary,
+        updatedAt: new Date().toISOString(),
+      }
+      setLastSavedSig(projectSignature(merged))
+      return merged
+    })
+  }, [])
+
+  /**
+   * Apply the first N library images to segments missing a background
+   * image. Walks segments in order, skipping any that already have one.
+   * Returns the count actually filled so the panel can show a toast.
+   */
+  const autoFillEmptySegments = useCallback((assets: AssetRef[]): number => {
+    let filled = 0
+    setProject((p) => {
+      let cursor = 0
+      const segments = p.segments.map((s) => {
+        if (s.visuals.background) return s
+        const asset = assets[cursor++]
+        if (!asset) return s
+        filled += 1
+        return {
+          ...s,
+          visuals: { ...s.visuals, background: asset },
+        }
+      })
+      if (filled === 0) return p
+      return { ...p, segments, updatedAt: new Date().toISOString() }
+    })
+    return filled
   }, [])
 
   /**
@@ -314,6 +395,94 @@ export function ProjectEditor({ initial }: { initial: Project }) {
     }
   }, [project])
 
+  /**
+   * Batch-synthesize narration for every segment that needs it.
+   *
+   *   - mode 'missing' fills only segments without audio (the common path
+   *     after manually adding new segments).
+   *   - mode 'all' re-synthesizes everything, useful after changing the
+   *     project voice.
+   *   - voiceId, when provided, overrides every segment's voice and
+   *     forces the batch onto that voice. When omitted each segment
+   *     keeps its current voiceId (falling back to the language default).
+   *
+   * Posts to /api/projects/[id]/voice-all, which writes the new
+   * storyboard to disk. We then replace the local state with the server
+   * response so the editor instantly reflects the new asset paths +
+   * stretched durations. Refuses to start when there are unsaved
+   * changes so we never overwrite local edits with a stale disk copy.
+   */
+  const generateAllVoices = useCallback(
+    async (mode: 'missing' | 'all', voiceId?: string) => {
+      if (isDirty) {
+        setGenVoiceError('Có thay đổi chưa lưu — hãy Save trước khi gen voice.')
+        setGenVoiceStatus('error')
+        return
+      }
+      setGenVoiceStatus('running')
+      setGenVoiceError(null)
+      setGenVoiceSummary(null)
+      try {
+        const res = await fetch(`/api/projects/${project.id}/voice-all`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            onlyMissing: mode === 'missing',
+            ...(voiceId ? { voiceId } : {}),
+          }),
+        })
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as { error?: string }
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+        const data = (await res.json()) as {
+          project: Project
+          summary: { total: number; synthesized: number; skipped: number; failed: number }
+        }
+        // Replace local state with the server-truth project, and reset
+        // the dirty baseline so the Save button doesn't immediately
+        // light up because narration paths changed.
+        setProject(data.project)
+        setLastSavedSig(projectSignature(data.project))
+        const s = data.summary
+        setGenVoiceSummary(
+          `Đã tạo ${s.synthesized}/${s.total}` +
+            (s.skipped ? ` · bỏ qua ${s.skipped}` : '') +
+            (s.failed ? ` · lỗi ${s.failed}` : '')
+        )
+        setGenVoiceStatus(s.failed > 0 ? 'error' : 'success')
+        if (s.failed > 0) {
+          setGenVoiceError(`${s.failed} segment gen voice thất bại`)
+        }
+        setTimeout(() => {
+          setGenVoiceStatus((cur) => (cur === 'success' ? 'idle' : cur))
+        }, 3000)
+      } catch (err) {
+        setGenVoiceStatus('error')
+        setGenVoiceError(err instanceof Error ? err.message : String(err))
+      }
+    },
+    [isDirty, project.id]
+  )
+
+  const openProjectFolder = useCallback(async () => {
+    setOpenFolderError(null)
+    try {
+      const res = await fetch(`/api/projects/${project.id}/open-folder`, {
+        method: 'POST',
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+    } catch (err) {
+      setOpenFolderError(
+        `Open folder failed: ${err instanceof Error ? err.message : String(err)}`
+      )
+      setTimeout(() => setOpenFolderError(null), 4000)
+    }
+  }, [project.id])
+
   const triggerRender = useCallback(
     async (variant?: string) => {
       setRenderStatus('running')
@@ -428,6 +597,16 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <ThemeToggle />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={openProjectFolder}
+            title="Open this project's folder in your file manager (output.mp4 lives here)"
+            aria-label="Open project folder"
+          >
+            <FolderOpen />
+            Folder
+          </Button>
           {/* Subs / Music / Watermark moved to the right aside's
               PROJECT section so the header stays focused on
               navigation + save/render actions. */}
@@ -470,6 +649,116 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                   ? 'Save*'
                   : 'Saved'}
           </Button>
+          {/* Batch gen-voice split button:
+                primary action fills only missing narration with each
+                segment's current voice (safe default). The dropdown
+                caret exposes: re-gen all with current voices, or pick
+                a single voice and apply it to every segment. */}
+          <div className="inline-flex items-stretch">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => generateAllVoices('missing')}
+              disabled={
+                genVoiceStatus === 'running' || project.segments.length === 0
+              }
+              title={
+                genVoiceStatus === 'running'
+                  ? 'Đang tạo giọng đọc cho tất cả segment…'
+                  : 'Tạo giọng đọc cho mọi segment chưa có narration (giữ giọng hiện tại)'
+              }
+              className="rounded-r-none border-r-0"
+            >
+              {genVoiceStatus === 'running' ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  Gen voice…
+                </>
+              ) : (
+                <>
+                  <Mic />
+                  Gen voice all
+                </>
+              )}
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    genVoiceStatus === 'running' || project.segments.length === 0
+                  }
+                  title="Tuỳ chọn gen voice"
+                  className="rounded-l-none px-2"
+                  aria-label="Tuỳ chọn gen voice"
+                >
+                  <ChevronDown className="size-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-72">
+                <DropdownMenuLabel>Giữ giọng hiện tại của từng segment</DropdownMenuLabel>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    // Defer the API call by one frame so Radix can finish
+                    // closing the menu first. Without this, the action
+                    // immediately disables the trigger (genVoiceStatus =
+                    // 'running'), and Radix's close transition stalls
+                    // trying to refocus a disabled element — leaving the
+                    // popover stuck open while the request runs.
+                    requestAnimationFrame(() => void generateAllVoices('missing'))
+                  }}
+                >
+                  Chỉ segment chưa có giọng
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={() => {
+                    requestAnimationFrame(() => void generateAllVoices('all'))
+                  }}
+                >
+                  Tạo lại toàn bộ (ghi đè)
+                </DropdownMenuItem>
+                <DropdownMenuLabel className="mt-1 border-t pt-2">
+                  Chọn giọng khác cho cả project
+                </DropdownMenuLabel>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    // For the picker-flow items we keep preventDefault +
+                    // a deferred state update: the menu closes on its
+                    // own next tick, then the dialog opens cleanly
+                    // without fighting Radix for focus.
+                    e.preventDefault()
+                    requestAnimationFrame(() => setVoicePickerMode('missing'))
+                  }}
+                >
+                  Chọn giọng & gen segment chưa có
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={(e) => {
+                    e.preventDefault()
+                    requestAnimationFrame(() => setVoicePickerMode('all'))
+                  }}
+                >
+                  Chọn giọng & tạo lại toàn bộ
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
+          <VoicePicker
+            language={project.language}
+            currentVoiceId={
+              project.segments[0]?.voice.voiceId || DEFAULT_VOICES[project.language]
+            }
+            open={voicePickerMode !== null}
+            onOpenChange={(open) => {
+              if (!open) setVoicePickerMode(null)
+            }}
+            onSelect={(voiceId) => {
+              const mode = voicePickerMode
+              setVoicePickerMode(null)
+              if (mode) void generateAllVoices(mode, voiceId)
+            }}
+          />
           <SocialCaptionDialog
             projectId={project.id}
             trigger={
@@ -553,9 +842,25 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         </div>
       </header>
 
-      {(saveError || renderError) && (
+      {(saveError || renderError || genVoiceError || openFolderError) && (
         <div className="border-b border-destructive/40 bg-destructive/10 px-6 py-2 text-xs text-destructive">
-          {saveError ?? renderError}
+          {saveError ?? renderError ?? genVoiceError ?? openFolderError}
+        </div>
+      )}
+
+      {genVoiceStatus === 'running' && (
+        <div className="flex items-center gap-2 border-b bg-primary/5 px-6 py-2 text-xs text-foreground">
+          <Loader2 className="size-3 animate-spin" />
+          <span>
+            Đang tạo giọng đọc cho từng segment… Edge TTS chạy tuần tự nên có thể
+            mất vài chục giây.
+          </span>
+        </div>
+      )}
+
+      {genVoiceStatus === 'success' && genVoiceSummary && (
+        <div className="border-b bg-emerald-500/10 px-6 py-2 text-xs text-emerald-700 dark:text-emerald-300">
+          {genVoiceSummary}
         </div>
       )}
 
@@ -586,7 +891,11 @@ export function ProjectEditor({ initial }: { initial: Project }) {
       )}
 
       <div className="grid min-h-0 flex-1 grid-cols-[260px_1fr_360px]">
-        <aside className="overflow-y-auto border-r p-3">
+        {/* Reserve a scrollbar gutter on both asides so the column
+            width stays constant whether or not the content overflows.
+            Without this, switching segments / tabs causes horizontal
+            jitter as the OS toggles the scrollbar in and out. */}
+        <aside className="overflow-y-auto border-r p-3 [scrollbar-gutter:stable]">
           {project.segments.length === 0 ? (
             <p className="px-2 py-4 text-sm text-muted-foreground">
               No segments yet. Ask Claude in the terminal to build the storyboard for this
@@ -640,7 +949,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           </div>
         </section>
 
-        <aside className="overflow-y-auto border-l p-4">
+        <aside className="overflow-y-auto border-l p-4 [scrollbar-gutter:stable]">
           {/* PROJECT scope controls — always visible regardless of
               segment selection. Inline with the SegmentEditor below
               (no card chrome) so the aside reads as one continuous
@@ -753,6 +1062,11 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               onCustomSfxChange={(next) =>
                 updateProject({ customSfx: next })
               }
+              onApplySfxToAll={applySfxToAll}
+              library={project.library ?? []}
+              onLibraryChange={onLibraryChange}
+              onAutoFillEmpty={autoFillEmptySegments}
+              emptySegmentCount={project.segments.filter((s) => !s.visuals.background).length}
             />
           ) : (
             <p className="text-sm text-muted-foreground">
@@ -779,6 +1093,11 @@ function SegmentEditor({
   projectId,
   customSfx,
   onCustomSfxChange,
+  onApplySfxToAll,
+  library,
+  onLibraryChange,
+  onAutoFillEmpty,
+  emptySegmentCount,
 }: {
   segment: Segment
   language: Project['language']
@@ -802,9 +1121,16 @@ function SegmentEditor({
   projectId: string
   customSfx: Project['customSfx']
   onCustomSfxChange: (next: Project['customSfx']) => void
+  onApplySfxToAll: (next: TextSfx) => void
+  library: AssetRef[]
+  onLibraryChange: (next: AssetRef[]) => void
+  onAutoFillEmpty: (assets: AssetRef[]) => number
+  emptySegmentCount: number
 }) {
   const [synthStatus, setSynthStatus] = useState<'idle' | 'running' | 'error'>('idle')
   const [synthError, setSynthError] = useState<string | null>(null)
+  /** Image editor modal state. Null = closed. */
+  const [editorOpen, setEditorOpen] = useState(false)
   /**
    * Right-aside inspector is split into 4 tabs so users aren't scrolling
    * through 11 stacked sections to find a single control. The grouping
@@ -1359,6 +1685,7 @@ function SegmentEditor({
             onChange={(next) =>
               onChange({ sfxOverride: next ?? undefined })
             }
+            onApplyToAll={onApplySfxToAll}
             onCustomSfxChange={onCustomSfxChange}
             trigger={
               <Button variant="outline" size="sm" className="w-full">
@@ -1376,35 +1703,86 @@ function SegmentEditor({
       ) : null}
 
       {tab === 'content' ? (
-      <div>
-        <Label>Background image</Label>
-        <div className="mt-1 space-y-2">
-          {segment.visuals.background ? (
-            <div className="overflow-hidden rounded-md border">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={assetUrl(segment.visuals.background.path) ?? ''}
-                alt=""
-                className="block max-h-40 w-full object-cover"
+      <div className="space-y-3 rounded-md border bg-secondary/20 p-2">
+        <ImageLibrary
+          projectId={projectId}
+          library={library}
+          onLibraryChange={onLibraryChange}
+          onApplyToCurrent={(asset) =>
+            onChange({ visuals: { ...segment.visuals, background: asset } })
+          }
+          onEditAndApply={(asset) => {
+            // Apply the bare asset first (and clear stale edits from
+            // a previously-attached image) so the editor opens against
+            // the new background. The user's Apply click then sets
+            // backgroundEdits via the editor's own onApply callback.
+            onChange({
+              visuals: { ...segment.visuals, background: asset },
+              backgroundEdits: undefined,
+            })
+            setEditorOpen(true)
+          }}
+          onAutoFillEmpty={onAutoFillEmpty}
+          emptySegmentCount={emptySegmentCount}
+          hasSelectedSegment
+        />
+        <div className="border-t pt-2">
+          <Label>Background image</Label>
+          <div className="mt-1 space-y-2">
+            {segment.visuals.background ? (
+              <BackgroundThumb
+                asset={segment.visuals.background}
+                edits={segment.backgroundEdits}
               />
+            ) : (
+              <p className="text-xs text-muted-foreground">No image set.</p>
+            )}
+            <div className="flex items-center gap-2">
+              <ImagePicker
+                defaultQuery={segment.text.split(/\s+/).slice(0, 4).join(' ')}
+                orientation={inferOrientation(aspect)}
+                onSelect={(asset: AssetRef) =>
+                  onChange({ visuals: { ...segment.visuals, background: asset } })
+                }
+                trigger={
+                  <Button variant="outline" size="sm" className="flex-1">
+                    <ImageIcon />
+                    {segment.visuals.background ? 'Swap' : 'Find image'}
+                  </Button>
+                }
+              />
+              {segment.visuals.background ? (
+                <Button
+                  variant={segment.backgroundEdits ? 'default' : 'outline'}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setEditorOpen(true)}
+                  title={
+                    segment.backgroundEdits
+                      ? 'Edit current adjustments'
+                      : 'Crop / rotate / overlay'
+                  }
+                >
+                  <Crop />
+                  Edit
+                  {segment.backgroundEdits ? (
+                    <span className="ml-1 rounded bg-primary-foreground/20 px-1 text-[9px]">
+                      ON
+                    </span>
+                  ) : null}
+                </Button>
+              ) : null}
             </div>
-          ) : (
-            <p className="text-xs text-muted-foreground">No image set.</p>
-          )}
-          <ImagePicker
-            defaultQuery={segment.text.split(/\s+/).slice(0, 4).join(' ')}
-            orientation={inferOrientation(aspect)}
-            onSelect={(asset: AssetRef) =>
-              onChange({ visuals: { ...segment.visuals, background: asset } })
-            }
-            trigger={
-              <Button variant="outline" size="sm" className="w-full">
-                <ImageIcon />
-                {segment.visuals.background ? 'Swap image' : 'Find image'}
-              </Button>
-            }
-          />
+          </div>
         </div>
+        <ImageEditorDialog
+          open={editorOpen}
+          onOpenChange={setEditorOpen}
+          asset={segment.visuals.background ?? null}
+          initialEdits={segment.backgroundEdits}
+          projectAspect={aspect}
+          onApply={(nextEdits) => onChange({ backgroundEdits: nextEdits })}
+        />
       </div>
       ) : null}
 
@@ -1466,4 +1844,72 @@ function inferOrientation(aspect: Project['aspect']): 'landscape' | 'portrait' |
   if (aspect === '16:9') return 'landscape'
   if (aspect === '1:1') return 'square'
   return 'portrait'
+}
+
+/**
+ * Tiny preview tile for a segment's background image. Re-applies the
+ * same CSS transforms the renderer will use, so users see the cropped
+ * + rotated thumbnail at a glance instead of the raw photo. Kept to
+ * ~max-h-40 so it doesn't dominate the inspector.
+ */
+function BackgroundThumb({
+  asset,
+  edits,
+}: {
+  asset: AssetRef
+  edits?: BackgroundEdits
+}) {
+  const url = assetUrl(asset.path)
+  const transforms: string[] = []
+  if (edits?.rotateDeg) transforms.push(`rotate(${edits.rotateDeg}deg)`)
+  if (edits?.flipH) transforms.push('scaleX(-1)')
+  if (edits?.flipV) transforms.push('scaleY(-1)')
+  let cropScale = 1
+  let objectPosition: string | undefined
+  if (edits?.crop) {
+    cropScale = 100 / Math.max(edits.crop.widthPct, 1)
+    objectPosition = `${edits.crop.xPct + edits.crop.widthPct / 2}% ${
+      edits.crop.yPct + edits.crop.heightPct / 2
+    }%`
+  }
+  return (
+    <div className="relative h-40 overflow-hidden rounded-md border bg-black/40">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url ?? ''}
+        alt=""
+        style={{
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          objectPosition,
+          transform: `${transforms.join(' ')} scale(${cropScale})`.trim(),
+          transformOrigin: 'center center',
+          display: 'block',
+        }}
+      />
+      {edits?.overlay && edits.overlay.opacity > 0 ? (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: edits.overlay.color,
+            opacity: edits.overlay.opacity,
+            mixBlendMode: edits.overlay.blendMode,
+            pointerEvents: 'none',
+          }}
+        />
+      ) : null}
+      {edits?.vignette && edits.vignette > 0 ? (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: `radial-gradient(ellipse at center, rgba(0,0,0,0) 40%, rgba(0,0,0,${edits.vignette}) 100%)`,
+            pointerEvents: 'none',
+          }}
+        />
+      ) : null}
+    </div>
+  )
 }
