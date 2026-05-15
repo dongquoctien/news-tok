@@ -1,4 +1,5 @@
 import type { LayoutComponent } from './types.js'
+import { BreakingNews } from './BreakingNews.js'
 import { BrowserWindow } from './BrowserWindow.js'
 import { Card } from './Card.js'
 import { ComparisonSplit } from './ComparisonSplit.js'
@@ -6,12 +7,15 @@ import { CrtTerminal } from './CrtTerminal.js'
 import { DossierCard } from './DossierCard.js'
 import { FullBleed } from './FullBleed.js'
 import { GradientMesh } from './GradientMesh.js'
+import { HealthCards } from './HealthCards.js'
 import { MagazineCover } from './MagazineCover.js'
 import { NeonSign } from './NeonSign.js'
 import { NumberedSteps } from './NumberedSteps.js'
 import { PhoneMockup } from './PhoneMockup.js'
+import { PortraitQuote } from './PortraitQuote.js'
 import { SplitVertical } from './SplitVertical.js'
 import { StatHero } from './StatHero.js'
+import { TimestampedWar } from './TimestampedWar.js'
 
 /**
  * Built-in layouts shipped in the source code. The id namespace matches
@@ -41,6 +45,14 @@ const BUILT_IN_LAYOUTS: Record<string, LayoutComponent> = {
   'builtin-gradientMesh': GradientMesh,
   'builtin-crtTerminal': CrtTerminal,
   'builtin-comparisonSplit': ComparisonSplit,
+  // News & journalism set — Gemini-inspired layouts tuned for VN
+  // press / pháp luật / chiến sự / sức khỏe content. Each leans on
+  // a distinct slot set so the orchestrator can pick by content
+  // shape (headline-driven vs. quote vs. chronology vs. list).
+  'builtin-breakingNews': BreakingNews,
+  'builtin-portraitQuote': PortraitQuote,
+  'builtin-timestampedWar': TimestampedWar,
+  'builtin-healthCards': HealthCards,
 }
 
 /**
