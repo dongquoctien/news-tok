@@ -44,6 +44,11 @@ describe('ProjectSchema', () => {
     // when missing. Assert each one explicitly.
     expect(p.bgMusicVolume).toBe(0.2)
     expect(p.sfxVolume).toBe(0.7)
+    // sfxEnabled defaults to true so legacy storyboards (saved before this
+    // flag existed) render identically. MCP createProject overrides this
+    // to false for newly-generated videos, but the schema default must
+    // not change the playback of stored projects.
+    expect(p.sfxEnabled).toBe(true)
     expect(p.subtitles).toEqual({ enabled: true, bottomPct: 0.18 })
     expect(p.showSceneBadges).toBe(false)
     expect(p.exportPreset).toBe('standard')

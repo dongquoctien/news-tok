@@ -174,6 +174,37 @@ export const BUILT_IN_LAYOUTS: BuiltInLayoutMeta[] = [
     hint:
       'Clean medical palette; chips become icon cards (auto-picks water/sleep/leaf/heart).',
   },
+  // Thumbnail-style 9:16 layouts — ported from VN short-form references.
+  // Each supports `**phrase**` accent markers inside `segment.text`; the
+  // marked phrase is repainted on a coloured plate / accent fill so the
+  // hook word pops at thumbnail size.
+  {
+    id: 'builtin-storyPill',
+    name: 'Story pill',
+    family: 'media-led',
+    slots: { media: true, eyebrow: true, chips: false, fileId: false },
+    thumbnail: '/layout-previews/builtin-storyPill.png',
+    hint:
+      'Showbiz / lifestyle thumb: white pill on top, bold white headline at bottom with a red-plate accent on **phrase**.',
+  },
+  {
+    id: 'builtin-storyChip',
+    name: 'Story chip',
+    family: 'media-led',
+    slots: { media: true, eyebrow: true, chips: false, fileId: false },
+    thumbnail: '/layout-previews/builtin-storyChip.png',
+    hint:
+      'Sports / fan thumb: yellow chip bottom-left, huge uppercase headline with yellow accent on **phrase**.',
+  },
+  {
+    id: 'builtin-storyVtv',
+    name: 'Story VTV',
+    family: 'editorial',
+    slots: { media: true, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-storyVtv.png',
+    hint:
+      'Broadcast / thời sự lower-third: channel tag top-left (fileId) + red category chip (eyebrow) + bottom headline.',
+  },
 ]
 
 /** Look up a layout meta by id; returns undefined for user layouts

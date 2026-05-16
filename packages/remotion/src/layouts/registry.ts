@@ -15,6 +15,9 @@ import { PhoneMockup } from './PhoneMockup.js'
 import { PortraitQuote } from './PortraitQuote.js'
 import { SplitVertical } from './SplitVertical.js'
 import { StatHero } from './StatHero.js'
+import { StoryChip } from './StoryChip.js'
+import { StoryPill } from './StoryPill.js'
+import { StoryVtv } from './StoryVtv.js'
 import { TimestampedWar } from './TimestampedWar.js'
 
 /**
@@ -53,6 +56,14 @@ const BUILT_IN_LAYOUTS: Record<string, LayoutComponent> = {
   'builtin-portraitQuote': PortraitQuote,
   'builtin-timestampedWar': TimestampedWar,
   'builtin-healthCards': HealthCards,
+  // Thumbnail-style 9:16 layouts ported from VN short-form references
+  // (showbiz pill, sports yellow-chip, broadcast lower-third). Each
+  // supports `**phrase**` accent markup inside `text` — the marked
+  // phrase is repainted on a coloured plate or accent fill so the
+  // hook word pops at thumbnail size.
+  'builtin-storyPill': StoryPill,
+  'builtin-storyChip': StoryChip,
+  'builtin-storyVtv': StoryVtv,
 }
 
 /**

@@ -72,6 +72,14 @@ export async function createProject(input: CreateProjectInput): Promise<CreatePr
   await mkdir(projectScenesDir(projectId), { recursive: true })
 
   const now = new Date().toISOString()
+  // Two project-wide defaults that differ from the schema fallback so
+  // every generated video matches the news-tok house style:
+  //   - logo: a "@newstokvn" text watermark in the bottom-right of
+  //     every segment (the schema default is { kind:'none' } to keep
+  //     legacy stored projects unchanged).
+  //   - sfxEnabled: false — generated videos should be SFX-free unless
+  //     the user explicitly opts in (the schema default is true to
+  //     keep legacy stored projects rendering the same as before).
   const project: Project = ProjectSchema.parse({
     id: projectId,
     title: deriveTitle(input),
@@ -80,6 +88,23 @@ export async function createProject(input: CreateProjectInput): Promise<CreatePr
     aspect: input.aspect,
     segments: [],
     bgMusicVolume: 0.2,
+    sfxEnabled: false,
+    logo: {
+      kind: 'text',
+      text: '@newstokvn',
+      fontId: 'inter',
+      sizePct: 2.2,
+      color: '#ffffff',
+      background: {
+        color: 'rgba(0,0,0,0.45)',
+        paddingPx: 10,
+        radiusPx: 6,
+      },
+      position: 'bottom-right',
+      marginPct: 3,
+      opacity: 0.85,
+      appliesTo: 'all',
+    },
     createdAt: now,
     updatedAt: now,
   })

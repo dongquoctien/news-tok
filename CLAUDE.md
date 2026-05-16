@@ -150,6 +150,23 @@ PascalCase React component filename:
 | `"outro"` | `packages/remotion/src/scenes/Outro.tsx` |
 | `"<PascalCaseName>"` | `data/projects/<id>/scenes/<PascalCaseName>.tsx` (custom forked scene — see "Custom scene" below) |
 
+Layouts (set `segment.layoutId` — applies on top of the chosen scene
+component). Built-in 9:16 layouts that pair well with `scene: "title"`
+or `scene: "keypoint"` for strong thumbnail-style opens:
+
+| `segment.layoutId` value | Look | Best for |
+|---|---|---|
+| `"builtin-storyPill"` | White pill at top + bold white headline at bottom with a red plate accent on `**...**` phrases | Showbiz / lifestyle / scandal hooks (e.g. "Miu Lê xin lỗi sau bê bối **sử dụng chất cấm**") |
+| `"builtin-storyChip"` | Yellow chip bottom-left + huge uppercase headline with a yellow accent on `**...**` phrases | Sports / fan-driven news (e.g. NGÀN NGẬM NHÌN ĐỘI NHÀ THUA THẢM **"QUẨY XẾ"** HÒA MŨ TRƯỚC SỨC MẠNH CỦA U17 VIỆT NAM) |
+| `"builtin-storyVtv"` | Top-left channel tag + red category chip + bottom white headline | Hard-news / weather / political broadcasts — set `segment.fileId` to the channel ("VTV24"), `segment.eyebrow` to the category ("THỜI SỰ" / "THỜI TIẾT") |
+
+For `storyPill` / `storyChip` / `storyVtv`, wrap the hook phrase in
+double asterisks inside `segment.text` (e.g. `"Miu Lê xin lỗi sau bê
+bối **sử dụng chất cấm**"`) — the layout repaints just that phrase
+on a red plate (Pill) or yellow fill (Chip / Vtv) so the
+attention-grabbing word pops at thumbnail size. Plain text without
+markers renders normally.
+
 Wrong (will fail render with `Unknown scene: TitleCard`):
 
 ```json
@@ -519,6 +536,15 @@ When the user requests a visual effect not covered by the built-in library:
 - **Default voice (Vietnamese)**: `vi-VN-HoaiMyNeural`
 - **Default voice (English)**: `en-US-AriaNeural`
 - **Default aspect**: `9:16`, 30 fps, 1080×1920
+- **Default watermark**: `@newstokvn` text watermark, bottom-right of every
+  segment, drawn by `LogoMarker` from `project.logo`. `createProject` writes
+  this watermark spec into every new project — keep it unless the user asks
+  to swap or remove it. Schema default for `project.logo` is still
+  `{ kind: 'none' }` so legacy stored projects render unchanged.
+- **Default SFX**: off. `createProject` writes `project.sfxEnabled = false`,
+  which gates ALL text-transition / per-word SFX cues at render time. The
+  user can flip it on if they want chrome, but do not enable SFX by default
+  when generating a video.
 - **Prefer Pexels** for images (most reliable); use `unsplash` as fallback
   when Pexels has no good match, `wikimedia` when the query is a
   proper noun (person, place, event, logo, map, historical photo —
