@@ -1135,6 +1135,11 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             ducking: { enabled: false, ratio: 0.3, smoothMs: 200 },
           }
         }
+        // Ducking aligns to wordBoundaries — flag this up to the dialog
+        // so it can warn the user when no segment has had TTS run yet.
+        hasNarration={project.segments.some(
+          (s) => (s.wordBoundaries?.length ?? 0) > 0
+        )}
         onApply={(next) => {
           // Commit track + edits + volume in one PATCH so a half-applied
           // change can't leave the project in an inconsistent state.

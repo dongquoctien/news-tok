@@ -13,6 +13,7 @@ import { resolveScene } from '../scenes/registry.js'
 import { MissingScene } from '../scenes/MissingScene.js'
 import { Subtitles } from '../effects/Subtitles.js'
 import { LogoMarker } from '../effects/LogoMarker.js'
+import { buildDuckTimeline, volumeAtFrame, type DuckTimeline } from '../effects/ducking.js'
 import { fontFor } from '../scenes/fonts.js'
 
 export type NewsTokCompositionProps = {
@@ -59,12 +60,20 @@ function BgMusic({
   trackDurationSec,
   videoDurationSec,
   edits,
+  duckTimeline,
 }: {
   src: string
   volume: number
   trackDurationSec: number | undefined
   videoDurationSec: number
   edits: BgMusicEdits
+  /**
+   * Precomputed sidechain timeline. `null` when ducking is disabled or
+   * no segment has wordBoundaries. Computed once in the parent and
+   * passed down so the binary search doesn't re-run inside <Audio>'s
+   * volume function (Remotion calls volume(frame) per frame).
+   */
+  duckTimeline: DuckTimeline | null
 }) {
   const { fps } = useVideoConfig()
   const frame = useCurrentFrame()
@@ -122,10 +131,17 @@ function BgMusic({
       : (trackDurationSec ?? videoDurationSec)) - edits.trimStartSec
   const shouldLoop = selectedSec > 0 && selectedSec < videoDurationSec
 
+  // Ducking multiplier — 1 when disabled, smoothed 0..1 curve otherwise.
+  // Defensive: even with edits.ducking.enabled=true, the parent passes
+  // `null` for projects whose segments have no wordBoundaries yet, so
+  // a user can flip the toggle in Studio before TTS has run without
+  // crashing the render.
+  const duckMul = duckTimeline ? volumeAtFrame(duckTimeline, frame) : 1
+
   return (
     <Audio
       src={src}
-      volume={volume * fadeIn * fadeOut}
+      volume={volume * fadeIn * fadeOut * duckMul}
       loop={shouldLoop}
       startFrom={startFromFrames > 0 ? startFromFrames : undefined}
       endAt={endAtFrames}
@@ -291,6 +307,29 @@ export const NewsTokComposition = ({
   })
   const videoDurationSec = segmentFrames.reduce((s, f) => s + f, 0) / fps
 
+  // Precompute segment offsets in frames so the duck timeline can align
+  // each segment's wordBoundaries with the project-wide music timeline.
+  const segmentOffsets: number[] = []
+  {
+    let offset = 0
+    for (const f of segmentFrames) {
+      segmentOffsets.push(offset)
+      offset += f
+    }
+  }
+  // Build the duck timeline only when ducking is enabled. The helper
+  // returns a `frame 0 → target 1` anchor for the no-narration case;
+  // we suppress it entirely to avoid the per-frame binary search when
+  // ducking is off.
+  const duckTimeline: DuckTimeline | null = bgMusicEdits.ducking.enabled
+    ? buildDuckTimeline(storyboard.segments, {
+        fps,
+        segmentOffsets,
+        ratio: bgMusicEdits.ducking.ratio,
+        smoothMs: bgMusicEdits.ducking.smoothMs,
+      })
+    : null
+
   return (
     <AbsoluteFill style={{ backgroundColor: '#0b0b0f' }}>
       {bgMusic ? (
@@ -300,6 +339,7 @@ export const NewsTokComposition = ({
           trackDurationSec={bgMusic.durationSec}
           videoDurationSec={videoDurationSec}
           edits={bgMusicEdits}
+          duckTimeline={duckTimeline}
         />
       ) : null}
       {storyboard.segments.map((segment, i) => {

@@ -389,6 +389,38 @@ typo or missing field can't land on disk and break the renderer mid-way.
   apply those manually.
 - **New visual effect or custom layout**: see "Custom scene" below.
 
+## Background music editing
+
+Once `bgMusic` is attached to a project, the user can edit how it plays
+without touching the cached mp3. All edits live in `project.bgMusicEdits`
+(schema in `packages/shared/src/schema.ts`):
+
+| Field | What it does |
+|---|---|
+| `trimStartSec` / `trimEndSec` | Carve out a sub-region of the track. Source mp3 stays untouched; Remotion's `<Audio startFrom endAt>` does the trim at render time. |
+| `fadeInSec` | Linear fade from silence at the start of the video. |
+| `fadeOutSec` | Linear fade to silence at the end (default 1.2s, matches the pre-edit hardcoded behaviour). |
+| `ducking.enabled` | Auto-lower music while narration speaks ("sidechain ducking"). |
+| `ducking.ratio` | Music volume multiplier under voice (0.3 = 30%, broadcast standard). |
+| `ducking.smoothMs` | Attack/release window. 200ms is safe; < 100ms audibly pumps. |
+
+Studio handles this through the **bgMusic trim dialog**
+(`apps/studio/components/studio/bg-music-trim-dialog.tsx`) which opens
+automatically after MusicPicker. The dialog draws a waveform via
+`/api/peaks` (server-side ffmpeg, cached to `data/cache/peaks/`) and
+lets the user drag amber handles to pick the loudest part of the track.
+
+Ducking is driven by `segment.wordBoundaries` (the per-word timing
+Edge TTS already gives us). When `ducking.enabled === true`, the
+renderer (`packages/remotion/src/effects/ducking.ts`) precomputes a
+sparse transition timeline and looks up the smoothed volume per
+frame. No extra signal extraction needed.
+
+If you (as the orchestrator) want to programmatically set these from
+MCP, mutate `project.bgMusicEdits` in `updateStoryboard` like any
+other field. The defaults (empty object) preserve legacy 1.2s tail
+fade behaviour — older storyboards render unchanged.
+
 ## Common task: prep video for social upload
 
 After `renderProject` succeeds, the user usually wants to post the mp4
