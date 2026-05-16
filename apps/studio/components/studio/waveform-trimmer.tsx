@@ -120,7 +120,18 @@ export function WaveformTrimmer({
     })
     wsRef.current = ws
 
+    // Track whether wavesurfer has fired `ready` for this instance. The
+    // `error` handler below ignores events that fire AFTER ready because
+    // wavesurfer v7 surfaces a benign "WaveSurfer is not initialized"
+    // error when the instance is destroyed mid-decode (eg. the user
+    // closes the dialog before the MediaElement backend finishes
+    // attaching). That transient state isn't a real load failure and
+    // shouldn't paint a red "Could not load audio" overlay on top of
+    // an already-rendered waveform.
+    let hasFiredReady = false
+
     const onReady = () => {
+      hasFiredReady = true
       // Create the initial region from `trimRef` — using the ref means
       // we don't have to re-create the wavesurfer instance just because
       // the parent re-renders with new trim values.
@@ -143,6 +154,17 @@ export function WaveformTrimmer({
     const onPause = () => setIsPlaying(false)
     const onFinish = () => setIsPlaying(false)
     const onLoadError = (err: Error) => {
+      // Two error classes we deliberately swallow:
+      //
+      //   1. `WaveSurfer is not initialized` — fires when the instance
+      //      gets destroyed mid-decode. Harmless; the new instance will
+      //      handle the load if the user reopens the dialog.
+      //   2. Any error AFTER `ready` has fired. By that point the
+      //      waveform is drawn and the user can interact with it; a
+      //      late HTMLAudioElement complaint (eg. CORS on a redirect)
+      //      is not worth a full-screen error overlay.
+      if (/not initialized/i.test(err.message)) return
+      if (hasFiredReady) return
       setLoadError(err.message)
       setIsReady(false)
     }
