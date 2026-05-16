@@ -13,6 +13,7 @@
     "./text-styles": "./src/text-styles.ts",
     "./sfx": "./src/sfx.ts",
     "./social": "./src/social.ts",
+    "./caption-sanitize": "./src/caption-sanitize.ts",
     "./paths": "./src/paths.ts",
     "./logger": "./src/logger.ts",
     "./env": "./src/env.ts"

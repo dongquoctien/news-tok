@@ -1,8 +1,9 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Check, Copy, Loader2, Share2, Sparkles } from 'lucide-react'
-import type { SocialCaptionResult } from '@news-tok/shared/social'
+import { Check, Copy, Loader2, Share2, ShieldCheck, Sparkles } from 'lucide-react'
+import type { Platform, SocialCaptionResult } from '@news-tok/shared/social'
+import type { SanitizeReplacement } from '@news-tok/shared/caption-sanitize'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -31,7 +32,7 @@ type PlatformMeta = {
  * rewrite it shorter.
  */
 const PLATFORMS: Record<
-  'tiktok' | 'facebook' | 'instagram',
+  Platform,
   PlatformMeta & { targetMax: number }
 > = {
   tiktok: {
@@ -55,21 +56,36 @@ const PLATFORMS: Record<
     targetMax: 500,
     tip: 'Sweet spot 250–500 chars. Emoji hook + arrow bullets + hashtag block.',
   },
+  youtube: {
+    label: 'YouTube',
+    color: 'bg-red-500/20 text-red-700 border-red-500/30 dark:text-red-300',
+    charBudget: 5000,
+    targetMax: 1500,
+    tip: 'Sweet spot 1500/5000 chars. Hook SEO + 2-3 đoạn + #shorts đầu tiên.',
+  },
 }
 
 function CaptionCard({
   platform,
   text,
   charCount,
+  sanitizeReplacements,
 }: {
-  platform: 'tiktok' | 'facebook' | 'instagram'
+  platform: Platform
   text: string
   charCount: number
+  sanitizeReplacements: SanitizeReplacement[]
 }) {
   const meta = PLATFORMS[platform]
   const [copied, setCopied] = useState(false)
   const overBudget = charCount > meta.charBudget
   const overTarget = charCount > meta.targetMax
+  // Dedupe sanitize replacements by `from` so a caption that masks the
+  // same word 3 times reports "1 word" not "3 instances" — matches what
+  // users typically want to see in the badge.
+  const uniqueMasked = Array.from(
+    new Set(sanitizeReplacements.map((r) => r.from.toLowerCase()))
+  )
 
   const onCopy = async () => {
     try {
@@ -132,6 +148,19 @@ function CaptionCard({
         className="mt-2 min-h-[200px] flex-1 resize-y font-mono text-xs leading-relaxed"
         onFocus={(e) => e.currentTarget.select()}
       />
+      {/* Sanitize badge — visible only when something was actually
+          masked. Hover to see the exact words ("kill, dead, suicide").
+          Keeps the dialog quiet for benign captions while flagging
+          rewrites the user might want to know about. */}
+      {uniqueMasked.length > 0 ? (
+        <p
+          className="mt-2 flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-300"
+          title={`Masked words: ${uniqueMasked.join(', ')}`}
+        >
+          <ShieldCheck className="size-3" />
+          {uniqueMasked.length} từ nhạy cảm đã được mask để tránh bị giảm reach
+        </p>
+      ) : null}
       <p className="mt-2 text-[10px] leading-snug text-muted-foreground/80">
         {meta.tip}
       </p>
@@ -197,9 +226,11 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
             Social captions
           </DialogTitle>
           <DialogDescription>
-            Three platform-tailored captions generated from the storyboard.
+            Four platform-tailored captions generated from the storyboard.
             Click Copy to grab one, then paste into your TikTok / Facebook /
-            Instagram post.
+            Instagram / YouTube post. Tier-1 sensitive words (death,
+            violence, drugs) are auto-masked per platform default to
+            avoid reach reduction.
           </DialogDescription>
         </DialogHeader>
 
@@ -264,13 +295,16 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
                 ))}
               </div>
             </div>
-            <div className="grid auto-rows-fr grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-3">
+            {/* 4 cards on desktop (1 per platform incl. YouTube), wrap
+                to 2 cols at md and 1 col on mobile. */}
+            <div className="grid auto-rows-fr grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-2 xl:grid-cols-4">
               {data.captions.map((c) => (
                 <CaptionCard
                   key={c.platform}
                   platform={c.platform}
                   text={c.text}
                   charCount={c.charCount}
+                  sanitizeReplacements={c.sanitizeReplacements ?? []}
                 />
               ))}
             </div>

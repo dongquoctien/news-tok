@@ -9,6 +9,7 @@ export * from './ui-tokens.js'
 export * from './text-styles.js'
 export * from './sfx.js'
 export * from './social.js'
+export * from './caption-sanitize.js'
 // sanitize.ts transitively imports paths.ts → server-only too. Client
 // callers should reach into specific helpers via the subpath
 // `@news-tok/shared/sanitize` and bear the responsibility of not

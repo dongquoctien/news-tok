@@ -188,13 +188,18 @@ All MCP tools are exposed under the `mcp__news-tok__*` namespace:
   output). The `confirm: true` literal is required so a stray call
   cannot wipe out a real project. Use only for test or abandoned
   projects.
-- `generateSocialCaption({ projectId, topic? })` — draft three
-  ready-to-paste captions (TikTok / Facebook / Instagram) plus a
-  topic-aware hashtag block from the project storyboard. Topic is
-  auto-classified by the same keyword rule as
-  `researchProjectAesthetic`; pass `topic` to pin it. Pure local
-  function, no LLM call. Use right after a successful render when the
-  user is about to post the video.
+- `generateSocialCaption({ projectId, topic?, sanitize? })` — draft
+  four ready-to-paste captions (TikTok / Facebook / Instagram /
+  YouTube) plus a topic-aware hashtag block from the project
+  storyboard. Topic is auto-classified by the same keyword rule as
+  `researchProjectAesthetic`; pass `topic` to pin it. Tier-1 sensitive
+  words (chết / giết / tự tử / ma túy / kill / suicide / gun) are
+  auto-masked per platform: TikTok / IG / YouTube get dot-insert
+  (c.h.ế.t), Facebook gets euphemism (không còn). Pass
+  `sanitize: { facebook: 'off' }` etc to override per-platform. Known
+  IG-banned hashtags (#alone, #killingit) are stripped defensively
+  across all platforms. Pure local function, no LLM call. Use right
+  after a successful render when the user is about to post the video.
 - `extractArticle({ url })` — fetches a URL and returns clean article text.
 - `searchImage({ query, orientation?, provider? })` — returns a local cached
   image path. `provider` is one of `pexels` (default, reliable), `unsplash`
@@ -433,9 +438,15 @@ punchier, audience-tuned captions before showing them to the user.
 ### Step 1 — Pull the baseline
 
 Call `generateSocialCaption({ projectId })`. It auto-classifies the
-topic and returns three platform variants plus a topic-aware hashtag
-block. Override `topic` if the article straddles two categories (e.g.
-"tech" article about a politician should be `politics`).
+topic and returns **four** platform variants (TikTok, Facebook,
+Instagram, YouTube) plus a topic-aware hashtag block. Each variant
+has Tier-1 sensitive words (chết, giết, ma túy, kill, suicide, gun,
+...) **already masked** per platform default (TikTok / IG / YouTube
+use dot-insert `c.h.ế.t`; Facebook uses euphemism `không còn`). To
+turn off masking on one platform, pass
+`sanitize: { facebook: 'off' }` etc. Override `topic` if the article
+straddles two categories (e.g. "tech" article about a politician
+should be `politics`).
 
 ### Step 2 — Rewrite each variant (REQUIRED)
 
@@ -445,13 +456,21 @@ hook, can't write in the user's voice, and can't read between the
 lines of the article. Your job is to rewrite each variant so it reads
 like a human who watched the video, not a script reader.
 
-Rewrite the three variants per platform target length:
+**When rewriting, preserve the masking pattern** the sanitizer applied
+(`c.h.ế.t` stays as `c.h.ế.t` on TikTok, `không còn` stays as
+`không còn` on Facebook). If you accidentally re-introduce the
+hard-ban word, the reach-reduction is back. The MCP response's
+`captions[].sanitizeReplacements[]` lists exactly what was masked so
+you can match the user's style.
+
+Rewrite the four variants per platform target length:
 
 | Platform | Target length | Style |
 |---|---|---|
-| TikTok | **120–250 chars** | Hook ngắn + 1 câu drama + CTA + ≤6 hashtag |
-| Facebook | 400–800 chars | Storytelling 2–3 đoạn, kết bằng câu hỏi mở để bình luận |
-| Instagram | 250–500 chars | Hook emoji + 2–3 dòng arrow `→` + hashtag dense ở dưới |
+| TikTok | **120–250 chars** | Hook ngắn + 1 câu drama + CTA + ≤6 hashtag (dot-masked) |
+| Facebook | 400–800 chars | Storytelling 2–3 đoạn, kết bằng câu hỏi mở (euphemism-masked) |
+| Instagram | 250–500 chars | Hook emoji + 2–3 dòng arrow `→` + hashtag dense (dot-masked) |
+| YouTube | 1000–1500 chars | SEO hook ≤100 chars + 2–3 đoạn body + `#shorts` đầu hashtag (dot-masked) |
 
 Vietnamese audiences respond best to:
 - TikTok: viết tắt khẩu ngữ ("ai mà ngờ", "cú twist", "đỉnh nóc"),
@@ -459,17 +478,20 @@ Vietnamese audiences respond best to:
 - Facebook: kể như một status cá nhân, không liệt kê
 - Instagram: emoji đầu dòng, ngắt dòng đẹp, hashtag thành 1 block ở
   cuối tách bằng dòng trống
+- YouTube: title-style SEO hook (chứa keyword chính trong 100 chars
+  đầu), body kể chi tiết hơn TikTok vì người xem YouTube đọc lâu hơn
 
-Keep the hashtag list intact (or trim to top 8 for TikTok) — the tool
-already picked topic-aware tags. Add niche tags from the article only
-if they obviously beat the generic pool.
+Keep the hashtag list intact (or trim to top 8 for TikTok, top 3 for
+YouTube above-fold) — the tool already picked topic-aware tags. Add
+niche tags from the article only if they obviously beat the generic
+pool.
 
-### Step 3 — Present all three variants
+### Step 3 — Present all four variants
 
 Show the rewritten captions plus character counts. Don't hide the
 baseline if the user asks for it — they may want to compare. Default
-to recommending **TikTok** first if the project is 9:16, **Facebook**
-if 16:9.
+to recommending **TikTok** first if the project is 9:16, **YouTube**
+or **Facebook** if 16:9.
 
 ### Why the baseline isn't enough
 

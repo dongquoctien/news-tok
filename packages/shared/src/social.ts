@@ -5,15 +5,31 @@
  * hashtag set is the union of a topic-aware pool and a few evergreen
  * trending tags for Vietnamese audiences.
  *
- * Three variants are returned every call:
- *   - tiktok   short hook + 3-5 lines + tight hashtag tail (≤2200 chars)
- *   - facebook narrative — opens with the headline, weaves keypoints,
- *              ends with a CTA. Hashtags on the last line.
+ * Four variants are returned every call:
+ *   - tiktok    short hook + 3-5 lines + tight hashtag tail (≤2200 chars)
+ *   - facebook  narrative — opens with the headline, weaves keypoints,
+ *               ends with a CTA. Hashtags on the last line.
  *   - instagram emoji-heavy hook + line-broken keypoints + dense hashtag
  *               block (Instagram caps captions at 2200 chars / 30 tags).
+ *   - youtube   SEO-first: keyword-rich hook in the first 100 chars,
+ *               2-3 paragraph body, sparse hashtags (YouTube only
+ *               surfaces the first 3 below the title; the rest live
+ *               in the description body).
+ *
+ * Each generated caption is passed through `sanitizeCaption` with the
+ * platform's default strategy (TikTok / IG / YT → dot, FB → euphemism)
+ * to mask Tier-1 hard-ban words. Callers wanting raw text should pass
+ * `sanitize: 'off'` per platform via the options argument.
  */
 
 import type { Project, Language } from './schema.js'
+import {
+  DEFAULT_STRATEGY_BY_PLATFORM,
+  filterBannedHashtags,
+  sanitizeCaption,
+  type SanitizeReplacement,
+  type SanitizeStrategy,
+} from './caption-sanitize.js'
 
 /**
  * Topic taxonomy — mirrors the one in mcp-server/research.ts. Kept here
@@ -138,6 +154,12 @@ const TOPIC_HASHTAGS_EN: Record<Topic, string[]> = {
 const EVERGREEN_VI = ['#xuhuong', '#fyp', '#viral', '#tiktokvn']
 const EVERGREEN_EN = ['#fyp', '#viral', '#trending', '#explore']
 
+// YouTube-specific evergreen pool. YouTube only displays the first 3
+// hashtags above the title — these are the highest-impact slots. The
+// rest live in the body and act as SEO weight only.
+const YOUTUBE_EVERGREEN_VI = ['#shorts', '#tintuc', '#vietnam']
+const YOUTUBE_EVERGREEN_EN = ['#shorts', '#news', '#trending']
+
 /** Pull the first N meaningful keywords out of the title (de-stopped). */
 const STOPWORDS_VI = new Set([
   'là', 'và', 'của', 'cho', 'với', 'từ', 'đến', 'một', 'những', 'này', 'đó',
@@ -180,14 +202,29 @@ function toHashtag(word: string): string {
  * Build the hashtag block. Topic pool first, then keyword-derived tags,
  * then evergreen high-reach tags. Capped at 12 to leave room for the
  * user to append their own; Instagram cap of 30 is well within range.
+ *
+ * Pass `platform: 'youtube'` to use the YouTube-specific evergreen
+ * pool (`#shorts` etc.) instead of the TikTok-friendly one. Other
+ * platforms share the generic evergreen list.
+ *
+ * Banned-tag filter (Instagram block-list) runs at the end so a stray
+ * generated tag like `#alone` doesn't poison the post's reach.
  */
 function buildHashtags(
   topic: Topic,
   language: Language,
-  title: string
+  title: string,
+  platform: 'tiktok' | 'facebook' | 'instagram' | 'youtube'
 ): string[] {
   const topicPool = language === 'vi' ? TOPIC_HASHTAGS_VI[topic] : TOPIC_HASHTAGS_EN[topic]
-  const evergreen = language === 'vi' ? EVERGREEN_VI : EVERGREEN_EN
+  const evergreen =
+    platform === 'youtube'
+      ? language === 'vi'
+        ? YOUTUBE_EVERGREEN_VI
+        : YOUTUBE_EVERGREEN_EN
+      : language === 'vi'
+        ? EVERGREEN_VI
+        : EVERGREEN_EN
   const kws = extractKeywords(title, language).map(toHashtag)
   const all = [...topicPool, ...kws, ...evergreen]
   const seen = new Set<string>()
@@ -199,7 +236,11 @@ function buildHashtags(
     out.push(h)
     if (out.length >= 12) break
   }
-  return out
+  // Strip IG-banned hashtags defensively — `#alone`, `#killingit`, etc
+  // get auto-generated from titles surprisingly often. The drop list
+  // is shared across platforms because a tag banned on IG also tends
+  // to underperform elsewhere.
+  return filterBannedHashtags(out).hashtags
 }
 
 /** Pull a short hook (≤90 chars) from the title or first keypoint. */
@@ -310,10 +351,56 @@ function instagramCaption(
   return [intro, '', ...bullets, '', cta, '', '.', '.', '.', hashtags.slice(0, 12).join(' ')].join('\n')
 }
 
+function youtubeCaption(
+  hook: string,
+  keypoints: string[],
+  outro: string | undefined,
+  hashtags: string[],
+  language: Language
+): string {
+  // YouTube sweet spot for description is 1500–5000 chars. SEO matters
+  // most in the first 100 chars (what shows above the fold) and in
+  // the first hashtag (only 3 hashtags display above the title).
+  //
+  // Layout:
+  //   line 1 — hook (keyword-dense, ≤ 100 chars)
+  //   blank
+  //   line 3..5 — 2–3 keypoint paragraphs (each one full sentence,
+  //               not compressed — YouTube readers tolerate length
+  //               and the algorithm reads the full body for indexing)
+  //   blank
+  //   line N-2 — outro / CTA (subscribe ask)
+  //   blank
+  //   line N — top-3 hashtags (display slot) — these are the only
+  //            hashtags YT shows above the title
+  //   line N+1 — remaining hashtags (SEO weight, hidden in description)
+  const intro = hook
+  const paras = keypoints.slice(0, 3).map((k) => k.trim())
+  const cta =
+    outro ??
+    (language === 'vi'
+      ? 'Đăng ký kênh để cập nhật những tin mới nhất 🔔'
+      : 'Subscribe for more daily news 🔔')
+  const topTags = hashtags.slice(0, 3).join(' ')
+  const restTags = hashtags.slice(3).join(' ')
+  const lines = [intro, '', ...paras.flatMap((p) => [p, '']), cta, '', topTags]
+  if (restTags) lines.push('', restTags)
+  return lines.join('\n')
+}
+
+export type Platform = 'tiktok' | 'facebook' | 'instagram' | 'youtube'
+
 export type SocialCaption = {
-  platform: 'tiktok' | 'facebook' | 'instagram'
+  platform: Platform
   text: string
   charCount: number
+  /**
+   * Words that were rewritten by the sanitizer (Tier-1 hard-ban
+   * masking). Empty when sanitize is `'off'` or no Tier-1 words
+   * appeared. Surface in the UI as a "5 words masked" badge so the
+   * user can decide whether to copy / further edit.
+   */
+  sanitizeReplacements: SanitizeReplacement[]
 }
 
 export type SocialCaptionResult = {
@@ -321,6 +408,15 @@ export type SocialCaptionResult = {
   hashtags: string[]
   captions: SocialCaption[]
 }
+
+/**
+ * Per-platform sanitize-strategy override. Pass to disable masking
+ * on one platform (e.g. user already hand-edited the FB caption) or
+ * force a specific strategy (e.g. dot on Facebook for a known
+ * sensitive story). When a platform key is omitted, the default
+ * from `DEFAULT_STRATEGY_BY_PLATFORM` is used.
+ */
+export type SanitizeOverrides = Partial<Record<Platform, SanitizeStrategy>>
 
 export function generateSocialCaptions(input: {
   project: Project
@@ -331,30 +427,55 @@ export function generateSocialCaptions(input: {
    * two categories.
    */
   topic?: Topic
+  /**
+   * Optional per-platform sanitize override. When omitted, each
+   * platform uses its research-backed default (TikTok / IG / YT →
+   * dot, FB → euphemism). Pass `{ facebook: 'off' }` to leave FB
+   * untouched, or `{ tiktok: 'euphemism' }` to swap strategies.
+   */
+  sanitize?: SanitizeOverrides
 }): SocialCaptionResult {
-  const { project } = input
+  const { project, sanitize: overrides = {} } = input
   const topic =
     input.topic ??
     classifyTopicLocal(
       `${project.title}\n${project.segments.map((s) => s.text).join('\n').slice(0, 2000)}`,
       project.language
     )
-  const hashtags = buildHashtags(topic, project.language, project.title)
+
   const hook = hookOf(project.title, project.segments)
   const keypoints = keypointsOf(project.segments)
   const outro = outroOf(project.segments)
 
-  const tiktok = tiktokCaption(hook, keypoints, outro, hashtags, project.language)
-  const facebook = facebookCaption(hook, keypoints, outro, hashtags, project.language)
-  const instagram = instagramCaption(hook, keypoints, outro, hashtags, project.language)
-
-  return {
-    topic,
-    hashtags,
-    captions: [
-      { platform: 'tiktok', text: tiktok, charCount: tiktok.length },
-      { platform: 'facebook', text: facebook, charCount: facebook.length },
-      { platform: 'instagram', text: instagram, charCount: instagram.length },
-    ],
+  // Hashtag pool is platform-aware (YouTube uses #shorts / #news, the
+  // others share the TikTok-friendly pool). Generated separately per
+  // platform so we don't smear a single set across all four.
+  const platforms: Platform[] = ['tiktok', 'facebook', 'instagram', 'youtube']
+  const captions: SocialCaption[] = []
+  for (const platform of platforms) {
+    const tags = buildHashtags(topic, project.language, project.title, platform)
+    const raw =
+      platform === 'tiktok'
+        ? tiktokCaption(hook, keypoints, outro, tags, project.language)
+        : platform === 'facebook'
+          ? facebookCaption(hook, keypoints, outro, tags, project.language)
+          : platform === 'instagram'
+            ? instagramCaption(hook, keypoints, outro, tags, project.language)
+            : youtubeCaption(hook, keypoints, outro, tags, project.language)
+    const strategy = overrides[platform] ?? DEFAULT_STRATEGY_BY_PLATFORM[platform]
+    const sanitized = sanitizeCaption(raw, project.language, strategy)
+    captions.push({
+      platform,
+      text: sanitized.text,
+      charCount: sanitized.text.length,
+      sanitizeReplacements: sanitized.replacements,
+    })
   }
+
+  // The top-level `hashtags` field is the TikTok-style pool (most
+  // callers want the generic one to display alongside the captions).
+  // Per-platform hashtag pools live inside the caption.text already.
+  const hashtags = buildHashtags(topic, project.language, project.title, 'tiktok')
+
+  return { topic, hashtags, captions }
 }
