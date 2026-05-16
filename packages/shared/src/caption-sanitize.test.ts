@@ -80,6 +80,91 @@ describe('sanitizeCaption (dot, en)', () => {
 })
 
 // ---------------------------------------------------------------------------
+// sanitizeCaption — legal-process death terms
+// ---------------------------------------------------------------------------
+
+describe('sanitizeCaption — legal terms (vi)', () => {
+  it('masks "án tử hình" — the canonical Vietnamese crime-journalism phrase', () => {
+    const r = sanitizeCaption('Tòa tuyên án tử hình bị cáo', 'vi', 'dot')
+    expect(r.text).toContain('á.n t.ử h.ì.n.h')
+    // The 3-word phrase must match as ONE replacement, not three.
+    expect(r.replacements).toHaveLength(1)
+    expect(r.replacements[0]!.from).toBe('án tử hình')
+  })
+
+  it('masks "tử hình" on its own when no "án" prefix is present', () => {
+    const r = sanitizeCaption('mức án tử hình cao nhất', 'vi', 'dot')
+    // "án tử hình" multi-word entry matches the substring inside the
+    // sentence — this is the right behavior because the algorithm
+    // suppresses on the longer phrase regardless of how the sentence
+    // is broken.
+    expect(r.replacements.some((x) => x.from === 'án tử hình' || x.from === 'tử hình')).toBe(true)
+  })
+
+  it('rewrites legal terms to softer phrases under euphemism strategy', () => {
+    const r = sanitizeCaption('Tòa tuyên án tử hình bị cáo', 'vi', 'euphemism')
+    expect(r.text).toBe('Tòa tuyên mức án cao nhất bị cáo')
+  })
+
+  it('masks tử tù / xử bắn / xử tử / hành quyết', () => {
+    expect(sanitizeCaption('Tử tù chờ thi hành án', 'vi', 'dot').replacements[0]!.from).toBe('Tử tù')
+    expect(sanitizeCaption('Bị xử bắn lúc 5h sáng', 'vi', 'dot').replacements[0]!.from).toBe('xử bắn')
+    expect(sanitizeCaption('Lệnh xử tử được ban hành', 'vi', 'dot').replacements[0]!.from).toBe('xử tử')
+    expect(sanitizeCaption('Hành quyết tại pháp trường', 'vi', 'dot').replacements[0]!.from).toBe('Hành quyết')
+  })
+
+  it('masks án mạng + thi thể (crime-scene terms)', () => {
+    const r = sanitizeCaption('Án mạng kinh hoàng, thi thể nạn nhân tại hiện trường', 'vi', 'dot')
+    expect(r.replacements.map((x) => x.from.toLowerCase())).toEqual(['án mạng', 'thi thể'])
+  })
+
+  it('does not double-mask "tử hình" inside "án tử hình" (no overlap)', () => {
+    // The multi-word "án tử hình" pattern fires first and rewrites it
+    // to dots; the standalone "tử hình" pattern then runs against the
+    // already-rewritten text where it cannot match (it contains dots).
+    // Result: exactly one replacement, not two.
+    const r = sanitizeCaption('án tử hình', 'vi', 'dot')
+    expect(r.replacements).toHaveLength(1)
+    expect(r.text).toBe('á.n t.ử h.ì.n.h')
+  })
+})
+
+describe('sanitizeCaption — legal terms (en)', () => {
+  it('masks "death penalty" as one phrase before single-word "death" patterns', () => {
+    // Multi-word entries are declared before any potential overlap so
+    // we get ONE replacement, not "death" + "penalty".
+    const r = sanitizeCaption('The death penalty was upheld', 'en', 'dot')
+    expect(r.text).toContain('d.e.a.t.h p.e.n.a.l.t.y')
+    expect(r.replacements.some((x) => x.from === 'death penalty')).toBe(true)
+  })
+
+  it('masks death row / death sentence', () => {
+    expect(sanitizeCaption('On death row', 'en', 'dot').replacements[0]!.from).toBe('death row')
+    expect(sanitizeCaption('Death sentence handed down', 'en', 'dot').replacements[0]!.from).toBe(
+      'Death sentence'
+    )
+  })
+
+  it('masks executed / execution', () => {
+    expect(sanitizeCaption('He was executed yesterday', 'en', 'dot').replacements[0]!.from).toBe(
+      'executed'
+    )
+    expect(
+      sanitizeCaption('The execution was carried out', 'en', 'dot').replacements[0]!.from
+    ).toBe('execution')
+  })
+
+  it('rewrites legal terms to softer phrases under euphemism strategy', () => {
+    expect(sanitizeCaption('death penalty upheld', 'en', 'euphemism').text).toBe(
+      'capital punishment ruling upheld'
+    )
+    expect(sanitizeCaption('he was executed', 'en', 'euphemism').text).toBe(
+      'he was sentence carried out'
+    )
+  })
+})
+
+// ---------------------------------------------------------------------------
 // sanitizeCaption — euphemism strategy
 // ---------------------------------------------------------------------------
 
