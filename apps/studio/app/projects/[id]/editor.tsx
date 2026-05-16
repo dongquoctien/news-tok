@@ -44,6 +44,7 @@ import { ImagePicker } from '@/components/studio/image-picker'
 import { ImageLibrary } from '@/components/studio/image-library'
 import { ImageEditorDialog } from '@/components/studio/image-editor-dialog'
 import { MusicPicker } from '@/components/studio/music-picker'
+import { BgMusicTrimDialog } from '@/components/studio/bg-music-trim-dialog'
 import { LayoutPicker } from '@/components/studio/layout-picker'
 import { layoutNeedsSlot } from '@/lib/layouts-catalog'
 import { StylePicker } from '@/components/studio/style-picker'
@@ -141,6 +142,22 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   const updateProject = useCallback((patch: Partial<Project>) => {
     setProject((p) => ({ ...p, ...patch, updatedAt: new Date().toISOString() }))
   }, [])
+
+  // Two-step bgMusic flow:
+  //   1. MusicPicker.onSelect → stash the picked AssetRef in `trimPending`
+  //      and open the trim dialog (UX choice confirmed by the user — auto-
+  //      open with a "Skip trim" escape hatch).
+  //   2. BgMusicTrimDialog.onApply → commit the track + edits + volume to
+  //      the project in one PATCH, then clear the pending state.
+  // Re-editing an already-applied track: clicking the Music button when
+  // project.bgMusic is set opens the trim dialog directly against the
+  // existing track (skips MusicPicker).
+  const [trimPending, setTrimPending] = useState<AssetRef | null>(null)
+  const [trimDialogOpen, setTrimDialogOpen] = useState(false)
+  const totalVideoDurationSec = useMemo(
+    () => project.segments.reduce((s, seg) => s + seg.durationSec, 0),
+    [project.segments]
+  )
 
   /**
    * Broadcast a single SFX configuration to every segment in the
@@ -980,23 +997,49 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               >
                 {project.subtitles.enabled ? <Captions /> : <CaptionsOff />}
               </Button>
-              <MusicPicker
-                defaultMood="calm"
-                defaultDurationSec={
-                  project.segments.reduce((s, x) => s + x.durationSec, 0) || 30
-                }
-                onSelect={(asset) => updateProject({ bgMusic: asset })}
-                trigger={
+              <div className="inline-flex items-center gap-1">
+                <MusicPicker
+                  defaultMood="calm"
+                  defaultDurationSec={
+                    project.segments.reduce((s, x) => s + x.durationSec, 0) || 30
+                  }
+                  // Picker no longer commits directly — it stashes the picked
+                  // track and opens the trim dialog. Trim dialog applies in
+                  // a single PATCH (bgMusic + bgMusicEdits + bgMusicVolume).
+                  onSelect={(asset) => {
+                    setTrimPending(asset)
+                    setTrimDialogOpen(true)
+                  }}
+                  trigger={
+                    <Button
+                      variant={project.bgMusic ? 'default' : 'outline'}
+                      size="icon"
+                      title={
+                        project.bgMusic
+                          ? 'Background music attached — click to swap'
+                          : 'Add background music'
+                      }
+                      aria-label="Background music"
+                    >
+                      <Music />
+                    </Button>
+                  }
+                />
+                {project.bgMusic ? (
                   <Button
-                    variant={project.bgMusic ? 'default' : 'outline'}
+                    variant="ghost"
                     size="icon"
-                    title={project.bgMusic ? 'Background music attached' : 'Add background music'}
-                    aria-label="Background music"
+                    title="Edit trim / fade / volume"
+                    aria-label="Edit background music"
+                    onClick={() => {
+                      setTrimPending(project.bgMusic!)
+                      setTrimDialogOpen(true)
+                    }}
                   >
-                    <Music />
+                    <Crop className="size-4" />
                   </Button>
-                }
-              />
+                ) : null}
+              </div>
               <LogoPicker
                 projectId={project.id}
                 logo={project.logo ?? { kind: 'none' }}
@@ -1075,6 +1118,33 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           )}
         </aside>
       </div>
+      <BgMusicTrimDialog
+        open={trimDialogOpen}
+        onOpenChange={(open) => {
+          setTrimDialogOpen(open)
+          if (!open) setTrimPending(null)
+        }}
+        track={trimPending}
+        videoDurationSec={totalVideoDurationSec}
+        initialVolume={project.bgMusicVolume ?? 0.2}
+        initialEdits={
+          project.bgMusicEdits ?? {
+            trimStartSec: 0,
+            fadeInSec: 0,
+            fadeOutSec: 1.2,
+            ducking: { enabled: false, ratio: 0.3, smoothMs: 200 },
+          }
+        }
+        onApply={(next) => {
+          // Commit track + edits + volume in one PATCH so a half-applied
+          // change can't leave the project in an inconsistent state.
+          updateProject({
+            bgMusic: next.bgMusic,
+            bgMusicEdits: next.bgMusicEdits,
+            bgMusicVolume: next.bgMusicVolume,
+          })
+        }}
+      />
     </div>
   )
 }
