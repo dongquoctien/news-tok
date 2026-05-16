@@ -1,5 +1,13 @@
 import { AbsoluteFill, Audio, Sequence, interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
-import type { ColorOverride, Project, SceneKind, Segment, TextStyle, Variant } from '@news-tok/shared/schema'
+import type {
+  BgMusicEdits,
+  ColorOverride,
+  Project,
+  SceneKind,
+  Segment,
+  TextStyle,
+  Variant,
+} from '@news-tok/shared/schema'
 import { BUILT_IN_TEXT_STYLES, findTextStyle, DEFAULT_TEXT_STYLE_ID } from '@news-tok/shared/text-styles'
 import { resolveScene } from '../scenes/registry.js'
 import { MissingScene } from '../scenes/MissingScene.js'
@@ -26,34 +34,103 @@ export type NewsTokCompositionProps = {
 }
 
 /**
- * Background music that adapts to the project duration:
- *  - if the track is shorter than the video, loop it (Remotion <Audio loop>).
- *  - either way, fade the last ~1.2s so the video tail does not cut off
- *    mid-bar. When the track is longer than the video the fade also
- *    masks the natural mid-song stop.
+ * Background music with non-destructive trim + fade applied at render
+ * time. Layered logic:
+ *
+ *   1. `startFrom` / `endAt` carve out the audible window inside the
+ *      source file — the underlying mp3 in `data/cache/music/` stays
+ *      untouched so the same cache entry serves multiple projects
+ *      that trim it differently.
+ *   2. `loop` kicks in when the selected window is shorter than the
+ *      video; Remotion loops from `startFrom` (not 0), so the user's
+ *      trimmed selection is what repeats.
+ *   3. `fadeIn` + `fadeOut` envelopes are computed frame-by-frame
+ *      against the video timeline (NOT the audio timeline) — fade-out
+ *      always lands on the video tail regardless of how the track loops.
+ *
+ * Default `edits` shape (legacy projects) = `{ trimStartSec:0,
+ * fadeInSec:0, fadeOutSec:1.2, ducking:{ enabled:false, ... } }`, which
+ * keeps the visible behaviour identical to the pre-edit hardcoded
+ * version: no trim, no fade-in, 1.2s tail fade.
  */
 function BgMusic({
   src,
   volume,
   trackDurationSec,
   videoDurationSec,
+  edits,
 }: {
   src: string
   volume: number
   trackDurationSec: number | undefined
   videoDurationSec: number
+  edits: BgMusicEdits
 }) {
   const { fps } = useVideoConfig()
   const frame = useCurrentFrame()
   const totalFrames = Math.max(1, Math.round(videoDurationSec * fps))
-  const fadeFrames = Math.min(Math.round(1.2 * fps), Math.floor(totalFrames / 3))
-  const fadeStart = Math.max(0, totalFrames - fadeFrames)
-  const fade = interpolate(frame, [fadeStart, totalFrames], [1, 0], {
-    extrapolateLeft: 'clamp',
-    extrapolateRight: 'clamp',
-  })
-  const shouldLoop = trackDurationSec != null && trackDurationSec < videoDurationSec
-  return <Audio src={src} volume={volume * fade} loop={shouldLoop} />
+
+  // Fade-out — anchored to the END of the video. Cap at 1/3 of the
+  // total duration so a 3-second video doesn't get a 1.2s fade-out
+  // gobbling the whole thing.
+  const fadeOutFrames = Math.min(
+    Math.round(edits.fadeOutSec * fps),
+    Math.floor(totalFrames / 3)
+  )
+  const fadeOutStart = Math.max(0, totalFrames - fadeOutFrames)
+  const fadeOut =
+    fadeOutFrames > 0
+      ? interpolate(frame, [fadeOutStart, totalFrames], [1, 0], {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        })
+      : 1
+
+  // Fade-in — anchored to the START. Same 1/3 cap for symmetry.
+  const fadeInFrames = Math.min(
+    Math.round(edits.fadeInSec * fps),
+    Math.floor(totalFrames / 3)
+  )
+  const fadeIn =
+    fadeInFrames > 0
+      ? interpolate(frame, [0, fadeInFrames], [0, 1], {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        })
+      : 1
+
+  // Trim — startFrom and endAt are measured in frames AT THE SOURCE
+  // file's timeline (not the video timeline). `endAt` is the absolute
+  // offset where playback stops; clamp against the file duration when
+  // we know it so a stale storyboard with trimEndSec=999 doesn't
+  // confuse Remotion.
+  const startFromFrames = Math.max(0, Math.round(edits.trimStartSec * fps))
+  let endAtFrames: number | undefined
+  if (typeof edits.trimEndSec === 'number') {
+    const requested = Math.round(edits.trimEndSec * fps)
+    if (trackDurationSec != null) {
+      endAtFrames = Math.min(requested, Math.round(trackDurationSec * fps))
+    } else {
+      endAtFrames = requested
+    }
+  }
+
+  // Loop when the selected window is shorter than the video.
+  const selectedSec =
+    (typeof edits.trimEndSec === 'number'
+      ? edits.trimEndSec
+      : (trackDurationSec ?? videoDurationSec)) - edits.trimStartSec
+  const shouldLoop = selectedSec > 0 && selectedSec < videoDurationSec
+
+  return (
+    <Audio
+      src={src}
+      volume={volume * fadeIn * fadeOut}
+      loop={shouldLoop}
+      startFrom={startFromFrames > 0 ? startFromFrames : undefined}
+      endAt={endAtFrames}
+    />
+  )
 }
 
 const FALLBACK_STYLE: TextStyle =
@@ -187,6 +264,15 @@ export const NewsTokComposition = ({
 
   const bgMusic = storyboard.bgMusic
   const bgMusicVolume = storyboard.bgMusicVolume ?? 0.2
+  // BgMusicEditsSchema.parse({}) defaults align with the pre-edit
+  // hardcoded behaviour (1.2s tail fade, no trim, no fade-in, no duck),
+  // so storyboards saved before this field existed render identically.
+  const bgMusicEdits = storyboard.bgMusicEdits ?? {
+    trimStartSec: 0,
+    fadeInSec: 0,
+    fadeOutSec: 1.2,
+    ducking: { enabled: false, ratio: 0.3, smoothMs: 200 },
+  }
   const masterSfxVolume = storyboard.sfxVolume ?? 0.7
   const userStyles = storyboard.userTextStyles ?? []
   const variants = storyboard.variants ?? []
@@ -213,6 +299,7 @@ export const NewsTokComposition = ({
           volume={bgMusicVolume}
           trackDurationSec={bgMusic.durationSec}
           videoDurationSec={videoDurationSec}
+          edits={bgMusicEdits}
         />
       ) : null}
       {storyboard.segments.map((segment, i) => {
