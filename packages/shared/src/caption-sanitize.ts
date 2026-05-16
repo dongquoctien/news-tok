@@ -97,6 +97,19 @@ const VI_TIER1: WordEntry[] = [
   { pattern: /(?<![\p{L}])tử vong(?![\p{L}])/giu, dot: 't.ử v.o.n.g', euphemism: 'không qua khỏi' },
   { pattern: /(?<![\p{L}])máu(?![\p{L}])/giu, dot: 'm.á.u', euphemism: 'thương tích' },
   { pattern: /(?<![\p{L}])xác chết(?![\p{L}])/giu, dot: 'x.á.c c.h.ế.t', euphemism: 'thi thể' },
+  // legal-process death terms — common in Vietnamese crime journalism
+  // (án tử hình / tử tù / xử bắn). Not slurs, but TikTok VN moderation
+  // treats them as violence-adjacent and reduces reach. Multi-word
+  // entries must come before single-word ones in case of overlap
+  // (e.g. "tử hình" → "tử" alone is not in the list, so order-free here).
+  { pattern: /(?<![\p{L}])án tử hình(?![\p{L}])/giu, dot: 'á.n t.ử h.ì.n.h', euphemism: 'mức án cao nhất' },
+  { pattern: /(?<![\p{L}])tử hình(?![\p{L}])/giu, dot: 't.ử h.ì.n.h', euphemism: 'mức án cao nhất' },
+  { pattern: /(?<![\p{L}])tử tù(?![\p{L}])/giu, dot: 't.ử t.ù', euphemism: 'người lĩnh án cao nhất' },
+  { pattern: /(?<![\p{L}])xử bắn(?![\p{L}])/giu, dot: 'x.ử b.ắ.n', euphemism: 'thi hành án' },
+  { pattern: /(?<![\p{L}])xử tử(?![\p{L}])/giu, dot: 'x.ử t.ử', euphemism: 'thi hành án' },
+  { pattern: /(?<![\p{L}])hành quyết(?![\p{L}])/giu, dot: 'h.à.n.h q.u.y.ế.t', euphemism: 'thi hành án' },
+  { pattern: /(?<![\p{L}])án mạng(?![\p{L}])/giu, dot: 'á.n m.ạ.n.g', euphemism: 'vụ việc nghiêm trọng' },
+  { pattern: /(?<![\p{L}])thi thể(?![\p{L}])/giu, dot: 't.h.i t.h.ể', euphemism: 'nạn nhân' },
   // drugs
   { pattern: /(?<![\p{L}])ma túy(?![\p{L}])/giu, dot: 'm.a t.ú.y', euphemism: 'chất cấm' },
   { pattern: /(?<![\p{L}])heroin(?![\p{L}])/giu, dot: 'h.e.r.o.i.n', euphemism: 'chất cấm' },
@@ -134,6 +147,13 @@ const EN_TIER1: WordEntry[] = [
   { pattern: /(?<![\p{L}])dead(?![\p{L}])/giu, dot: 'd.e.a.d', euphemism: 'no longer with us' },
   { pattern: /(?<![\p{L}])die(?![\p{L}])/giu, dot: 'd.i.e', euphemism: 'pass on' },
   { pattern: /(?<![\p{L}])died(?![\p{L}])/giu, dot: 'd.i.e.d', euphemism: 'passed on' },
+  // legal-process death terms — common in English crime journalism.
+  // Multi-word entries first so "death penalty" matches before "death".
+  { pattern: /(?<![\p{L}])death penalty(?![\p{L}])/giu, dot: 'd.e.a.t.h p.e.n.a.l.t.y', euphemism: 'capital punishment ruling' },
+  { pattern: /(?<![\p{L}])death sentence(?![\p{L}])/giu, dot: 'd.e.a.t.h s.e.n.t.e.n.c.e', euphemism: 'maximum sentence' },
+  { pattern: /(?<![\p{L}])death row(?![\p{L}])/giu, dot: 'd.e.a.t.h r.o.w', euphemism: 'awaiting maximum sentence' },
+  { pattern: /(?<![\p{L}])executed(?![\p{L}])/giu, dot: 'e.x.e.c.u.t.e.d', euphemism: 'sentence carried out' },
+  { pattern: /(?<![\p{L}])execution(?![\p{L}])/giu, dot: 'e.x.e.c.u.t.i.o.n', euphemism: 'carrying out of sentence' },
   // drugs
   { pattern: /(?<![\p{L}])heroin(?![\p{L}])/giu, dot: 'h.e.r.o.i.n', euphemism: 'opiates' },
   { pattern: /(?<![\p{L}])cocaine(?![\p{L}])/giu, dot: 'c.o.c.a.i.n.e', euphemism: 'stimulants' },
