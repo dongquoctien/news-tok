@@ -26,8 +26,12 @@ pnpm install                  # one-time
 pnpm build                    # build every workspace package (recursive)
 pnpm typecheck                # tsc --noEmit across every package
 pnpm lint                     # lint every workspace package (currently only Studio defines it)
+pnpm test                     # run vitest across every package that defines a test script
+pnpm check                    # typecheck + check:scenes + test (the safety-net bundle)
+pnpm check:scenes             # fail if any scene .tsx file uses className= (Tailwind silently breaks under Remotion)
 pnpm studio                   # run the Web Studio dev server (http://localhost:3000)
 pnpm mcp:build                # rebuild the MCP server (required after editing packages/mcp-server)
+pnpm mcp:dev                  # MCP server in watch mode — auto-rebuild dist/ on source change
 pnpm doctor                   # verify ffmpeg, env vars, MCP wiring (scripts/doctor.mjs)
 ```
 
@@ -42,13 +46,15 @@ pnpm smoke:mcp                # spawns the MCP server and lists tools
 pnpm smoke:m6                 # Studio M6 smoke: storyboard round-trip + render API
 ```
 
-There is **no Jest/Vitest suite**. To run a single check, invoke the
-appropriate smoke script directly with `tsx scripts/<name>.ts`, or run the
-package-scoped typecheck with `pnpm --filter @news-tok/<package> typecheck`.
+Unit tests live next to their source as `*.test.ts` and run with **Vitest**
+(only `@news-tok/shared` ships them today — schema parse, sanitiser, text-style
+invariants, render-preset resolution). Run a single package's suite with
+`pnpm --filter @news-tok/<package> test` or `pnpm test` for everything.
 
 After editing `packages/mcp-server/`, you must `pnpm mcp:build` before the
 Claude CLI picks up the change — the MCP server is consumed as a built
-artifact via `.mcp.json`, not from source.
+artifact via `.mcp.json`, not from source. Long iterative work is easier with
+`pnpm mcp:dev` (tsup watch mode) so dist/ stays fresh on every save.
 
 ## Your role
 
