@@ -34,6 +34,7 @@ import {
   type Segment,
   type TextSfx,
   type TextStyle,
+  type WordBoundary,
 } from '@news-tok/shared/schema'
 import { findTextStyle } from '@news-tok/shared/text-styles'
 import { recommendSegmentDurationSec } from '@news-tok/shared/sanitize'
@@ -1237,7 +1238,11 @@ function SegmentEditor({
         const body = (await res.json().catch(() => ({}))) as { error?: string }
         throw new Error(body.error ?? `HTTP ${res.status}`)
       }
-      const { path, durationSec } = (await res.json()) as { path: string; durationSec: number }
+      const { path, durationSec, wordBoundaries } = (await res.json()) as {
+        path: string
+        durationSec: number
+        wordBoundaries?: WordBoundary[]
+      }
       onChange({
         audio: {
           ...segment.audio,
@@ -1248,6 +1253,7 @@ function SegmentEditor({
             durationSec,
           },
         },
+        wordBoundaries: wordBoundaries ?? [],
       })
       setSynthStatus('idle')
     } catch (err) {
