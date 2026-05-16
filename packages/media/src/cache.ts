@@ -4,7 +4,17 @@ import { mkdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { cacheNamespaceRoot } from './paths.js'
 
-export type CacheNamespace = 'images' | 'videos' | 'music' | 'tts' | 'articles' | 'uploads'
+export type CacheNamespace =
+  | 'images'
+  | 'videos'
+  | 'music'
+  | 'tts'
+  | 'articles'
+  | 'uploads'
+  // Pre-computed waveform peaks JSON for the Studio bgMusic trimmer UI.
+  // Keyed by the SOURCE mp3's content hash so re-trimming the same track
+  // across projects hits a single cache file (~2KB / 3 min audio).
+  | 'peaks'
 
 export function cacheKey(parts: unknown[]): string {
   const h = createHash('sha256')

@@ -503,6 +503,67 @@ export const CustomSfxEntrySchema = z.object({
 export type CustomSfxEntry = z.infer<typeof CustomSfxEntrySchema>
 export type SubtitleConfig = z.infer<typeof SubtitleConfigSchema>
 
+/**
+ * Non-destructive edits applied to `project.bgMusic` at render time.
+ * The cached mp3 file under `data/cache/music/<hash>.mp3` is never
+ * modified — Remotion's `<Audio startFrom endAt>` + frame-based
+ * `interpolate` apply trim, fade, and ducking on the fly. That keeps
+ * the cache file reusable across projects that trim it differently,
+ * and lets the user re-tune any of these knobs without re-fetching
+ * the track.
+ *
+ * Default shape is the empty object `{}`, which resolves to:
+ *   - no trim (use the whole track from 0..duration)
+ *   - 0s fade-in
+ *   - 1.2s fade-out (matches the pre-edit hardcoded behaviour, so
+ *     storyboards saved before this schema existed render identically)
+ *   - ducking disabled
+ */
+export const BgMusicEditsSchema = z
+  .object({
+    /** Seconds to skip at the start of the track. 0 = use from beginning. */
+    trimStartSec: z.number().min(0).default(0),
+    /**
+     * Stop the track at this offset (seconds from track start, NOT from
+     * `trimStartSec`). Undefined = play to the end of the file. The
+     * renderer clamps against the actual track duration when staging.
+     */
+    trimEndSec: z.number().min(0).optional(),
+    /** Fade-in length at the start of the video. 0 = no fade. */
+    fadeInSec: z.number().min(0).max(10).default(0),
+    /**
+     * Fade-out length at the end of the video. Default 1.2 matches the
+     * legacy hardcoded fade so the schema default = previous behavior.
+     */
+    fadeOutSec: z.number().min(0).max(10).default(1.2),
+    /**
+     * Sidechain ducking — automatically reduce music volume while narration
+     * is speaking, so the voice stays intelligible. Driven by every
+     * segment's `wordBoundaries` (no extra signal extraction required).
+     * Disabled by default to preserve existing render output.
+     */
+    ducking: z
+      .object({
+        enabled: z.boolean().default(false),
+        /**
+         * Volume multiplier while narration is active, 0..1. 0.3 = music
+         * drops to 30% (broadcast-standard "voice over" ratio). 0 mutes
+         * music entirely under narration, which often sounds abrupt.
+         */
+        ratio: z.number().min(0).max(1).default(0.3),
+        /**
+         * Attack/release smoothing window in milliseconds. Too short
+         * (< 100ms) makes the duck "pump" audibly; too long (> 500ms)
+         * means the first word of a segment isn't audible because the
+         * music hasn't dropped yet. 200ms is a safe broadcast default.
+         */
+        smoothMs: z.number().int().min(50).max(2000).default(200),
+      })
+      .default({ enabled: false, ratio: 0.3, smoothMs: 200 }),
+  })
+  .default({})
+export type BgMusicEdits = z.infer<typeof BgMusicEditsSchema>
+
 export const ProjectSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -512,6 +573,12 @@ export const ProjectSchema = z.object({
   segments: z.array(SegmentSchema),
   bgMusic: AssetRefSchema.optional(),
   bgMusicVolume: z.number().min(0).max(1).default(0.2),
+  /**
+   * Non-destructive trim / fade / ducking edits applied to `bgMusic` at
+   * render time. Empty default `{}` preserves the pre-edit behavior
+   * (no trim, no fade-in, 1.2s fade-out, no ducking).
+   */
+  bgMusicEdits: BgMusicEditsSchema,
   /** Master volume for text-transition SFX (multiplied into each cue). */
   sfxVolume: z.number().min(0).max(1).default(0.7),
   subtitles: SubtitleConfigSchema.default({ enabled: true, bottomPct: 0.18 }),

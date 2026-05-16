@@ -41,6 +41,12 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     customSfx: [],
     logo: { kind: 'none' },
     library: [],
+    bgMusicEdits: {
+      trimStartSec: 0,
+      fadeInSec: 0,
+      fadeOutSec: 1.2,
+      ducking: { enabled: false, ratio: 0.3, smoothMs: 200 },
+    },
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,

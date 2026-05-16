@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ASPECT_PRESETS,
+  BgMusicEditsSchema,
   CustomSfxEntrySchema,
   DEFAULT_VOICES,
   EXPORT_PRESET_OVERRIDES,
@@ -51,6 +52,15 @@ describe('ProjectSchema', () => {
     expect(p.customSfx).toEqual([])
     expect(p.logo).toEqual({ kind: 'none' })
     expect(p.library).toEqual([])
+    // bgMusicEdits defaults preserve pre-edit render behavior: no trim,
+    // no fade-in, 1.2s fade-out (matches the legacy hardcoded value),
+    // no ducking. A stale storyboard parsed today must render identically.
+    expect(p.bgMusicEdits).toEqual({
+      trimStartSec: 0,
+      fadeInSec: 0,
+      fadeOutSec: 1.2,
+      ducking: { enabled: false, ratio: 0.3, smoothMs: 200 },
+    })
   })
 
   it('round-trips through JSON without losing fields', () => {
@@ -99,6 +109,74 @@ describe('ProjectSchema', () => {
     expect(() =>
       ProjectSchema.parse({ ...minimalProject(), sfxVolume: -0.1 })
     ).toThrow()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// BgMusicEditsSchema — non-destructive trim/fade/duck applied at render time
+// ---------------------------------------------------------------------------
+
+describe('BgMusicEditsSchema', () => {
+  it('parses {} into the documented defaults (legacy behavior preserved)', () => {
+    expect(BgMusicEditsSchema.parse({})).toEqual({
+      trimStartSec: 0,
+      fadeInSec: 0,
+      fadeOutSec: 1.2,
+      ducking: { enabled: false, ratio: 0.3, smoothMs: 200 },
+    })
+  })
+
+  it('accepts undefined trimEndSec (play to end of track)', () => {
+    const e = BgMusicEditsSchema.parse({ trimStartSec: 5 })
+    expect(e.trimEndSec).toBeUndefined()
+  })
+
+  it('rejects negative trimStartSec', () => {
+    expect(() => BgMusicEditsSchema.parse({ trimStartSec: -1 })).toThrow()
+  })
+
+  it('clamps fade lengths to 0..10s', () => {
+    expect(() => BgMusicEditsSchema.parse({ fadeInSec: -0.1 })).toThrow()
+    expect(() => BgMusicEditsSchema.parse({ fadeOutSec: 11 })).toThrow()
+  })
+
+  it('clamps ducking ratio to 0..1', () => {
+    expect(() =>
+      BgMusicEditsSchema.parse({ ducking: { enabled: true, ratio: 1.1 } })
+    ).toThrow()
+    expect(() =>
+      BgMusicEditsSchema.parse({ ducking: { enabled: true, ratio: -0.1 } })
+    ).toThrow()
+  })
+
+  it('clamps ducking smoothMs to 50..2000', () => {
+    // < 50ms produces audible pumping; > 2000ms makes the first words of
+    // every segment muddy because the music has not dropped yet.
+    expect(() =>
+      BgMusicEditsSchema.parse({ ducking: { enabled: true, smoothMs: 40 } })
+    ).toThrow()
+    expect(() =>
+      BgMusicEditsSchema.parse({ ducking: { enabled: true, smoothMs: 3000 } })
+    ).toThrow()
+  })
+
+  it('round-trips through JSON without losing fields', () => {
+    const edits = BgMusicEditsSchema.parse({
+      trimStartSec: 10.5,
+      trimEndSec: 40,
+      fadeInSec: 0.8,
+      fadeOutSec: 2.0,
+      ducking: { enabled: true, ratio: 0.25, smoothMs: 300 },
+    })
+    const restored = BgMusicEditsSchema.parse(JSON.parse(JSON.stringify(edits)))
+    expect(restored).toEqual(edits)
+  })
+
+  it('survives a partial ducking object by filling sibling defaults', () => {
+    // Studio UI may send just `{ enabled: true }` when the user flips
+    // the toggle on but hasn't moved the ratio/smooth sliders yet.
+    const e = BgMusicEditsSchema.parse({ ducking: { enabled: true } })
+    expect(e.ducking).toEqual({ enabled: true, ratio: 0.3, smoothMs: 200 })
   })
 })
 
