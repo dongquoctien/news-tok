@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic'
 import { useEffect, useMemo, useState } from 'react'
-import { Loader2, Music, Volume2 } from 'lucide-react'
+import { Loader2, Mic, Music, Volume2 } from 'lucide-react'
 import type { AssetRef, BgMusicEdits } from '@news-tok/shared/schema'
 import { Button } from '@/components/ui/button'
 import {
@@ -49,6 +49,14 @@ export type BgMusicTrimDialogProps = {
   /** Current edits on the project. New tracks default to {} (legacy). */
   initialEdits: BgMusicEdits
   /**
+   * Whether at least one segment has wordBoundaries today. Drives the
+   * "ducking will be inactive until you render voices" hint — without
+   * narration timing, ducking has nothing to align against and silently
+   * no-ops at render time. The dialog still lets the user enable it
+   * (the toggle persists) so they can set up ducking before TTS runs.
+   */
+  hasNarration: boolean
+  /**
    * Commit the new track + edits to project.bgMusic / bgMusicEdits /
    * bgMusicVolume in one round-trip. Called on Apply (with finalized
    * trim) or on Skip (with default edits = full track).
@@ -67,6 +75,7 @@ export function BgMusicTrimDialog({
   videoDurationSec,
   initialVolume,
   initialEdits,
+  hasNarration,
   onApply,
 }: BgMusicTrimDialogProps) {
   const [peaks, setPeaks] = useState<PeaksResponse | null>(null)
@@ -240,6 +249,84 @@ export function BgMusicTrimDialog({
             formatValue={(v) => `${v.toFixed(1)}s`}
             resetTo={1.2}
           />
+        </div>
+
+        <div className="rounded-md border border-border p-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-xs">
+              <Mic className="size-3.5" />
+              <span className="font-medium">Auto-duck under voice</span>
+              <span className="text-muted-foreground">
+                Lower music while narration speaks
+              </span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={edits.ducking.enabled}
+              onClick={() =>
+                setEdits((curr) => ({
+                  ...curr,
+                  ducking: { ...curr.ducking, enabled: !curr.ducking.enabled },
+                }))
+              }
+              className={
+                edits.ducking.enabled
+                  ? 'relative inline-flex h-5 w-9 items-center rounded-full bg-primary transition-colors'
+                  : 'relative inline-flex h-5 w-9 items-center rounded-full bg-secondary transition-colors'
+              }
+            >
+              <span
+                className={
+                  edits.ducking.enabled
+                    ? 'inline-block size-4 translate-x-4 rounded-full bg-background shadow transition-transform'
+                    : 'inline-block size-4 translate-x-0.5 rounded-full bg-background shadow transition-transform'
+                }
+              />
+            </button>
+          </div>
+          {edits.ducking.enabled ? (
+            <>
+              {!hasNarration ? (
+                <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-[10px] text-amber-700 dark:text-amber-300">
+                  No narration yet — ducking will engage automatically once
+                  segments have voices.
+                </div>
+              ) : null}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Slider
+                  label="Duck level"
+                  min={0}
+                  max={1}
+                  step={0.05}
+                  value={edits.ducking.ratio}
+                  onChange={(v) =>
+                    setEdits((curr) => ({
+                      ...curr,
+                      ducking: { ...curr.ducking, ratio: v },
+                    }))
+                  }
+                  formatValue={(v) => `${Math.round(v * 100)}%`}
+                  resetTo={0.3}
+                />
+                <Slider
+                  label="Smoothing"
+                  min={50}
+                  max={500}
+                  step={10}
+                  value={edits.ducking.smoothMs}
+                  onChange={(v) =>
+                    setEdits((curr) => ({
+                      ...curr,
+                      ducking: { ...curr.ducking, smoothMs: v },
+                    }))
+                  }
+                  formatValue={(v) => `${v}ms`}
+                  resetTo={200}
+                />
+              </div>
+            </>
+          ) : null}
         </div>
 
         <DialogFooter>

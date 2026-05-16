@@ -52,6 +52,12 @@ const CACHE_CAPS_BYTES: Record<string, number> = {
   articles: 100 * 1024 * 1024, //     100 MB — JSON blobs only
   uploads: 500 * 1024 * 1024, //      500 MB — user uploads
   downloads: 500 * 1024 * 1024, //    500 MB — per-project subtitle/voice zips
+  // Peaks JSON for the bgMusic trimmer waveform. Each file is ~2KB at
+  // 1000-sample resolution; 100MB cap = ~50,000 unique tracks. The
+  // peaks generator (packages/media/src/peaks.ts) regenerates on
+  // cache miss, so dropping a stale entry costs ~1s of ffmpeg time
+  // the next time the user opens the trim dialog for that track.
+  peaks: 100 * 1024 * 1024, //        100 MB
 }
 
 const BUNDLE_DIR = resolve(REPO_ROOT, '.remotion-cache')
