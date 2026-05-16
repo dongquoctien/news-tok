@@ -581,6 +581,17 @@ export const ProjectSchema = z.object({
   bgMusicEdits: BgMusicEditsSchema,
   /** Master volume for text-transition SFX (multiplied into each cue). */
   sfxVolume: z.number().min(0).max(1).default(0.7),
+  /**
+   * Project-wide SFX kill-switch. When false the renderer skips ALL
+   * text-transition / per-word SFX cues regardless of what the
+   * TextStyle or per-segment override says — useful for "no chrome"
+   * generated videos. Defaults to true to preserve legacy render
+   * output on storyboards saved before this flag existed. New
+   * projects created via MCP `createProject` write `false`, matching
+   * the project convention that generated videos are SFX-free unless
+   * the user opts in.
+   */
+  sfxEnabled: z.boolean().default(true),
   subtitles: SubtitleConfigSchema.default({ enabled: true, bottomPct: 0.18 }),
   /**
    * Show small scene-kind badges (Newspaper + title on title scenes,

@@ -290,6 +290,11 @@ export const NewsTokComposition = ({
     ducking: { enabled: false, ratio: 0.3, smoothMs: 200 },
   }
   const masterSfxVolume = storyboard.sfxVolume ?? 0.7
+  // Project-wide SFX kill-switch. Legacy storyboards lack the field,
+  // and Zod's default makes ProjectSchema.parse() return true for them
+  // — but the composition is also rendered directly without re-parsing
+  // in some tests, so default to true here too.
+  const sfxEnabled = storyboard.sfxEnabled ?? true
   const userStyles = storyboard.userTextStyles ?? []
   const variants = storyboard.variants ?? []
   const activeVariant =
@@ -381,12 +386,14 @@ export const NewsTokComposition = ({
                 fontFamily={subtitleFont}
               />
             ) : null}
-            <SegmentSfx
-              segment={segment}
-              style={style}
-              sfxUrlMap={sfxUrlMap}
-              masterVolume={masterSfxVolume}
-            />
+            {sfxEnabled ? (
+              <SegmentSfx
+                segment={segment}
+                style={style}
+                sfxUrlMap={sfxUrlMap}
+                masterVolume={masterSfxVolume}
+              />
+            ) : null}
             {showLogo ? (
               <LogoMarker
                 spec={storyboard.logo}

@@ -33,6 +33,7 @@ function makeProject(overrides: Partial<Project> = {}): Project {
     segments: [],
     bgMusicVolume: 0.2,
     sfxVolume: 0.7,
+    sfxEnabled: true,
     subtitles: { enabled: true, bottomPct: 0.18 },
     showSceneBadges: false,
     exportPreset: 'standard',
