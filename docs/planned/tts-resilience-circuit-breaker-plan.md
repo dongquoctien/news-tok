@@ -138,6 +138,40 @@ surface a "rendered with backup voice" hint.
 - `pnpm doctor` warns if Piper models missing
 - Existing tests + a new vitest for the registry failover logic
 
+#### Alternative considered: Valtec Vietnamese TTS
+
+`valtec-tts` (github.com/tronghieuit/valtec-tts) was evaluated as a
+Piper replacement. Native Vietnamese model, 5 built-in voices, plus
+zero-shot voice cloning from 3-10s reference audio. Better VI quality
+than Piper.
+
+**Why we don't recommend it as the primary fallback:**
+
+| Factor | Verdict |
+|---|---|
+| Runtime stack | Python 3.8+ + PyTorch 2.5 + 16 deps (~2GB install) vs Piper's single binary. Breaks the "100% Node local app" promise. |
+| HTTP surface | Only ships a Python lib + Gradio demo UI. No stable REST API — we'd need to wrap it in FastAPI ourselves and maintain a second service. |
+| Word boundaries | Not exposed. VITS-based, so phoneme-level alignment exists internally but would need a source fork + phoneme → word grouping to use. Breaks karaoke / ducking on fallback. |
+| Disk footprint | 285MB model + 1-2GB Python deps vs Piper's ~50MB/voice. |
+| EN support | None. Project supports `vi` + `en`; fallback must cover both. |
+
+**Two cases where Valtec still makes sense (not as Edge fallback):**
+
+1. **Opt-in premium offline provider.** User who wants the best VI
+   quality and accepts the Python setup runs Valtec in Docker
+   (`docker run -p 7860:7860 valtec-tts`). `news-tok` probes
+   `localhost:7860` on startup; if up, registers it as a third
+   provider behind Edge → Piper. Default off, manual install.
+
+2. **Standalone voice-cloning feature.** Zero-shot voice cloning is
+   unique to Valtec — neither Edge nor Piper has it. That's a
+   feature add ("clone my own voice for narration"), not a
+   resilience layer. Worth a separate plan if/when there's demand.
+
+**If you want Valtec as a Case-1 provider after Piper is in place**,
+filing a separate `docs/planned/valtec-provider-plan.md` is the right
+move — it's additive, not a replacement.
+
 ### Layer 3 — Doctor health check (1 hour)
 
 Add Edge TTS endpoint ping to `scripts/doctor.mjs`. Currently doctor
