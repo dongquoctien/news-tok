@@ -25,6 +25,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       path: result.asset.path,
       durationSec: result.durationSec,
+      wordBoundaries: result.wordBoundaries,
     })
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)
