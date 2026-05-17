@@ -243,13 +243,27 @@ function buildHashtags(
   return filterBannedHashtags(out).hashtags
 }
 
+/**
+ * Strip `**accent**` markers used by storyPill / storyChip / storyVtv
+ * layouts. The markers are a render-time directive — never visible
+ * text — so they must be removed before captions go to TikTok / FB /
+ * IG / YT, none of which render markdown bold. Mirror the regex from
+ * `splitAccent` in packages/remotion/src/layouts/StoryPill.tsx so
+ * behaviour stays in lockstep.
+ */
+function stripAccentMarkers(input: string): string {
+  if (!input.includes('**')) return input
+  return input.replace(/\*\*([^*]+)\*\*/g, '$1')
+}
+
 /** Pull a short hook (≤90 chars) from the title or first keypoint. */
 function hookOf(title: string, segments: Project['segments']): string {
-  const t = title.trim()
+  const t = stripAccentMarkers(title).trim()
   if (t.length > 0 && t.length <= 90) return t
   if (t.length > 90) return t.slice(0, 87) + '...'
   const first = segments.find((s) => s.scene === 'title') ?? segments[0]
-  return (first?.text ?? '').slice(0, 87) + (first?.text && first.text.length > 87 ? '...' : '')
+  const firstText = stripAccentMarkers(first?.text ?? '')
+  return firstText.slice(0, 87) + (firstText && firstText.length > 87 ? '...' : '')
 }
 
 /** Pull short keypoint bullets — up to 4 — for the body of the caption. */
@@ -257,7 +271,7 @@ function keypointsOf(segments: Project['segments'], max = 4): string[] {
   return segments
     .filter((s) => s.scene === 'keypoint')
     .slice(0, max)
-    .map((s) => s.text.trim())
+    .map((s) => stripAccentMarkers(s.text).trim())
     .filter(Boolean)
 }
 
@@ -286,7 +300,7 @@ function compressKeypoint(text: string, maxChars = 70): string {
 /** Optional outro line — closing CTA from the storyboard if present. */
 function outroOf(segments: Project['segments']): string | undefined {
   const out = segments.find((s) => s.scene === 'outro')
-  return out?.text?.trim() || undefined
+  return stripAccentMarkers(out?.text ?? '').trim() || undefined
 }
 
 function tiktokCaption(
@@ -439,7 +453,9 @@ export function generateSocialCaptions(input: {
   const topic =
     input.topic ??
     classifyTopicLocal(
-      `${project.title}\n${project.segments.map((s) => s.text).join('\n').slice(0, 2000)}`,
+      stripAccentMarkers(
+        `${project.title}\n${project.segments.map((s) => s.text).join('\n').slice(0, 2000)}`
+      ),
       project.language
     )
 
