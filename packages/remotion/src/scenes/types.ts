@@ -21,6 +21,13 @@ export type SceneProps = {
    * to <TextBlock>; the renderer applies it inside typographyStyle().
    */
   colorOverride?: ColorOverride
+  /**
+   * URL for the NEWSTOKVN brand logo, resolved by the caller for the
+   * runtime environment (Studio vs renderer). Forwarded into layouts
+   * via `LayoutProps.brandLogoUrl`. Optional — non-outro scenes can
+   * ignore it.
+   */
+  brandLogoUrl?: string
 }
 
 export type SceneComponent = ComponentType<SceneProps>

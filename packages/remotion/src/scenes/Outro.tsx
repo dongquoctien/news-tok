@@ -12,7 +12,7 @@ import { resolveLayout } from '../layouts/registry.js'
 
 const CLASSIC = findTextStyle('cinematic', []) ?? findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
-export const Outro = ({ segment, project, textStyle, fontOverride, colorOverride }: SceneProps) => {
+export const Outro = ({ segment, project, textStyle, fontOverride, colorOverride, brandLogoUrl }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 12 })
   const r = useResponsive()
   const bg = segment.visuals.background
@@ -33,6 +33,7 @@ export const Outro = ({ segment, project, textStyle, fontOverride, colorOverride
         colorOverride={colorOverride}
         segment={segment}
         project={project}
+        brandLogoUrl={brandLogoUrl}
       />
     )
   }

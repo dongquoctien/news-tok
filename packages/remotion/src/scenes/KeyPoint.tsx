@@ -12,7 +12,7 @@ import { resolveLayout } from '../layouts/registry.js'
 
 const CLASSIC = findTextStyle('classic', []) ?? BUILT_IN_TEXT_STYLES[0]!
 
-export const KeyPoint = ({ segment, project, textStyle, fontOverride, colorOverride }: SceneProps) => {
+export const KeyPoint = ({ segment, project, textStyle, fontOverride, colorOverride, brandLogoUrl }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 16 })
   const r = useResponsive()
   const bg = segment.visuals.background
@@ -33,6 +33,7 @@ export const KeyPoint = ({ segment, project, textStyle, fontOverride, colorOverr
         colorOverride={colorOverride}
         segment={segment}
         project={project}
+        brandLogoUrl={brandLogoUrl}
       />
     )
   }

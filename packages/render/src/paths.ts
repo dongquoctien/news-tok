@@ -30,3 +30,9 @@ export const sfxStagingDir = () => resolve(dataDir(), 'sfx')
  *  `layout.tsx` + `meta.json` + optional preview/reference files. */
 export const layoutsDir = () => resolve(dataDir(), 'layouts')
 export const layoutDir = (layoutId: string) => resolve(layoutsDir(), layoutId)
+/** Source directory holding versioned brand assets (logo, etc.) that
+ *  every render needs. Files are copied into publicDir at stage time so
+ *  the renderer's bundler can serve them via `staticFile('<name>')` —
+ *  same URL convention Studio's Next.js public folder uses. */
+export const brandAssetsSrcDir = () =>
+  resolve(REPO_ROOT, 'packages', 'remotion', 'src', 'assets')

@@ -205,6 +205,37 @@ export const BUILT_IN_LAYOUTS: BuiltInLayoutMeta[] = [
     hint:
       'Broadcast / thời sự lower-third: channel tag top-left (fileId) + red category chip (eyebrow) + bottom headline.',
   },
+  // Outro / end-card set — branded CTA layouts to close a video.
+  // All three pull the NEWSTOKVN brand logo from the staged
+  // public dir; no per-segment media required (NextVideo accepts
+  // an optional teaser still).
+  {
+    id: 'builtin-outroSubscribeBurst',
+    name: 'Outro — subscribe burst',
+    family: 'design-forward',
+    slots: { media: false, eyebrow: true, chips: false, fileId: false },
+    thumbnail: '/layout-previews/builtin-outroSubscribeBurst.png',
+    hint:
+      'Center NEWSTOKVN logo + concentric pulse rings + bouncing "NHẤN THEO DÕI" CTA + thumbs-up / bell icons fly in.',
+  },
+  {
+    id: 'builtin-outroFollowChannel',
+    name: 'Outro — follow channel',
+    family: 'editorial',
+    slots: { media: false, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-outroFollowChannel.png',
+    hint:
+      'VTV/YouTube channel card: logo + name (text) + handle (eyebrow) + animated follower counter (fileId target) + yellow "THEO DÕI KÊNH" button.',
+  },
+  {
+    id: 'builtin-outroNextVideo',
+    name: 'Outro — next video tease',
+    family: 'media-led',
+    slots: { media: true, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-outroNextVideo.png',
+    hint:
+      'Tease the next clip: background photo + "VIDEO TIẾP THEO" eyebrow + bold headline + triple-stack swipe-up chevron with "Vuốt lên xem ngay".',
+  },
 ]
 
 /** Look up a layout meta by id; returns undefined for user layouts

@@ -13,6 +13,9 @@ import { NeonSign } from './NeonSign.js'
 import { NumberedSteps } from './NumberedSteps.js'
 import { PhoneMockup } from './PhoneMockup.js'
 import { PortraitQuote } from './PortraitQuote.js'
+import { OutroFollowChannel } from './OutroFollowChannel.js'
+import { OutroNextVideo } from './OutroNextVideo.js'
+import { OutroSubscribeBurst } from './OutroSubscribeBurst.js'
 import { SplitVertical } from './SplitVertical.js'
 import { StatHero } from './StatHero.js'
 import { StoryChip } from './StoryChip.js'
@@ -64,6 +67,14 @@ const BUILT_IN_LAYOUTS: Record<string, LayoutComponent> = {
   'builtin-storyPill': StoryPill,
   'builtin-storyChip': StoryChip,
   'builtin-storyVtv': StoryVtv,
+  // Outro / end-card set — branded CTA layouts that wrap a video.
+  // Each leans on the staged NEWSTOKVN logo (via stageBrandAssets)
+  // and pairs a different motion language (ring pulse, channel
+  // card with animated counter, swipe-up tease) with the same
+  // brand mark so a series of videos feels coherent at the close.
+  'builtin-outroSubscribeBurst': OutroSubscribeBurst,
+  'builtin-outroFollowChannel': OutroFollowChannel,
+  'builtin-outroNextVideo': OutroNextVideo,
 }
 
 /**

@@ -151,6 +151,11 @@ export function PlayerPane({
             variantId: previewVariantId ?? undefined,
             sfxUrlMap,
             logoUrl,
+            // NEWSTOKVN brand logo lives at apps/studio/public/ —
+            // Next serves it at this URL. The renderer stages the
+            // same file into data/ so its bundler URL works too;
+            // outro layouts consume whichever the active env passes.
+            brandLogoUrl: '/newstokvn-logo.png',
           }}
           durationInFrames={durationInFrames}
           fps={preset.fps}
