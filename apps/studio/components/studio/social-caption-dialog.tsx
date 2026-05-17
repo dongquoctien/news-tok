@@ -1,7 +1,16 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { Check, Copy, Loader2, Share2, ShieldCheck, Sparkles } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  Bot,
+  Check,
+  Copy,
+  Loader2,
+  RefreshCw,
+  Share2,
+  ShieldCheck,
+  Sparkles,
+} from 'lucide-react'
 import type { Platform, SocialCaptionResult } from '@news-tok/shared/social'
 import type { SanitizeReplacement } from '@news-tok/shared/caption-sanitize'
 import { Button } from '@/components/ui/button'
@@ -173,39 +182,140 @@ export type SocialCaptionDialogProps = {
   trigger: React.ReactNode
 }
 
+/**
+ * Data shape returned from /api/projects/[id]/social-caption — adds
+ * `source` + `generatedAt` on top of `SocialCaptionResult` so the
+ * dialog can badge LLM-rewritten content distinctly from the
+ * deterministic local template.
+ */
+type CaptionDataWithSource = SocialCaptionResult & {
+  source: 'template' | 'llm-rewrite'
+  generatedAt?: string
+}
+
 export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogProps) {
   const [open, setOpen] = useState(false)
-  const [data, setData] = useState<SocialCaptionResult | null>(null)
+  const [data, setData] = useState<CaptionDataWithSource | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Refresh / regenerate flow state. `regenerating` toggles the
+  // loading overlay; `regenStep` mirrors the Claude CLI job.step so
+  // the sub-text reflects what Claude is doing right now.
+  const [regenerating, setRegenerating] = useState(false)
+  const [regenStep, setRegenStep] = useState<string>('Claude đang viết caption và hashtag…')
+  const [regenError, setRegenError] = useState<string | null>(null)
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const fetchCaption = useCallback(
+    async (signal?: AbortSignal): Promise<CaptionDataWithSource> => {
+      const res = await fetch(`/api/projects/${projectId}/social-caption`, {
+        cache: 'no-store',
+        signal,
+      })
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string }
+        throw new Error(body.error ?? `HTTP ${res.status}`)
+      }
+      return (await res.json()) as CaptionDataWithSource
+    },
+    [projectId]
+  )
 
   useEffect(() => {
     if (!open) return
-    let cancelled = false
+    const controller = new AbortController()
     setLoading(true)
     setError(null)
-    fetch(`/api/projects/${projectId}/social-caption`, { cache: 'no-store' })
-      .then((res) => {
-        if (!res.ok) {
-          return res.json().then((b: { error?: string }) => {
-            throw new Error(b.error ?? `HTTP ${res.status}`)
-          })
-        }
-        return res.json() as Promise<SocialCaptionResult>
-      })
-      .then((body) => {
-        if (!cancelled) setData(body)
-      })
+    fetchCaption(controller.signal)
+      .then((body) => setData(body))
       .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err))
+        if (controller.signal.aborted) return
+        setError(err instanceof Error ? err.message : String(err))
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       })
     return () => {
-      cancelled = true
+      controller.abort()
     }
-  }, [open, projectId])
+  }, [open, fetchCaption])
+
+  // Clean up the polling interval if the dialog closes mid-refresh.
+  useEffect(() => {
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current)
+    }
+  }, [])
+
+  const handleRefresh = useCallback(async () => {
+    if (regenerating) return
+    setRegenerating(true)
+    setRegenError(null)
+    setRegenStep('Claude đang viết caption và hashtag…')
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/social-caption/regenerate`,
+        { method: 'POST' }
+      )
+      const body = (await res.json().catch(() => ({}))) as {
+        jobId?: string
+        error?: string
+        job?: { jobId?: string }
+      }
+      if (!res.ok) {
+        // 409 returns the existing job — fall through to polling it.
+        if (res.status === 409 && body.job?.jobId) {
+          // existing job still running — attach to it
+        } else {
+          throw new Error(body.error ?? `HTTP ${res.status}`)
+        }
+      }
+      const jobId = body.jobId ?? body.job?.jobId
+      if (!jobId) throw new Error('Server did not return a jobId')
+
+      // Poll every 1.5s until the job terminates.
+      pollRef.current = setInterval(async () => {
+        try {
+          const r = await fetch(
+            `/api/projects/${projectId}/social-caption/regenerate?jobId=${encodeURIComponent(jobId)}`,
+            { cache: 'no-store' }
+          )
+          if (!r.ok) throw new Error(`Poll HTTP ${r.status}`)
+          const job = (await r.json()) as {
+            status: 'running' | 'completed' | 'failed' | 'cancelled'
+            step?: string
+            error?: string
+          }
+          if (job.step) setRegenStep(job.step)
+          if (job.status === 'running') return
+          // Terminal state — stop polling and either refresh data or
+          // surface the error.
+          if (pollRef.current) {
+            clearInterval(pollRef.current)
+            pollRef.current = null
+          }
+          if (job.status === 'completed') {
+            const fresh = await fetchCaption()
+            setData(fresh)
+            setRegenerating(false)
+          } else {
+            setRegenError(job.error ?? 'Caption regeneration failed')
+            setRegenerating(false)
+          }
+        } catch (err) {
+          if (pollRef.current) {
+            clearInterval(pollRef.current)
+            pollRef.current = null
+          }
+          setRegenError(err instanceof Error ? err.message : String(err))
+          setRegenerating(false)
+        }
+      }, 1500)
+    } catch (err) {
+      setRegenError(err instanceof Error ? err.message : String(err))
+      setRegenerating(false)
+    }
+  }, [projectId, regenerating, fetchCaption])
 
   const copyHashtags = async () => {
     if (!data) return
@@ -224,15 +334,58 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="size-5" />
             Social captions
+            {data?.source === 'llm-rewrite' ? (
+              <span
+                className="ml-2 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300"
+                title={
+                  data.generatedAt
+                    ? `Claude rewrote these on ${new Date(data.generatedAt).toLocaleString()}`
+                    : 'Rewritten by Claude'
+                }
+              >
+                <Bot className="size-3" />
+                Claude
+              </span>
+            ) : data?.source === 'template' ? (
+              <span
+                className="ml-2 inline-flex items-center gap-1 rounded-full bg-secondary px-2 py-0.5 text-[10px] font-medium text-muted-foreground"
+                title="Generated from a local keyword template. Click Refresh to have Claude rewrite them."
+              >
+                Template
+              </span>
+            ) : null}
           </DialogTitle>
           <DialogDescription>
-            Four platform-tailored captions generated from the storyboard.
-            Click Copy to grab one, then paste into your TikTok / Facebook /
-            Instagram / YouTube post. Tier-1 sensitive words (death,
-            violence, drugs) are auto-masked per platform default to
-            avoid reach reduction.
+            Four platform-tailored captions for your post. The Refresh
+            button asks Claude CLI to rewrite them in-context (takes ~30-60s).
+            Tier-1 sensitive words (death, violence, drugs) are
+            auto-masked per platform to avoid reach reduction.
           </DialogDescription>
         </DialogHeader>
+
+        {/* Refresh action sits at the top so it's visible regardless of
+            which platform card the user is scrolled to. Disabled while a
+            regeneration is in flight to prevent racing the storyboard
+            write. */}
+        <div className="flex items-center justify-end">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={regenerating || loading}
+            title="Ask Claude CLI to rewrite captions with full context"
+          >
+            <RefreshCw className={cn('size-3.5', regenerating && 'animate-spin')} />
+            {regenerating ? 'Đang viết…' : 'Refresh with Claude'}
+          </Button>
+        </div>
+
+        {regenError ? (
+          <p className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+            {regenError}
+          </p>
+        ) : null}
 
         {loading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -241,7 +394,24 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
         ) : error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : data ? (
-          <>
+          <div className="relative">
+            {/* Loading overlay during Refresh. Dimmed bg keeps the
+                stale data visible underneath so the user can compare
+                old vs new once it lands; spinner + sub-text mirrors
+                the home create-prompt loading pattern. */}
+            {regenerating ? (
+              <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-3 rounded-md bg-background/80 backdrop-blur-sm">
+                <Loader2 className="size-8 animate-spin text-primary" />
+                <div className="space-y-1 text-center">
+                  <p className="text-sm font-medium">Claude đang viết caption và hashtag…</p>
+                  <p className="text-xs text-muted-foreground">{regenStep}</p>
+                </div>
+                <p className="max-w-xs text-center text-[10px] text-muted-foreground">
+                  Quá trình này thường mất 30–60s. Đừng đóng dialog —
+                  caption sẽ tự cập nhật khi Claude xong.
+                </p>
+              </div>
+            ) : null}
             {/* AI rewrite hint — surface when any baseline caption exceeds
                 the platform sweet spot. The orchestrator (Claude in CLI)
                 can compress the verbose template output into hook-driven
@@ -308,7 +478,7 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
                 />
               ))}
             </div>
-          </>
+          </div>
         ) : null}
       </DialogContent>
     </Dialog>
