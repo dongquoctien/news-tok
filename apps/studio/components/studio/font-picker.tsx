@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Check, Type } from 'lucide-react'
 import {
   ALLOWED_FONT_IDS,
@@ -23,6 +23,12 @@ import {
   textCss as libTextCss,
 } from '@/lib/text-style-preview'
 import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
+import { useFavorites } from '@/lib/use-favorites'
+import {
+  FavoriteStar,
+  FavoritesFilterChip,
+  sortFavoritesFirst,
+} from './favorites-ui'
 
 /**
  * CSS font stack the Studio uses to PREVIEW each logical font id. The
@@ -83,6 +89,12 @@ function FontCard({
           : 'border-border'
       )}
     >
+      {/* Favorite star — top-left, paired with check badge top-right. */}
+      <FavoriteStar
+        kind="fonts"
+        id={fontId}
+        className="left-2 right-auto top-2"
+      />
       {/* Check badge mirrors LayoutPicker / StylePicker for a
           consistent "active pick" affordance across all pickers. */}
       {selected ? (
@@ -153,6 +165,17 @@ export function FontPicker({
 }: FontPickerProps) {
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<string | null>(currentFontId ?? null)
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const { list: favList, isFavorite } = useFavorites()
+
+  const visibleFonts = useMemo(() => {
+    const all = [...ALLOWED_FONT_IDS]
+    const filtered = favoritesOnly
+      ? all.filter((id) => isFavorite('fonts', id))
+      : all
+    return sortFavoritesFirst(filtered, (id) => id, favList('fonts'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- favList/isFavorite stable per render
+  }, [favoritesOnly, favList('fonts').join('|')])
 
   useEffect(() => {
     if (open) setPicked(currentFontId ?? null)
@@ -183,16 +206,27 @@ export function FontPicker({
             : 'max-w-3xl grid-rows-[auto_1fr_auto]'
         )}
       >
-        <div className="border-b px-4 py-3">
+        {/* pr-12 reserves room for the Dialog's absolute Close (×)
+            button at right-4 top-4 so the title doesn't run under it,
+            and the chip sits on its own row to mirror the style /
+            layout picker pattern. */}
+        <div className="space-y-2 border-b px-4 py-3 pr-12">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Type className="size-5" />
             Pick a font
           </DialogTitle>
-          <DialogDescription className="mt-1 text-xs">
+          <DialogDescription className="text-xs">
             Override the typeface for this segment without forking the whole text
             style. The renderer prefers segment / variant overrides before the
             style&apos;s own font.
           </DialogDescription>
+          <div className="flex items-center gap-2 pt-1">
+            <FavoritesFilterChip
+              kind="fonts"
+              active={favoritesOnly}
+              onToggle={setFavoritesOnly}
+            />
+          </div>
         </div>
 
         <div
@@ -205,8 +239,13 @@ export function FontPicker({
         >
           {/* LEFT — font grid */}
           <div className="overflow-y-auto p-4">
+            {visibleFonts.length === 0 ? (
+              <div className="py-12 text-center text-xs text-muted-foreground">
+                Chưa có font yêu thích nào. Bấm sao trên từng thẻ để thêm.
+              </div>
+            ) : null}
             <div className="grid grid-cols-3 gap-2">
-              {ALLOWED_FONT_IDS.map((id) => (
+              {visibleFonts.map((id) => (
                 <FontCard
                   key={id}
                   fontId={id}

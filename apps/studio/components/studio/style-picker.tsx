@@ -22,6 +22,12 @@ import {
 import { PREVIEW_KEYFRAMES, previewAnimationStyle } from '@/lib/text-style-anim'
 import { TextStyleBuilder } from './text-style-builder'
 import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
+import { useFavorites } from '@/lib/use-favorites'
+import {
+  FavoriteStar,
+  FavoritesFilterChip,
+  sortFavoritesFirst,
+} from './favorites-ui'
 
 const FAMILY_LABEL: Record<TextStyle['family'], string> = {
   news: 'News',
@@ -227,6 +233,12 @@ function StyleCard({
           : 'border-border'
       )}
     >
+      {/* Favorite star — top-left so it doesn't fight the check badge. */}
+      <FavoriteStar
+        kind="styles"
+        id={style.id}
+        className="left-2 right-auto top-2"
+      />
       {/* Check badge mirrors LayoutPicker so the "this is the active
           pick" affordance is consistent across both pickers. */}
       {selected ? (
@@ -310,6 +322,8 @@ export function StylePicker({
   const [error, setError] = useState<string | null>(null)
   const [filter, setFilter] = useState<TextStyle['family'] | 'all' | 'custom'>('all')
   const [picked, setPicked] = useState<string | null>(currentStyleId ?? null)
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const { list: favList, isFavorite } = useFavorites()
   const [pendingDeleteForce, setPendingDeleteForce] = useState<{
     id: string
     segmentRefs: string[]
@@ -371,10 +385,18 @@ export function StylePicker({
   const visibleStyles = useMemo(() => {
     if (!builtIn) return []
     const combined = [...builtIn, ...userStyles]
-    if (filter === 'all') return combined
-    if (filter === 'custom') return userStyles
-    return combined.filter((s) => s.family === filter)
-  }, [builtIn, userStyles, filter])
+    const familyFiltered =
+      filter === 'all'
+        ? combined
+        : filter === 'custom'
+          ? userStyles
+          : combined.filter((s) => s.family === filter)
+    const afterFavorites = favoritesOnly
+      ? familyFiltered.filter((s) => isFavorite('styles', s.id))
+      : familyFiltered
+    return sortFavoritesFirst(afterFavorites, (s) => s.id, favList('styles'))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- favList / isFavorite are stable per render
+  }, [builtIn, userStyles, filter, favoritesOnly, favList('styles').join('|')])
 
   const deleteUserStyle = async (id: string, force = false) => {
     if (!projectId) return
@@ -444,6 +466,11 @@ export function StylePicker({
           {/* LEFT — filters + grid */}
           <div className="flex min-h-0 flex-col overflow-hidden border-r">
             <div className="flex flex-wrap items-center gap-2 border-b px-4 py-3 text-xs">
+              <FavoritesFilterChip
+                kind="styles"
+                active={favoritesOnly}
+                onToggle={setFavoritesOnly}
+              />
               <span className="text-muted-foreground">Family</span>
               {(['all', 'news', 'social', 'cinematic', 'retro', 'playful'] as const).map((f) => (
                 <button

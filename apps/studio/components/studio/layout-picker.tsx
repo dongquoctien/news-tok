@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Check, Layout as LayoutIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -12,7 +12,13 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { BUILT_IN_LAYOUTS } from '@/lib/layouts-catalog'
+import { useFavorites } from '@/lib/use-favorites'
 import { cn } from '@/lib/utils'
+import {
+  FavoriteStar,
+  FavoritesFilterChip,
+  sortFavoritesFirst,
+} from './favorites-ui'
 
 /**
  * Segment-editor layout picker. Grid of thumbnails — one per built-in
@@ -34,6 +40,20 @@ export function LayoutPicker({
 }) {
   const [open, setOpen] = useState(false)
   const [picked, setPicked] = useState<string | undefined>(currentId)
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const { list, isFavorite } = useFavorites()
+
+  // Apply the filter first (when the chip is on), then float favorites
+  // to the top of the remaining set. In favorites-only mode the
+  // sort is a no-op because every visible item is already a favorite.
+  const layouts = useMemo(() => {
+    const favs = list('layouts')
+    const filtered = favoritesOnly
+      ? BUILT_IN_LAYOUTS.filter((l) => isFavorite('layouts', l.id))
+      : BUILT_IN_LAYOUTS
+    return sortFavoritesFirst(filtered, (l) => l.id, favs)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- list / isFavorite are stable per render
+  }, [favoritesOnly, list('layouts').join('|')])
 
   const confirm = () => {
     onApply(picked)
@@ -59,7 +79,12 @@ export function LayoutPicker({
           9:16 thumbnails on portrait monitors pushed the dialog past
           the viewport and the user couldn't see the Apply button. */}
       <DialogContent className="grid max-h-[90vh] w-full max-w-3xl grid-rows-[auto_1fr_auto] gap-0 overflow-hidden p-0">
-        <div className="space-y-1 border-b px-4 py-3">
+        {/* pr-12 so the title row doesn't run under the Dialog's
+            absolute Close (×) button at right-4 top-4 (size-4 icon
+            + ~16px of breathing room). The chip lives in its own
+            row below — clear of the Close button and aligned with
+            the filter strip pattern used by the style picker. */}
+        <div className="space-y-2 border-b px-4 py-3 pr-12">
           <DialogTitle className="flex items-center gap-2 text-base">
             <LayoutIcon className="size-5" />
             Pick a layout
@@ -69,11 +94,23 @@ export function LayoutPicker({
             on the frame. Headline still picks up your text style, font,
             and colour — only the placement is layout-owned.
           </DialogDescription>
+          <div className="flex items-center gap-2 pt-1">
+            <FavoritesFilterChip
+              kind="layouts"
+              active={favoritesOnly}
+              onToggle={setFavoritesOnly}
+            />
+          </div>
         </div>
 
         <div className="overflow-y-auto px-4 py-3">
+          {layouts.length === 0 ? (
+            <div className="py-12 text-center text-xs text-muted-foreground">
+              Chưa có layout yêu thích nào. Bấm sao trên từng thẻ để thêm.
+            </div>
+          ) : null}
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
-            {BUILT_IN_LAYOUTS.map((layout) => {
+            {layouts.map((layout) => {
               const selected = picked === layout.id
               return (
                 <button
@@ -97,6 +134,13 @@ export function LayoutPicker({
                       src={layout.thumbnail}
                       alt={layout.name}
                       className="absolute inset-0 size-full object-cover"
+                    />
+                    {/* Favorite star — top-left so it doesn't fight the
+                        selected check badge in top-right. */}
+                    <FavoriteStar
+                      kind="layouts"
+                      id={layout.id}
+                      className="left-2 right-auto top-2"
                     />
                     {selected ? (
                       <div className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
