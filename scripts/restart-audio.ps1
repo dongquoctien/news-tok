@@ -35,72 +35,32 @@ function Write-Step {
     Write-Host "==> $Message" -ForegroundColor Cyan
 }
 
-function Stop-ServiceWithDependents {
-    param([string]$ServiceName)
-
-    # On some OEM builds (notably Toshiba laptops where TPHKLOAD --
-    # the hotkey driver service -- depends on AudioEndpointBuilder),
-    # `Restart-Service -Force` refuses to stop the target because a
-    # dependent service is locking it. We have to walk the dependency
-    # tree manually, stop each dependent, then stop the target.
-    $svc = Get-Service -Name $ServiceName -ErrorAction Stop
-    $dependents = $svc.DependentServices | Where-Object { $_.Status -eq 'Running' }
-
-    foreach ($dep in $dependents) {
-        Write-Host "    Stopping dependent: $($dep.Name) ($($dep.DisplayName))" -ForegroundColor DarkGray
-        try {
-            Stop-Service -Name $dep.Name -Force -ErrorAction Stop
-        } catch {
-            # Dependent refuses to stop -- try `sc.exe stop` as fallback
-            # (uses SCM directly, bypasses some PowerShell quirks).
-            Write-Host "      retry via sc.exe..." -ForegroundColor DarkGray
-            & sc.exe stop $dep.Name | Out-Null
-            Start-Sleep -Milliseconds 800
-        }
-    }
-
-    Stop-Service -Name $ServiceName -Force -ErrorAction Stop
-    return $dependents
-}
-
-function Start-ServiceWithDependents {
-    param(
-        [string]$ServiceName,
-        $Dependents
-    )
-    Start-Service -Name $ServiceName -ErrorAction Stop
-    # Restart the dependents we stopped earlier so the laptop keeps
-    # working (TPHKLOAD = hotkeys, etc).
-    foreach ($dep in $Dependents) {
-        try {
-            Start-Service -Name $dep.Name -ErrorAction Stop
-            Write-Host "    Resumed dependent: $($dep.Name)" -ForegroundColor DarkGray
-        } catch {
-            Write-Host "    Could not auto-restart $($dep.Name) -- start it from services.msc if needed." -ForegroundColor DarkYellow
-        }
-    }
-}
-
-function Restart-AudioService {
-    param([string]$ServiceName)
-
-    Write-Step "Restarting $ServiceName ..."
+function Restart-AudiosrvOnly {
+    # We only restart Audiosrv (Windows Audio), NOT AudioEndpointBuilder.
+    #
+    # Why: AudioEndpointBuilder commonly has OEM dependents (TPHKLOAD on
+    # Lenovo / Toshiba hotkey loaders, plus a few Realtek + Dell helpers)
+    # that refuse to stop even via `sc.exe stop` because the OEM software
+    # marks them non-stoppable. Trying to restart AudioEndpointBuilder
+    # then fails and the whole script bails out before Audiosrv even
+    # gets a chance.
+    #
+    # Audiosrv is the one that actually holds the WASAPI session handles
+    # we want to free, and it has NO dependents on a clean Windows
+    # install -- so restarting just Audiosrv is both sufficient for the
+    # stale-handle freeze AND safe across OEM machines.
+    Write-Step "Restarting Audiosrv (Windows Audio) ..."
     try {
-        $deps = Stop-ServiceWithDependents -ServiceName $ServiceName
-        Start-ServiceWithDependents -ServiceName $ServiceName -Dependents $deps
+        Restart-Service -Name 'Audiosrv' -Force -ErrorAction Stop
         Write-Host "    OK" -ForegroundColor Green
     } catch {
-        Write-Warning "Failed to restart $ServiceName : $($_.Exception.Message)"
+        Write-Warning "Failed to restart Audiosrv : $($_.Exception.Message)"
         Write-Warning "  (Are you running PowerShell as Administrator?)"
         exit 1
     }
 }
 
-# AudioEndpointBuilder must come BEFORE Audiosrv since Audiosrv depends
-# on it. Restarting them in the other order leaves Audiosrv momentarily
-# without an endpoint enumerator and it logs a warning to the Event Log.
-Restart-AudioService -ServiceName 'AudioEndpointBuilder'
-Restart-AudioService -ServiceName 'Audiosrv'
+Restart-AudiosrvOnly
 
 Write-Host ""
 Write-Host "Audio services restarted." -ForegroundColor Green
