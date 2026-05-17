@@ -412,10 +412,16 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
                 </p>
               </div>
             ) : null}
-            {/* AI rewrite hint — surface when any baseline caption exceeds
-                the platform sweet spot. The orchestrator (Claude in CLI)
-                can compress the verbose template output into hook-driven
-                copy; the dialog itself only shows the template baseline. */}
+            {/* Length-warning banner. Now points at the in-dialog
+                Refresh button (above) instead of asking the user to
+                "go back to Claude CLI". Text varies by source:
+                - template: explain it's the deterministic baseline
+                  and Refresh will produce a hook-driven rewrite.
+                - llm-rewrite: Claude already retried under the
+                  server-side max-length enforcement; the only way
+                  this banner fires now is when a retry exhausted
+                  the budget — Refresh again to ask Claude to try a
+                  different angle. */}
             {data.captions.some((c) => {
               const m = PLATFORMS[c.platform]
               return c.charCount > m.targetMax
@@ -423,11 +429,13 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
               <div className="flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-800 dark:text-amber-200">
                 <Sparkles className="mt-0.5 size-3.5 shrink-0" />
                 <p className="leading-relaxed">
-                  Baseline hơi dài. Quay lại Claude CLI và yêu cầu{' '}
+                  {data.source === 'llm-rewrite'
+                    ? 'Vài caption vẫn dài hơn sweet spot khuyến nghị. Bấm '
+                    : 'Đang dùng template baseline — caption hơi dài cho từng platform. Bấm '}
                   <em className="not-italic font-medium text-amber-900 dark:text-amber-100">
-                    "cải thiện caption ngắn gọn hơn"
+                    Refresh with Claude
                   </em>{' '}
-                  — orchestrator sẽ rewrite theo style từng platform.
+                  ở phía trên để Claude viết lại ngắn gọn hơn, đúng style từng platform.
                 </p>
               </div>
             ) : null}

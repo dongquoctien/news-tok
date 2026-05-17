@@ -56,11 +56,12 @@ function buildPrompt(projectId: string): string {
     `Step 2: mcp__news-tok__generateSocialCaption with { projectId: "${projectId}" }`,
     `        Returns { topic, hashtags, captions: [{ platform, text, charCount }] }. Use this as the BASELINE — do NOT just copy it back.`,
     ``,
-    `Step 3: Rewrite each platform's caption text in your head following these targets:`,
-    `   - tiktok    120-250 chars, hook + 1 drama line + CTA, ≤6 hashtags (preserve any dot-masking from baseline like c.h.ế.t)`,
-    `   - facebook  400-800 chars, narrative 2-3 paragraphs, end with an open question`,
-    `   - instagram 250-500 chars, emoji hook + arrow bullets (→) + hashtag block at the end`,
-    `   - youtube   1000-1500 chars, SEO-first hook ≤100 chars, then 2-3 body paragraphs, hashtags start with #shorts`,
+    `Step 3: Rewrite each platform's caption following these HARD upper bounds. The rewriteSocialCaptions tool ENFORCES these and REJECTS oversize payloads — count chars yourself before calling, aim for the lower end of each range:`,
+    `   - tiktok    target 120-220 chars, MUST NOT exceed 250. Hook + 1 drama line + CTA, ≤6 hashtags (preserve any dot-masking from baseline like c.h.ế.t).`,
+    `   - facebook  target 400-700 chars, MUST NOT exceed 800. Narrative 2-3 paragraphs, end with an open question.`,
+    `   - instagram target 250-450 chars, MUST NOT exceed 500. Emoji hook + arrow bullets (→) + hashtag block at the end.`,
+    `   - youtube   target 1000-1400 chars, MUST NOT exceed 1500. SEO-first hook ≤100 chars, then 2-3 body paragraphs, hashtags start with #shorts.`,
+    `   COUNT THE CHARACTERS of each draft before calling rewriteSocialCaptions. If any is over its max, shorten it FIRST (drop a sentence, tighten phrasing) — do not rely on the tool to truncate. If the tool rejects with "Caption length exceeds sweet spot", the error names every offending platform with the exact chars to drop; shorten by AT LEAST that many + 10 chars buffer, then call the tool again. You may retry up to 2 times. Persisting an oversize caption is NOT acceptable.`,
     `   For hashtags: STRIP Vietnamese diacritics (#vietnam not #việt-nam, #u17vietnam not #u17việt-nam). Drop verb-form keywords. Add event-specific tags from the title (e.g. #U17AsianCup, #VietnamFootball). Cap at 12.`,
     ``,
     `Step 4 (REQUIRED — this is the success criterion): Call mcp__news-tok__rewriteSocialCaptions with:`,
@@ -76,7 +77,7 @@ function buildPrompt(projectId: string): string {
     `    "hashtags": ["#tag1", "#tag2", ...]`,
     `  }`,
     ``,
-    `Stop immediately after step 4 succeeds. Do NOT call any other MCP tool. Do NOT call renderProject. Do NOT call updateStoryboard. Do NOT call AskUserQuestion. If a step fails, retry that step once; do not give up silently.`,
+    `Stop immediately after step 4 succeeds. Do NOT call any other MCP tool. Do NOT call renderProject. Do NOT call updateStoryboard. Do NOT call AskUserQuestion. If step 4 rejects with a length-budget error, follow the retry rule in step 3 (shorten + retry up to 2 times). If any other step fails, retry it once; do not give up silently.`,
   ].join('\n')
 }
 

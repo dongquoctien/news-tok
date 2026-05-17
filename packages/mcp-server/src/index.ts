@@ -722,7 +722,7 @@ async function main() {
     {
       title: 'Persist Claude-rewritten social captions onto the project',
       description:
-        "Use this AFTER calling generateSocialCaption (to get the template baseline) and rewriting each platform's caption per CLAUDE.md guidance (TikTok 120-250 chars, Facebook 400-800, Instagram 250-500, YouTube 1000-1500). The tool writes your rewritten captions + hashtags into `project.socialCaptions` so Studio's caption dialog can show them instead of regenerating the template every time. Captions are sanitized (emoji stripped from text per project convention is NOT applied here — captions intentionally keep emoji that the social-post platforms expect). charCount is computed automatically per platform. Pass `source: 'llm-rewrite'` (the default) to mark these as Claude-generated; pass `source: 'template'` when you want to seed the cache with the raw template result.",
+        "Use this AFTER calling generateSocialCaption (baseline) and rewriting each caption per CLAUDE.md guidance. The tool ENFORCES per-platform upper bounds and REJECTS any payload that exceeds them — TikTok MUST be ≤250 chars, Facebook ≤800, Instagram ≤500, YouTube ≤1500. When rejected, the error message names every offending platform with its actual count and how many chars to drop; shorten those captions and call this tool again. The retry-until-accepted loop is the success path. On success, captions + hashtags persist into `project.socialCaptions` so Studio's caption dialog shows them next time. charCount is computed automatically. Pass `source: 'llm-rewrite'` (default) to mark these as Claude-generated; pass `source: 'template'` to seed the cache with the raw template.",
       inputSchema: {
         projectId: z.string().min(1),
         topic: z.string().min(1),
@@ -771,6 +771,33 @@ async function main() {
           text: c.text,
           charCount: c.text.length,
         }))
+        // Per-platform upper bound enforcement. Caption that overshoots
+        // hurts reach (TikTok/IG truncate, Facebook collapses with
+        // "See more" cutting the CTA) — the whole point of the rewrite
+        // is to land inside the sweet spot. Reject hard so Claude CLI
+        // retries the rewrite instead of saving an oversized result.
+        const PLATFORM_MAX_CHARS = {
+          tiktok: 250,
+          facebook: 800,
+          instagram: 500,
+          youtube: 1500,
+        } as const
+        const oversized = captionEntries.filter(
+          (c) => c.charCount > PLATFORM_MAX_CHARS[c.platform]
+        )
+        if (oversized.length > 0) {
+          const detail = oversized
+            .map(
+              (c) =>
+                `${c.platform} is ${c.charCount} chars but the sweet-spot max is ${PLATFORM_MAX_CHARS[c.platform]} (shorten by ${c.charCount - PLATFORM_MAX_CHARS[c.platform]} chars)`
+            )
+            .join('; ')
+          return fail(
+            new Error(
+              `Caption length exceeds sweet spot — please rewrite shorter and call this tool again. ${detail}.`
+            )
+          )
+        }
         const next = {
           ...project,
           socialCaptions: {
