@@ -58,14 +58,28 @@ export const KenBurns = ({
 
   // Map a user crop rect (% of source image) to objectPosition + an
   // additional scale so the crop fills the frame. objectFit:cover
-  // already centers + scales — we shift the focal point with
-  // objectPosition and scale up by 100/cropWidthPct so the cropped
-  // region exactly fills the AbsoluteFill.
+  // already scales the source along whichever axis would otherwise
+  // leave the frame uncovered. The crop only needs an EXTRA scale
+  // along the axis that COVER didn't already stretch — i.e. the
+  // smaller of (100/widthPct, 100/heightPct). Letting cover finish
+  // the work avoids the over-zoom bug where a 9:16 crop on a 16:9
+  // source was scaled ~3× because we'd compounded width-only
+  // cropScale with cover's height-driven scale.
+  //
+  // Verified across (source, frame, crop) aspect combinations:
+  //   - source 16:9, frame 9:16, crop 9:16 (full-height): 1×
+  //   - source 9:16, frame 9:16, crop half size: 2×
+  //   - source 16:9, frame 9:16, crop half-height 9:16: 2×
+  // In every case, min(100/w, 100/h) gives the residual scale that
+  // cover hasn't already applied, and the cropped region lands
+  // exactly inside the frame.
   let cropScale = 1
   let objectPosition: string | undefined
   if (edits?.crop) {
     const c = edits.crop
-    cropScale = 100 / Math.max(c.widthPct, 1)
+    const w = Math.max(c.widthPct, 1)
+    const h = Math.max(c.heightPct, 1)
+    cropScale = Math.min(100 / w, 100 / h)
     // objectPosition takes 0..100% — convert the crop's center to %.
     const cx = c.xPct + c.widthPct / 2
     const cy = c.yPct + c.heightPct / 2
