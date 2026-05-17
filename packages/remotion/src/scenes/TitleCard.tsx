@@ -18,6 +18,7 @@ export const TitleCard = ({
   textStyle,
   fontOverride,
   colorOverride,
+  brandLogoUrl,
 }: SceneProps) => {
   const spring = useEntranceSpring({ damping: 14 })
   const r = useResponsive()
@@ -44,6 +45,7 @@ export const TitleCard = ({
         colorOverride={colorOverride}
         segment={segment}
         project={project}
+        brandLogoUrl={brandLogoUrl}
       />
     )
   }

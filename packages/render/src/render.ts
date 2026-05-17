@@ -19,6 +19,7 @@ import {
 import { readStoryboard } from './storyboard.js'
 import { collectUsedSfxIds, stageSfxFiles } from './sfx-staging.js'
 import { stageLogoImage } from './logo-staging.js'
+import { stageBrandAssets } from './brand-staging.js'
 
 /**
  * Convert an AssetRef.path into a `/`-prefixed URL that Remotion serves
@@ -121,11 +122,20 @@ export async function renderSegmentMedia(
   const sfxIds = collectUsedSfxIds(project)
   const sfxUrlMap = await stageSfxFiles(sfxIds, project)
   const logoUrl = await stageLogoImage(project)
+  // Stage versioned brand assets (logo PNG, etc.) into publicDir at the
+  // root so layouts can reference them at `/newstokvn-logo.png` — same
+  // URL Studio's <Player> sees because the file is also present in
+  // apps/studio/public/.
+  await stageBrandAssets()
   const serveUrl = await bundleForProject(projectId)
   const inputProps = {
     storyboard: rewriteProjectAssets(segmentSubProject(project, segment)),
     sfxUrlMap,
     logoUrl,
+    // brandLogoUrl is staged into publicDir by stageBrandAssets()
+    // above; bundler serves dataDir() at `/public/` so the staged
+    // file resolves at this URL inside the renderer.
+    brandLogoUrl: '/public/newstokvn-logo.png',
   }
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)
@@ -172,6 +182,11 @@ export async function renderProjectMedia(
   const sfxIds = collectUsedSfxIds(project)
   const sfxUrlMap = await stageSfxFiles(sfxIds, project)
   const logoUrl = await stageLogoImage(project)
+  // Stage versioned brand assets (logo PNG, etc.) into publicDir at the
+  // root so layouts can reference them at `/newstokvn-logo.png` — same
+  // URL Studio's <Player> sees because the file is also present in
+  // apps/studio/public/.
+  await stageBrandAssets()
   const serveUrl = await bundleForProject(projectId)
   const compositionId = compositionIdFor(project.aspect)
   const preset = resolveRenderPreset(project.aspect, project.exportPreset)
@@ -201,6 +216,10 @@ export async function renderProjectMedia(
       variantId: variantId ?? undefined,
       sfxUrlMap,
       logoUrl,
+      // Same publicDir-relative path as renderSegmentMedia — staged
+      // earlier by stageBrandAssets(). Outro layouts consume it via
+      // LayoutProps.brandLogoUrl.
+      brandLogoUrl: '/public/newstokvn-logo.png',
     }
 
     const composition = await selectComposition({
