@@ -79,23 +79,28 @@ export function LayoutPicker({
           9:16 thumbnails on portrait monitors pushed the dialog past
           the viewport and the user couldn't see the Apply button. */}
       <DialogContent className="grid max-h-[90vh] w-full max-w-3xl grid-rows-[auto_1fr_auto] gap-0 overflow-hidden p-0">
-        <div className="space-y-1 border-b px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <LayoutIcon className="size-5" />
-              Pick a layout
-            </DialogTitle>
+        {/* pr-12 so the title row doesn't run under the Dialog's
+            absolute Close (×) button at right-4 top-4 (size-4 icon
+            + ~16px of breathing room). The chip lives in its own
+            row below — clear of the Close button and aligned with
+            the filter strip pattern used by the style picker. */}
+        <div className="space-y-2 border-b px-4 py-3 pr-12">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <LayoutIcon className="size-5" />
+            Pick a layout
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Layouts decide how the headline, eyebrow, chips, and media land
+            on the frame. Headline still picks up your text style, font,
+            and colour — only the placement is layout-owned.
+          </DialogDescription>
+          <div className="flex items-center gap-2 pt-1">
             <FavoritesFilterChip
               kind="layouts"
               active={favoritesOnly}
               onToggle={setFavoritesOnly}
             />
           </div>
-          <DialogDescription className="text-xs">
-            Layouts decide how the headline, eyebrow, chips, and media land
-            on the frame. Headline still picks up your text style, font,
-            and colour — only the placement is layout-owned.
-          </DialogDescription>
         </div>
 
         <div className="overflow-y-auto px-4 py-3">

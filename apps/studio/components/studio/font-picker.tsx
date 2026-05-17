@@ -206,23 +206,27 @@ export function FontPicker({
             : 'max-w-3xl grid-rows-[auto_1fr_auto]'
         )}
       >
-        <div className="border-b px-4 py-3">
-          <div className="flex items-center justify-between gap-3">
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Type className="size-5" />
-              Pick a font
-            </DialogTitle>
+        {/* pr-12 reserves room for the Dialog's absolute Close (×)
+            button at right-4 top-4 so the title doesn't run under it,
+            and the chip sits on its own row to mirror the style /
+            layout picker pattern. */}
+        <div className="space-y-2 border-b px-4 py-3 pr-12">
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <Type className="size-5" />
+            Pick a font
+          </DialogTitle>
+          <DialogDescription className="text-xs">
+            Override the typeface for this segment without forking the whole text
+            style. The renderer prefers segment / variant overrides before the
+            style&apos;s own font.
+          </DialogDescription>
+          <div className="flex items-center gap-2 pt-1">
             <FavoritesFilterChip
               kind="fonts"
               active={favoritesOnly}
               onToggle={setFavoritesOnly}
             />
           </div>
-          <DialogDescription className="mt-1 text-xs">
-            Override the typeface for this segment without forking the whole text
-            style. The renderer prefers segment / variant overrides before the
-            style&apos;s own font.
-          </DialogDescription>
         </div>
 
         <div
