@@ -100,9 +100,34 @@ function Restart-AudiosrvOnly {
 Restart-AudiosrvOnly
 
 Write-Host ""
-Write-Host "Audio services restarted." -ForegroundColor Green
-Write-Host "Try playing something now. If you still hear no sound, try:"
+Write-Host "Audiosrv restarted." -ForegroundColor Green
 Write-Host ""
+
+# Restarting Audiosrv only releases NEW WASAPI handles -- already-running
+# apps (especially Chrome / Edge tabs that opened audio before the freeze)
+# can still hold dead session pointers internally. We kick those processes
+# so the next launch gets a fresh session from the freshly-restarted
+# Audiosrv. Chrome auto-restores tabs, so this is non-destructive in
+# practice. Edge is bundled in case the user mixed browsers.
+Write-Step "Recycling browser audio sessions ..."
+$browsers = @('chrome', 'msedge')
+$killedAny = $false
+foreach ($name in $browsers) {
+    $procs = Get-Process -Name $name -ErrorAction SilentlyContinue
+    if ($procs) {
+        Write-Host "    Killing $name ($($procs.Count) processes) -- tabs will auto-restore on next launch." -ForegroundColor DarkGray
+        Stop-Process -Name $name -Force -ErrorAction SilentlyContinue
+        $killedAny = $true
+    }
+}
+if (-not $killedAny) {
+    Write-Host "    No browser processes were holding audio sessions." -ForegroundColor DarkGray
+}
+
+Write-Host ""
+Write-Host "Done. Open Chrome / Edge again and audio should work." -ForegroundColor Green
+Write-Host ""
+Write-Host "If silence persists, recycle the audio driver itself:" -ForegroundColor Gray
 
 # Surface the active render device id so the user can run pnputil
 # without hunting through Device Manager.
