@@ -80,11 +80,18 @@ function previewStyle(edits: BackgroundEdits): {
   if (edits.flipH) transforms.push('scaleX(-1)')
   if (edits.flipV) transforms.push('scaleY(-1)')
 
+  // Keep in lockstep with packages/remotion/src/effects/KenBurns.tsx —
+  // use the SMALLER of (100/widthPct, 100/heightPct) so objectFit:cover
+  // finishes covering the axis we don't scale. Using width alone
+  // (the old behavior) over-zoomed when crop aspect differed from
+  // source aspect (e.g. a 9:16 crop on a 16:9 photo).
   let cropScale = 1
   let objectPosition: string | undefined
   if (edits.crop) {
     const c = edits.crop
-    cropScale = 100 / Math.max(c.widthPct, 1)
+    const w = Math.max(c.widthPct, 1)
+    const h = Math.max(c.heightPct, 1)
+    cropScale = Math.min(100 / w, 100 / h)
     objectPosition = `${c.xPct + c.widthPct / 2}% ${c.yPct + c.heightPct / 2}%`
   }
 
