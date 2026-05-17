@@ -22,6 +22,9 @@ export type OrchestrateStatus = 'running' | 'completed' | 'failed' | 'cancelled'
  *                  scenes + fitting durations to narration. Comes AFTER
  *                  assets because Claude calls updateStoryboard last,
  *                  once every segment has its image + voice + music.
+ * - 'captions'   — Claude rewriting + persisting social captions via
+ *                  generateSocialCaption + rewriteSocialCaptions.
+ *                  Runs after finalize, before render.
  * - 'render'     — running ffmpeg (only when skipRender = false)
  * - 'done'       — terminal state, redirecting to Studio
  */
@@ -33,11 +36,23 @@ export type OrchestratePhase =
   | 'plan'
   | 'assets'
   | 'finalize'
+  | 'captions'
   | 'render'
   | 'done'
 
+/**
+ * Job kind discriminator. Default 'orchestrate' (the home "Tạo video"
+ * flow that runs every phase). 'captions' is the dialog-Refresh flow —
+ * same on-disk store but a different MCP tool set and a single phase.
+ * Absent on legacy jobs (written before the field existed) is treated
+ * as 'orchestrate'.
+ */
+export type OrchestrateJobKind = 'orchestrate' | 'captions'
+
 export type OrchestrateJob = {
   jobId: string
+  /** What kind of Claude CLI run this is. See OrchestrateJobKind. */
+  kind?: OrchestrateJobKind
   status: OrchestrateStatus
   pid?: number
   startedAt: string

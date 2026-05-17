@@ -718,6 +718,97 @@ async function main() {
   )
 
   server.registerTool(
+    'rewriteSocialCaptions',
+    {
+      title: 'Persist Claude-rewritten social captions onto the project',
+      description:
+        "Use this AFTER calling generateSocialCaption (to get the template baseline) and rewriting each platform's caption per CLAUDE.md guidance (TikTok 120-250 chars, Facebook 400-800, Instagram 250-500, YouTube 1000-1500). The tool writes your rewritten captions + hashtags into `project.socialCaptions` so Studio's caption dialog can show them instead of regenerating the template every time. Captions are sanitized (emoji stripped from text per project convention is NOT applied here — captions intentionally keep emoji that the social-post platforms expect). charCount is computed automatically per platform. Pass `source: 'llm-rewrite'` (the default) to mark these as Claude-generated; pass `source: 'template'` when you want to seed the cache with the raw template result.",
+      inputSchema: {
+        projectId: z.string().min(1),
+        topic: z.string().min(1),
+        captions: z
+          .array(
+            z.object({
+              platform: z.enum(['tiktok', 'facebook', 'instagram', 'youtube']),
+              text: z.string().min(1),
+            })
+          )
+          .min(1)
+          .max(4),
+        hashtags: z.array(z.string()).min(1).max(30),
+        source: z.enum(['template', 'llm-rewrite']).optional(),
+      },
+    },
+    async ({ projectId, topic, captions, hashtags, source }) => {
+      try {
+        const path = projectStoryboardPath(projectId)
+        if (!existsSync(path)) {
+          return fail(new Error(`No storyboard at ${path}`))
+        }
+        const raw = await readFile(path, 'utf8')
+        const parsed = ProjectSchema.safeParse(JSON.parse(raw))
+        if (!parsed.success) {
+          return fail(
+            new Error(
+              `Invalid storyboard: ${parsed.error.issues
+                .map((i) => `${i.path.join('.')}: ${i.message}`)
+                .join('; ')}`
+            )
+          )
+        }
+        const project = parsed.data
+        // Normalise hashtags: ensure each starts with '#', trim, dedupe.
+        const cleanedHashtags = Array.from(
+          new Set(
+            hashtags
+              .map((h) => h.trim())
+              .filter(Boolean)
+              .map((h) => (h.startsWith('#') ? h : `#${h}`))
+          )
+        )
+        const captionEntries = captions.map((c) => ({
+          platform: c.platform,
+          text: c.text,
+          charCount: c.text.length,
+        }))
+        const next = {
+          ...project,
+          socialCaptions: {
+            generatedAt: new Date().toISOString(),
+            topic,
+            source: source ?? ('llm-rewrite' as const),
+            hashtags: cleanedHashtags,
+            captions: captionEntries,
+          },
+          updatedAt: new Date().toISOString(),
+        }
+        // Re-validate through the schema so a bad payload from Claude
+        // (e.g. text exceeding string limit somewhere) fails loudly
+        // here instead of corrupting the storyboard on disk.
+        const reparsed = ProjectSchema.safeParse(next)
+        if (!reparsed.success) {
+          return fail(
+            new Error(
+              `Rewritten captions failed validation: ${reparsed.error.issues
+                .map((i) => `${i.path.join('.')}: ${i.message}`)
+                .join('; ')}`
+            )
+          )
+        }
+        await writeStoryboard(projectId, reparsed.data)
+        return ok({
+          projectId,
+          captionsCount: captionEntries.length,
+          hashtagCount: cleanedHashtags.length,
+          generatedAt: reparsed.data.socialCaptions?.generatedAt,
+        })
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
     'renderProject',
     {
       title: 'Render the full project video',

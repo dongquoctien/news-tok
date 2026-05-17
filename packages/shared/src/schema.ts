@@ -672,6 +672,39 @@ export const BgMusicEditsSchema = z
   .default({})
 export type BgMusicEdits = z.infer<typeof BgMusicEditsSchema>
 
+/**
+ * Cached captions + hashtags for a project — written by Claude CLI after
+ * `updateStoryboard` (during /api/orchestrate) or by the user clicking
+ * Refresh in the caption dialog. The renderer never reads this; it's
+ * purely a Studio cache so the user doesn't pay the 30-60s Claude CLI
+ * cost every time they open the Caption dialog.
+ *
+ * The `source` discriminator lets the UI badge "Claude" (LLM-rewritten)
+ * vs fall back to the local template when this field is absent.
+ */
+export const SocialCaptionsCacheSchema = z.object({
+  /** ISO datetime when the captions were last generated. */
+  generatedAt: z.string().datetime(),
+  /** Topic id (mirrors social.ts Topic). Free-form string — schema
+   *  doesn't enforce the enum to stay resilient to topic-pool changes. */
+  topic: z.string(),
+  /** Who wrote these captions: the local keyword-template or Claude CLI. */
+  source: z.enum(['template', 'llm-rewrite']),
+  /** Flat hashtag list — UI shows them as chips and exposes a single
+   *  "Copy hashtags" button. */
+  hashtags: z.array(z.string()),
+  /** One caption per platform. Each carries pre-computed charCount so
+   *  the dialog can render sweet-spot indicators without re-measuring. */
+  captions: z.array(
+    z.object({
+      platform: z.enum(['tiktok', 'facebook', 'instagram', 'youtube']),
+      text: z.string(),
+      charCount: z.number().int().nonnegative(),
+    })
+  ),
+})
+export type SocialCaptionsCache = z.infer<typeof SocialCaptionsCacheSchema>
+
 export const ProjectSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -741,6 +774,13 @@ export const ProjectSchema = z.object({
    * survives reloads via `storyboard.json`.
    */
   library: z.array(AssetRefSchema).default([]),
+  /**
+   * Cached social captions + hashtags. Optional so legacy storyboards
+   * (and freshly-created projects before Claude CLI's caption phase
+   * runs) parse + render byte-identically. The /api/social-caption
+   * endpoint falls back to the local template when this is absent.
+   */
+  socialCaptions: SocialCaptionsCacheSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 })

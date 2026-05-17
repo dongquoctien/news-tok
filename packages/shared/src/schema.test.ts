@@ -8,6 +8,7 @@ import {
   LogoMarkerSchema,
   ProjectSchema,
   SegmentSchema,
+  SocialCaptionsCacheSchema,
   TextStyleSchema,
   resolveRenderPreset,
   type Project,
@@ -57,6 +58,11 @@ describe('ProjectSchema', () => {
     expect(p.customSfx).toEqual([])
     expect(p.logo).toEqual({ kind: 'none' })
     expect(p.library).toEqual([])
+    // socialCaptions is optional — absent on freshly-created projects
+    // until Claude CLI runs the captions phase, and on legacy projects
+    // saved before this field existed. Studio's caption dialog falls
+    // back to the local template when this is undefined.
+    expect(p.socialCaptions).toBeUndefined()
     // bgMusicEdits defaults preserve pre-edit render behavior: no trim,
     // no fade-in, 1.2s fade-out (matches the legacy hardcoded value),
     // no ducking. A stale storyboard parsed today must render identically.
@@ -552,5 +558,68 @@ describe('DEFAULT_VOICES', () => {
   it('maps every supported language to an Edge TTS voice id', () => {
     expect(DEFAULT_VOICES.vi).toMatch(/^vi-VN-/)
     expect(DEFAULT_VOICES.en).toMatch(/^en-US-/)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// SocialCaptionsCacheSchema — written by Claude CLI after updateStoryboard.
+// ---------------------------------------------------------------------------
+
+describe('SocialCaptionsCacheSchema', () => {
+  const valid = {
+    generatedAt: '2026-05-17T12:00:00.000Z',
+    topic: 'sports',
+    source: 'llm-rewrite' as const,
+    hashtags: ['#U17vietnam', '#vietnamfootball', '#shorts'],
+    captions: [
+      { platform: 'tiktok' as const, text: 'Hook text', charCount: 9 },
+      { platform: 'facebook' as const, text: 'Story body', charCount: 10 },
+      { platform: 'instagram' as const, text: 'Emoji + body', charCount: 12 },
+      { platform: 'youtube' as const, text: 'SEO title + paragraphs', charCount: 22 },
+    ],
+  }
+
+  it('parses a full cache payload', () => {
+    expect(() => SocialCaptionsCacheSchema.parse(valid)).not.toThrow()
+  })
+
+  it('rejects unknown source value', () => {
+    expect(() =>
+      SocialCaptionsCacheSchema.parse({ ...valid, source: 'human' })
+    ).toThrow()
+  })
+
+  it('rejects unknown platform on a caption entry', () => {
+    expect(() =>
+      SocialCaptionsCacheSchema.parse({
+        ...valid,
+        captions: [{ platform: 'reddit', text: 'x', charCount: 1 }],
+      })
+    ).toThrow()
+  })
+
+  it('rejects negative charCount', () => {
+    expect(() =>
+      SocialCaptionsCacheSchema.parse({
+        ...valid,
+        captions: [{ platform: 'tiktok', text: 'x', charCount: -1 }],
+      })
+    ).toThrow()
+  })
+
+  it('ProjectSchema accepts an attached socialCaptions cache', () => {
+    expect(() =>
+      ProjectSchema.parse({
+        id: 'p1',
+        title: 't',
+        source: { type: 'text', value: 'x' },
+        language: 'vi',
+        aspect: '9:16',
+        segments: [],
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+        socialCaptions: valid,
+      })
+    ).not.toThrow()
   })
 })

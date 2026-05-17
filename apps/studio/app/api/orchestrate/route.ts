@@ -1,9 +1,6 @@
-import { spawn } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { NextResponse, type NextRequest } from 'next/server'
-import { REPO_ROOT } from '@news-tok/render'
 import { createLogger } from '@news-tok/shared/logger'
+import { extractProjectId, runClaudeCli } from '@/lib/claude-cli'
 import {
   findRunningJob,
   newOrchestrateJobId,
@@ -35,6 +32,17 @@ const TOOL_TO_PHASE: Record<string, { phase: OrchestratePhase; label: string }> 
     phase: 'finalize',
     label: 'Xây dựng bố cục và điều chỉnh âm thanh…',
   },
+  // Captions phase: Claude calls generateSocialCaption to read the
+  // template baseline, then rewriteSocialCaptions to persist the
+  // rewritten version onto the project.
+  generateSocialCaption: {
+    phase: 'captions',
+    label: 'Đang viết caption và hashtag…',
+  },
+  rewriteSocialCaptions: {
+    phase: 'captions',
+    label: 'Đang viết caption và hashtag…',
+  },
   renderSegment: { phase: 'render', label: 'Dựng từng đoạn video…' },
   renderProject: { phase: 'render', label: 'Ghép video hoàn chỉnh…' },
 }
@@ -53,6 +61,8 @@ const ALLOWED_TOOLS = [
   'mcp__news-tok__synthesizeVoice',
   'mcp__news-tok__listVoices',
   'mcp__news-tok__researchProjectAesthetic',
+  'mcp__news-tok__generateSocialCaption',
+  'mcp__news-tok__rewriteSocialCaptions',
   'mcp__news-tok__renderSegment',
   'mcp__news-tok__renderProject',
   'Read',
@@ -190,10 +200,11 @@ function buildPrompt(body: StartBody): string {
     '5. For each segment, call searchImage + synthesizeVoice in parallel — ALWAYS use searchImage for backgrounds, NEVER use article mediaAssets here. Set segment.durationSec = recommendedSegmentDurationSec.',
     '6. Call searchMusic using the musicMood from research, set bgMusic.',
     '7. Build the project payload with `library` set to the `mediaAssets` array from step 2 (or `[]` if step 2 was skipped or returned no images). updateStoryboard automatically mirrors every segment background into library, so you only need to seed it with the article media here — the stock backgrounds will be added by the sanitiser. Then call updateStoryboard to persist.',
+    '8. Generate social captions for the user to paste on TikTok / Facebook / Instagram / YouTube. (a) Call mcp__news-tok__generateSocialCaption to fetch the local template baseline (topic auto-detect + hashtag pool). (b) Rewrite each platform per CLAUDE.md "prep video for social upload" guidance — TikTok 120-250 chars, Facebook 400-800, Instagram 250-500, YouTube 1000-1500. Preserve any masking patterns the baseline applied. Refine hashtags: drop generic / off-topic tags, add event-specific tags from the title (strip Vietnamese diacritics — #vietnam not #việt). (c) Call mcp__news-tok__rewriteSocialCaptions with projectId, topic, captions (4 platforms), hashtags (≤12). This persists into project.socialCaptions so Studio shows your version next time the user opens the Caption dialog.',
     skipRender
-      ? '8. DO NOT call renderProject. The user will trigger render from Studio when ready. Report the project path and stop.'
-      : `8. Call renderProject with variants: ${variantPicksToRender(variants)}.`,
-    skipRender ? '9. Done — return the project id and absolute project directory path.' : '9. Report the absolute output path.',
+      ? '9. DO NOT call renderProject. The user will trigger render from Studio when ready. Report the project path and stop.'
+      : `9. Call renderProject with variants: ${variantPicksToRender(variants)}.`,
+    skipRender ? '10. Done — return the project id and absolute project directory path.' : '10. Report the absolute output path.',
     '',
     'Important: this is non-interactive. Make sensible defaults whenever CLAUDE.md says to ask — never call AskUserQuestion.',
   ].join('\n')
@@ -289,51 +300,7 @@ export async function DELETE(req: NextRequest) {
   return NextResponse.json({ ...job, status: 'cancelled' })
 }
 
-function resolveClaudeCli(): string {
-  if (process.env.CLAUDE_CLI_PATH) return process.env.CLAUDE_CLI_PATH
-  if (process.platform !== 'win32') return 'claude'
-  // Node on Windows refuses to spawn .cmd shims with EINVAL unless shell:true,
-  // which then re-parses argv and mangles multi-line prompts. Prefer the native
-  // .exe when present.
-  const candidates = [
-    resolve(process.env.LOCALAPPDATA ?? '', 'AnthropicClaude', 'claude.exe'),
-    resolve(process.env.USERPROFILE ?? '', '.local', 'bin', 'claude.exe'),
-  ]
-  for (const c of candidates) if (existsSync(c)) return c
-  return 'claude.exe'
-}
-
 async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
-  const cliPath = resolveClaudeCli()
-  const args = [
-    '-p',
-    prompt,
-    '--output-format=stream-json',
-    '--verbose',
-    '--permission-mode=acceptEdits',
-    '--allowedTools',
-    ALLOWED_TOOLS,
-    '--add-dir',
-    REPO_ROOT,
-  ]
-
-  // shell:true on Windows lets the spawn find claude.cmd via PATH, but it also
-  // re-parses argv through cmd.exe — which mangles the multi-line prompt and
-  // strips characters like `&` from URLs. Use shell:false with the .exe path
-  // so we get a single, faithful argv handoff.
-  //
-  // stdio[0] = 'ignore' explicitly closes claude's stdin. Without this, the CLI
-  // sees a pipe open with no EOF and blocks for 3 seconds waiting for input
-  // ("Warning: no stdin data received in 3s") before bailing out partway
-  // through the run — even though we pass the prompt via -p, not stdin.
-  const child = spawn(cliPath, args, {
-    cwd: REPO_ROOT,
-    stdio: ['ignore', 'pipe', 'pipe'],
-  })
-
-  await writeOrchestrateJob({ ...job, pid: child.pid, step: 'AI đã sẵn sàng…' })
-
-  let buffer = ''
   let lastStep = job.step
   let lastPhase: OrchestratePhase | undefined = job.phase
   let projectId: string | undefined
@@ -350,8 +317,9 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     plan: 4,
     assets: 5,
     finalize: 6,
-    render: 7,
-    done: 8,
+    captions: 7,
+    render: 8,
+    done: 9,
   }
 
   const updateStep = async (
@@ -379,103 +347,64 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     })
   }
 
-  child.stdout.on('data', (chunk: Buffer) => {
-    buffer += chunk.toString('utf8')
-    let nl: number
-    while ((nl = buffer.indexOf('\n')) >= 0) {
-      const line = buffer.slice(0, nl).trim()
-      buffer = buffer.slice(nl + 1)
-      if (!line) continue
-      void handleLine(line)
-    }
-  })
+  // Buffer of recent stdout lines so projectId detection can scan the
+  // raw tool_result string before runClaudeCli unwraps it. We pass an
+  // onToolResult that gives us the unwrapped text, but the projectId
+  // pattern also appears literally in unwrapped form so a single regex
+  // on the unwrapped text catches both shapes.
+  const stderrTail = { value: '' }
 
-  const handleLine = async (line: string) => {
-    if (!projectId) {
-      // The createProject MCP tool returns `{ projectId, path }` as the tool result text.
-      // In stream-json that arrives as a `tool_result` block whose `content[0].text`
-      // is a JSON string — so the projectId pattern appears both literally
-      // (`"projectId": "..."`) and JSON-escaped (`\"projectId\": \"...\"`).
-      const m =
-        line.match(/"projectId"\s*:\s*"([^"]+)"/) ??
-        line.match(/\\"projectId\\"\s*:\s*\\"([^\\"]+)\\"/)
-      if (m) {
-        projectId = m[1]
-        const current = await readOrchestrateJob(job.jobId)
-        if (current) await writeOrchestrateJob({ ...current, projectId })
-      }
-    }
-    try {
-      const evt = JSON.parse(line) as {
-        type?: string
-        message?: {
-          content?: Array<{
-            type?: string
-            name?: string
-            text?: string
-            content?: Array<{ type?: string; text?: string }>
-          }>
+  let stderrFinal = ''
+  try {
+    const result = await runClaudeCli({
+      prompt,
+      allowedTools: ALLOWED_TOOLS,
+      onPid: async (pid) => {
+        await writeOrchestrateJob({ ...job, pid, step: 'AI đã sẵn sàng…' })
+      },
+      onToolUse: async ({ name }) => {
+        const mapped = TOOL_TO_PHASE[name]
+        if (mapped) {
+          await updateStep(mapped.label, mapped.phase)
+        } else {
+          // Unknown MCP tool — keep the user informed without
+          // advancing the phase checklist.
+          await updateStep('Đang xử lý…')
         }
-      }
-      const content = evt?.message?.content
-      if (Array.isArray(content)) {
-        for (const block of content) {
-          if (block?.type === 'tool_use' && block.name) {
-            const short = block.name.replace(/^mcp__news-tok__/, '')
-            const mapped = TOOL_TO_PHASE[short]
-            if (mapped) {
-              await updateStep(mapped.label, mapped.phase)
-            } else {
-              // Unknown MCP tool — keep the user informed without
-              // advancing the phase checklist.
-              await updateStep('Đang xử lý…')
-            }
-          }
-          // extractArticle internally does both Readability + image
-          // download. We surface that as two checklist rows: the
-          // tool_use above lights up `extract`, and detecting the
-          // `mediaAssets` field in the tool_result advances to
-          // `collect-media` so the user knows article media just
-          // landed in the cache (and will appear in Library).
-          if (block?.type === 'tool_result') {
-            const inner = Array.isArray(block.content) ? block.content : []
-            const text = inner
-              .map((c) => (typeof c?.text === 'string' ? c.text : ''))
-              .join('')
-            if (
-              text.includes('"mediaAssets"') ||
-              text.includes('\\"mediaAssets\\"')
-            ) {
-              // Count downloaded assets so the label is informative.
-              const matches = text.match(/"path"\s*:\s*"/g) ?? []
-              const count = matches.length
-              await updateStep(
-                count > 0
-                  ? `Đã lấy ${count} ảnh từ bài báo cho Library…`
-                  : 'Bài báo không có ảnh — bỏ qua bước Library…',
-                'collect-media'
-              )
-            }
+      },
+      onToolResult: async ({ text }) => {
+        if (!projectId) {
+          // createProject returns `{ projectId, path }` as the tool result
+          // text. The regex tolerates both raw and JSON-escaped forms so
+          // either stream-json shape is caught.
+          const id = extractProjectId(text)
+          if (id) {
+            projectId = id
+            const current = await readOrchestrateJob(job.jobId)
+            if (current) await writeOrchestrateJob({ ...current, projectId })
           }
         }
-      }
-    } catch {
-      // not a json line — ignore
-    }
-  }
-
-  let stderr = ''
-  child.stderr.on('data', (chunk: Buffer) => {
-    stderr += chunk.toString('utf8')
-  })
-
-  await new Promise<void>((resolveExit, rejectExit) => {
-    child.on('error', rejectExit)
-    child.on('exit', (code) => {
-      if (code === 0) resolveExit()
-      else rejectExit(new Error(`claude exited ${code}: ${stderr.slice(-500)}`))
+        // extractArticle internally does Readability + image download.
+        // Surface the image-collection phase when mediaAssets shows up
+        // in the result so the user sees the Library populate live.
+        if (text.includes('"mediaAssets"') || text.includes('\\"mediaAssets\\"')) {
+          const matches = text.match(/"path"\s*:\s*"/g) ?? []
+          const count = matches.length
+          await updateStep(
+            count > 0
+              ? `Đã lấy ${count} ảnh từ bài báo cho Library…`
+              : 'Bài báo không có ảnh — bỏ qua bước Library…',
+            'collect-media'
+          )
+        }
+      },
     })
-  })
+    stderrFinal = result.stderr
+    stderrTail.value = result.stderr
+  } catch (err) {
+    stderrFinal = (err instanceof Error ? err.message : String(err)).slice(-500)
+    throw err
+  }
 
   const final = await readOrchestrateJob(job.jobId)
   if (final?.status === 'cancelled') {
@@ -501,7 +430,7 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     void log.error('job ended without projectId', {
       jobId: job.jobId,
       lastPhase: final?.phase,
-      stderrTail: stderr.slice(-500),
+      stderrTail: stderrFinal.slice(-500),
     })
   }
 }

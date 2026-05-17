@@ -119,6 +119,7 @@ type Phase =
   | 'plan'
   | 'assets'
   | 'finalize'
+  | 'captions'
   | 'render'
   | 'done'
 
@@ -147,6 +148,7 @@ const PHASE_ORDER: ReadonlyArray<{
   { phase: 'plan', label: 'Lên kịch bản từng đoạn' },
   { phase: 'assets', label: 'Tìm ảnh, nhạc & tạo giọng đọc' },
   { phase: 'finalize', label: 'Xây dựng bố cục và điều chỉnh âm thanh' },
+  { phase: 'captions', label: 'Viết caption và hashtag' },
   { phase: 'render', label: 'Dựng video hoàn chỉnh' },
   { phase: 'done', label: 'Mở Studio' },
 ]
