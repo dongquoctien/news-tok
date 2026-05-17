@@ -77,6 +77,17 @@ export function VoicePicker({
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
+      // Force-release the underlying media handle. Otherwise Chrome
+      // keeps the HTMLAudioElement attached to its WASAPI session
+      // after pause(), which on Windows 11 build 26200 can pile up
+      // stale audio sessions and contribute to the audiosrv freeze
+      // that makes the whole laptop go silent.
+      try {
+        audioRef.current.removeAttribute('src')
+        audioRef.current.load()
+      } catch {
+        // best-effort
+      }
     }
     audioRef.current = null
     setPreview({ voiceId: '', status: 'idle' })
@@ -85,6 +96,17 @@ export function VoicePicker({
   useEffect(() => {
     if (!open) stopAudio()
   }, [open])
+
+  // Belt-and-braces unmount cleanup — `open` flipping false is the
+  // common path, but if the parent unmounts the picker entirely (e.g.
+  // user navigates away) the `open` effect never fires. This catches
+  // that case so a preview audio handle can't outlive the component.
+  useEffect(() => {
+    return () => {
+      stopAudio()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const grouped = useMemo(() => {
     const g: Record<string, Voice[]> = {}

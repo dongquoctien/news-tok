@@ -100,7 +100,17 @@ export function SfxPicker({
     audio.oncanplay = null
     audio.onerror = null
     audio.pause()
-    audio.src = ''
+    // Force the browser to release the underlying media handle. Just
+    // setting `audio.src = ''` keeps Chrome attached to the WASAPI
+    // session in some builds; `removeAttribute + load()` is the
+    // documented "release everything" sequence and helps avoid the
+    // Windows 11 build 26200 audiosrv stale-handle freeze.
+    try {
+      audio.removeAttribute('src')
+      audio.load()
+    } catch {
+      // best-effort
+    }
     audioRef.current = null
   }
 

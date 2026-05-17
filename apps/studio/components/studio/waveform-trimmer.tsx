@@ -191,6 +191,25 @@ export function WaveformTrimmer({
     regions.on('region-updated', onRegionReleased)
 
     return () => {
+      // Force-close any AudioContext WaveSurfer may have opened BEFORE
+      // calling destroy(). v7 lazy-creates an AudioContext for a few
+      // features even when `backend: 'MediaElement'` is set; if the
+      // user closes the dialog mid-decode, destroy() throws "not
+      // initialized" and the leaked AudioContext stays open. On
+      // Windows that piles WASAPI shared-mode sessions on Chrome's
+      // audio thread, which in build 26200 is a known trigger for
+      // `audiosrv.exe` stale handles ("laptop mất tiếng" until
+      // restart). Closing the ctx ourselves bypasses the throw path.
+      try {
+        const internalCtx = (
+          ws as unknown as { audioContext?: AudioContext }
+        ).audioContext
+        if (internalCtx && internalCtx.state !== 'closed') {
+          void internalCtx.close()
+        }
+      } catch {
+        // older wavesurfer builds may not expose audioContext — swallow.
+      }
       try {
         ws.destroy()
       } catch {

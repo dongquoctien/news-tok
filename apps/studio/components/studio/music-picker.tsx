@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Check, Clock, Loader2, Music, Pause, Play, Search } from 'lucide-react'
 import type { AssetRef } from '@news-tok/shared/schema'
 import { Button } from '@/components/ui/button'
@@ -111,6 +111,17 @@ export function MusicPicker({
     if (audioRef.current) {
       audioRef.current.pause()
       audioRef.current.currentTime = 0
+      // Drop the src and force the browser to release the underlying
+      // media handle. Without `removeAttribute('src') + load()`, Chrome
+      // keeps the HTMLAudioElement attached to the WASAPI session even
+      // after pause(), which on Windows 11 build 26200 can pile up
+      // stale audio sessions and trigger the "laptop mất tiếng" bug.
+      try {
+        audioRef.current.removeAttribute('src')
+        audioRef.current.load()
+      } catch {
+        // ignore — best-effort cleanup
+      }
     }
     audioRef.current = null
     setPlayingTrackId(null)
@@ -118,6 +129,20 @@ export function MusicPicker({
     setLoadingTrackId(null)
     setLoadingSingle(false)
   }
+
+  // Cleanup audio handle when the picker unmounts (e.g. user navigates
+  // back to /projects mid-preview). Without this the HTMLAudioElement
+  // keeps Chrome's audio thread engaged until tab close — which on
+  // Windows 11 build 26200 contributes to the audiosrv stale-handle
+  // freeze that costs the user a full restart.
+  useEffect(() => {
+    return () => {
+      stopAudio()
+    }
+    // stopAudio is stable enough (state setters + ref) for an empty dep
+    // array — we explicitly want this to fire only on unmount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const runSearch = async () => {
     if (!mood.trim()) return
