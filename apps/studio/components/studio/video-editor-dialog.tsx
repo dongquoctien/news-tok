@@ -68,6 +68,8 @@ export type VideoEditorResult = {
   videoLoop?: boolean
   videoMuted?: boolean
   videoVolume?: number
+  videoAudioFadeInSec?: number
+  videoAudioFadeOutSec?: number
   videoPlaybackRate?: number
   videoFit?: VideoFit
   videoAlign?: VideoAlign
@@ -141,6 +143,10 @@ function collapseDefaults(raw: VideoEditorResult): VideoEditorResult {
   if (raw.videoMuted === false) out.videoMuted = false
   if (typeof raw.videoVolume === 'number' && Math.abs(raw.videoVolume - 1) > 0.001)
     out.videoVolume = trimDecimals(raw.videoVolume)
+  if (typeof raw.videoAudioFadeInSec === 'number' && raw.videoAudioFadeInSec > 0.001)
+    out.videoAudioFadeInSec = trimDecimals(raw.videoAudioFadeInSec)
+  if (typeof raw.videoAudioFadeOutSec === 'number' && raw.videoAudioFadeOutSec > 0.001)
+    out.videoAudioFadeOutSec = trimDecimals(raw.videoAudioFadeOutSec)
   if (
     typeof raw.videoPlaybackRate === 'number' &&
     Math.abs(raw.videoPlaybackRate - 1) > 0.001
@@ -175,6 +181,12 @@ export function VideoEditorDialog({
   const [loop, setLoop] = useState<boolean>(initial.videoLoop ?? true)
   const [muted, setMuted] = useState<boolean>(initial.videoMuted ?? true)
   const [volume, setVolume] = useState<number>(initial.videoVolume ?? 1)
+  const [audioFadeIn, setAudioFadeIn] = useState<number>(
+    initial.videoAudioFadeInSec ?? 0
+  )
+  const [audioFadeOut, setAudioFadeOut] = useState<number>(
+    initial.videoAudioFadeOutSec ?? 0
+  )
   const [rate, setRate] = useState<number>(initial.videoPlaybackRate ?? 1)
   const [fit, setFit] = useState<VideoFit>(initial.videoFit ?? 'cover')
   const [align, setAlign] = useState<VideoAlign>(initial.videoAlign ?? 'center')
@@ -193,6 +205,8 @@ export function VideoEditorDialog({
     setLoop(initial.videoLoop ?? true)
     setMuted(initial.videoMuted ?? true)
     setVolume(initial.videoVolume ?? 1)
+    setAudioFadeIn(initial.videoAudioFadeInSec ?? 0)
+    setAudioFadeOut(initial.videoAudioFadeOutSec ?? 0)
     setRate(initial.videoPlaybackRate ?? 1)
     setFit(initial.videoFit ?? 'cover')
     setAlign(initial.videoAlign ?? 'center')
@@ -311,6 +325,8 @@ export function VideoEditorDialog({
       videoLoop: loop,
       videoMuted: muted,
       videoVolume: volume,
+      videoAudioFadeInSec: audioFadeIn,
+      videoAudioFadeOutSec: audioFadeOut,
       videoPlaybackRate: rate,
       videoFit: fit,
       videoAlign: align,
@@ -507,10 +523,47 @@ export function VideoEditorDialog({
                   ariaLabel="Clip audio volume"
                 />
               </div>
+              {/* Audio fade in / out — keep visible regardless of mute
+                  state so the user can pre-author the ramp before
+                  flipping mute off. Stored independently of the visual
+                  fadeIn/fadeOut on the segment so audio can ramp
+                  longer than the visual cut. */}
+              <div className={cn('space-y-1', muted && 'opacity-50')}>
+                <div className="flex items-center justify-between text-xs">
+                  <span>Audio fade in</span>
+                  <span className="font-mono text-muted-foreground">
+                    {audioFadeIn.toFixed(1)}s
+                  </span>
+                </div>
+                <Slider
+                  min={0}
+                  max={3}
+                  step={0.1}
+                  value={audioFadeIn}
+                  onChange={(v) => setAudioFadeIn(v)}
+                  ariaLabel="Audio fade in seconds"
+                />
+              </div>
+              <div className={cn('space-y-1', muted && 'opacity-50')}>
+                <div className="flex items-center justify-between text-xs">
+                  <span>Audio fade out</span>
+                  <span className="font-mono text-muted-foreground">
+                    {audioFadeOut.toFixed(1)}s
+                  </span>
+                </div>
+                <Slider
+                  min={0}
+                  max={3}
+                  step={0.1}
+                  value={audioFadeOut}
+                  onChange={(v) => setAudioFadeOut(v)}
+                  ariaLabel="Audio fade out seconds"
+                />
+              </div>
               {!muted ? (
                 <p className="rounded bg-secondary/40 px-2 py-1 text-[10px] text-muted-foreground">
-                  Clip audio mixes with narration TTS. Lower the volume
-                  here if narration should stay dominant.
+                  Clip audio mixes with narration TTS. Use fade-out to
+                  avoid a harsh cut when the segment ends mid-clip.
                 </p>
               ) : null}
             </section>
@@ -659,6 +712,8 @@ export function videoEditorInitial(segment: Segment): VideoEditorResult {
     videoLoop: segment.videoLoop,
     videoMuted: segment.videoMuted,
     videoVolume: segment.videoVolume,
+    videoAudioFadeInSec: segment.videoAudioFadeInSec,
+    videoAudioFadeOutSec: segment.videoAudioFadeOutSec,
     videoPlaybackRate: segment.videoPlaybackRate,
     videoFit: segment.videoFit,
     videoAlign: segment.videoAlign,

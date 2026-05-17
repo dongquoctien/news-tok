@@ -357,6 +357,60 @@ describe('SegmentSchema', () => {
       SegmentSchema.parse({ ...baseSeg, videoAlign: 'middle' })
     ).toThrow()
   })
+
+  it('accepts fadeInSec / fadeOutSec within 0..2s', () => {
+    const seg = SegmentSchema.parse({
+      ...baseSeg,
+      fadeInSec: 0.3,
+      fadeOutSec: 0.5,
+    })
+    expect(seg.fadeInSec).toBe(0.3)
+    expect(seg.fadeOutSec).toBe(0.5)
+  })
+
+  it('leaves fade fields undefined when absent (legacy renders unchanged)', () => {
+    const seg = SegmentSchema.parse(baseSeg)
+    expect(seg.fadeInSec).toBeUndefined()
+    expect(seg.fadeOutSec).toBeUndefined()
+  })
+
+  it('rejects fade values above 2 seconds', () => {
+    // Cap at 2s so a 5s segment can't be dominated by fades that eat
+    // the entire content window.
+    expect(() => SegmentSchema.parse({ ...baseSeg, fadeInSec: 2.5 })).toThrow()
+    expect(() => SegmentSchema.parse({ ...baseSeg, fadeOutSec: 3 })).toThrow()
+  })
+
+  it('rejects negative fade values', () => {
+    expect(() => SegmentSchema.parse({ ...baseSeg, fadeInSec: -0.1 })).toThrow()
+    expect(() => SegmentSchema.parse({ ...baseSeg, fadeOutSec: -0.5 })).toThrow()
+  })
+
+  it('accepts videoAudioFadeInSec / videoAudioFadeOutSec within 0..3s', () => {
+    const seg = SegmentSchema.parse({
+      ...baseSeg,
+      videoAudioFadeInSec: 0.5,
+      videoAudioFadeOutSec: 1.5,
+    })
+    expect(seg.videoAudioFadeInSec).toBe(0.5)
+    expect(seg.videoAudioFadeOutSec).toBe(1.5)
+  })
+
+  it('leaves audio fade fields undefined when absent', () => {
+    const seg = SegmentSchema.parse(baseSeg)
+    expect(seg.videoAudioFadeInSec).toBeUndefined()
+    expect(seg.videoAudioFadeOutSec).toBeUndefined()
+  })
+
+  it('rejects audio fade values above 3 seconds', () => {
+    // Cap at 3s so a typical 5-10s segment isn't dominated by ramps.
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoAudioFadeInSec: 3.5 })
+    ).toThrow()
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoAudioFadeOutSec: 5 })
+    ).toThrow()
+  })
 })
 
 // ---------------------------------------------------------------------------

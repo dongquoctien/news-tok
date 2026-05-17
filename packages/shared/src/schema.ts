@@ -318,6 +318,23 @@ export const SegmentSchema = z.object({
     })
     .optional(),
   /**
+   * Fade-in duration in seconds, anchored to the START of the segment.
+   * Renders as a black overlay that goes from opacity 1 → 0 over the
+   * first `fadeInSec` seconds of the segment. Applies to BOTH image and
+   * video backgrounds so transitions between cuts feel cinematic
+   * regardless of the source media.
+   *
+   * Absent / undefined = no fade-in (legacy behavior). Cap 2s — longer
+   * fades on a 5s segment eat too much of the content.
+   */
+  fadeInSec: z.number().min(0).max(2).optional(),
+  /**
+   * Fade-out duration in seconds, anchored to the END of the segment.
+   * Mirrors `fadeInSec`: black overlay opacity 0 → 1 over the last
+   * `fadeOutSec` seconds.
+   */
+  fadeOutSec: z.number().min(0).max(2).optional(),
+  /**
    * Loop the trimmed video clip when the segment is longer than the clip.
    * Renderer treats absent as `true` to preserve phase-1 behavior (always
    * loop when a clip is shorter than the segment). Set `false` to play
@@ -345,6 +362,24 @@ export const SegmentSchema = z.object({
    * narration so a "mute with volume 0" mistake can't leak both tracks.
    */
   videoVolume: z.number().min(0).max(1).optional(),
+  /**
+   * Audio fade-in for the clip's own soundtrack, in seconds. Ramps clip
+   * volume from 0 → `videoVolume` over the first `videoAudioFadeInSec`
+   * seconds of the segment. Ignored when `videoMuted === true` (clip
+   * audio already silent) or when the background is not a video.
+   *
+   * Independent of the visual `fadeInSec` so users who want a fast
+   * visual cut can still smooth out a harsh audio in-point. Cap 3s —
+   * a longer ramp on a typical 5-10s segment swamps the content.
+   */
+  videoAudioFadeInSec: z.number().min(0).max(3).optional(),
+  /**
+   * Audio fade-out for the clip's soundtrack. Mirrors `videoAudioFadeInSec`:
+   * ramps from `videoVolume` → 0 over the LAST `videoAudioFadeOutSec`
+   * seconds. Common case is trimming the middle of a video and using a
+   * 1-2s fade-out so the cut doesn't feel jarring.
+   */
+  videoAudioFadeOutSec: z.number().min(0).max(3).optional(),
   /**
    * Playback rate for the background video. Absent = 1 (normal speed).
    * Clamped to [0.25, 2] to keep the pitch shift (when unmuted) within

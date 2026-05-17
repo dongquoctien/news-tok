@@ -421,9 +421,71 @@ export const NewsTokComposition = ({
                 language={storyboard.language}
               />
             ) : null}
+            {/* Per-segment fade-to-black transition. Drawn LAST so it
+                sits on top of the scene + subtitles + watermark — the
+                whole segment goes to black uniformly, like a film cut.
+                Absent fade fields = no overlay, so legacy storyboards
+                render byte-identically. */}
+            {(segment.fadeInSec ?? 0) > 0 || (segment.fadeOutSec ?? 0) > 0 ? (
+              <SegmentFadeOverlay
+                fadeInSec={segment.fadeInSec ?? 0}
+                fadeOutSec={segment.fadeOutSec ?? 0}
+              />
+            ) : null}
           </Sequence>
         )
       })}
     </AbsoluteFill>
+  )
+}
+
+/**
+ * Black rectangle that drives a per-segment fade-in / fade-out
+ * transition. Sits on top of every other layer in the Sequence so the
+ * whole frame — including subtitles and watermark — goes to black
+ * uniformly. Opacity ramps from 1 → 0 over `fadeInSec` at the start,
+ * stays at 0 in the middle, then 0 → 1 over `fadeOutSec` at the end.
+ *
+ * Pointer events disabled so the overlay never intercepts clicks in
+ * the Studio <Player>.
+ */
+function SegmentFadeOverlay({
+  fadeInSec,
+  fadeOutSec,
+}: {
+  fadeInSec: number
+  fadeOutSec: number
+}) {
+  const frame = useCurrentFrame()
+  const { fps, durationInFrames } = useVideoConfig()
+  const inFrames = Math.max(0, Math.round(fadeInSec * fps))
+  const outFrames = Math.max(0, Math.round(fadeOutSec * fps))
+  // Clamp so a 5s segment with 3s fade-in + 3s fade-out never overlaps
+  // the two ramps (would otherwise make the middle darker than either
+  // edge). Reserve at least 1 frame in the middle.
+  const safeIn = Math.min(inFrames, Math.max(0, durationInFrames - outFrames - 1))
+  const safeOut = Math.min(outFrames, Math.max(0, durationInFrames - safeIn - 1))
+  const outStart = durationInFrames - safeOut
+  let opacity = 0
+  if (safeIn > 0 && frame < safeIn) {
+    opacity = interpolate(frame, [0, safeIn], [1, 0], {
+      extrapolateLeft: 'clamp',
+      extrapolateRight: 'clamp',
+    })
+  } else if (safeOut > 0 && frame > outStart) {
+    opacity = interpolate(frame, [outStart, durationInFrames], [0, 1], {
+      extrapolateLeft: 'clamp',
+      extrapolateRight: 'clamp',
+    })
+  }
+  if (opacity <= 0) return null
+  return (
+    <AbsoluteFill
+      style={{
+        backgroundColor: '#000',
+        opacity,
+        pointerEvents: 'none',
+      }}
+    />
   )
 }
