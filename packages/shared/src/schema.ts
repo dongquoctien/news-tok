@@ -363,6 +363,24 @@ export const SegmentSchema = z.object({
    */
   videoVolume: z.number().min(0).max(1).optional(),
   /**
+   * Audio fade-in for the clip's own soundtrack, in seconds. Ramps clip
+   * volume from 0 → `videoVolume` over the first `videoAudioFadeInSec`
+   * seconds of the segment. Ignored when `videoMuted === true` (clip
+   * audio already silent) or when the background is not a video.
+   *
+   * Independent of the visual `fadeInSec` so users who want a fast
+   * visual cut can still smooth out a harsh audio in-point. Cap 3s —
+   * a longer ramp on a typical 5-10s segment swamps the content.
+   */
+  videoAudioFadeInSec: z.number().min(0).max(3).optional(),
+  /**
+   * Audio fade-out for the clip's soundtrack. Mirrors `videoAudioFadeInSec`:
+   * ramps from `videoVolume` → 0 over the LAST `videoAudioFadeOutSec`
+   * seconds. Common case is trimming the middle of a video and using a
+   * 1-2s fade-out so the cut doesn't feel jarring.
+   */
+  videoAudioFadeOutSec: z.number().min(0).max(3).optional(),
+  /**
    * Playback rate for the background video. Absent = 1 (normal speed).
    * Clamped to [0.25, 2] to keep the pitch shift (when unmuted) within
    * the range Remotion's <OffthreadVideo> handles cleanly.

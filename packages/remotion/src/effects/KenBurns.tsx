@@ -78,6 +78,17 @@ export type KenBurnsProps = {
   muted?: boolean
   /** Volume multiplier 0..1 applied when `muted === false`. */
   volume?: number
+  /**
+   * Fade-in window (seconds) for the clip's own audio. Ramps clip volume
+   * from 0 to `volume` over the first `audioFadeInSec` seconds of the
+   * segment. Ignored when `muted === true`.
+   */
+  audioFadeInSec?: number
+  /**
+   * Fade-out window (seconds) for the clip's audio. Ramps from `volume`
+   * back to 0 over the LAST `audioFadeOutSec` seconds.
+   */
+  audioFadeOutSec?: number
   /** Playback rate (0.25..2). 1 = normal speed. */
   playbackRate?: number
   /** CSS object-fit equivalent: cover (default) | contain | fill. */
@@ -113,6 +124,8 @@ export const KenBurns = ({
   loop = true,
   muted = true,
   volume = 1,
+  audioFadeInSec = 0,
+  audioFadeOutSec = 0,
   playbackRate = 1,
   fit = 'cover',
   align = 'center',
@@ -218,11 +231,41 @@ export const KenBurns = ({
       const startSec = Math.max(0, videoTrim?.startSec ?? 0)
       const endSec = videoTrim?.endSec ?? durationSec
       const trimBeforeFrames = Math.max(0, Math.round(startSec * fps))
+      const targetVol = muted ? 0 : Math.max(0, Math.min(1, volume))
+      const fadeInFrames = Math.max(0, Math.round(audioFadeInSec * fps))
+      const fadeOutFrames = Math.max(0, Math.round(audioFadeOutSec * fps))
+      // Audio fade is anchored to the SEGMENT timeline (outer
+      // Sequence's durationInFrames), not the clip's local time. When
+      // the user trims a clip's middle, the clip's last second is
+      // still mid-content but the SEGMENT is about to end — that's
+      // when we want to drop the volume so the next segment's cut
+      // doesn't feel jarring. Callback receives the frame in clip-local
+      // time which, since we use trimBefore (not Sequence offsets),
+      // equals the segment frame for non-looping clips. For looping,
+      // the callback fires per-frame too, so the fade-out window still
+      // aligns with the segment edge.
+      const volumeFn =
+        muted || (fadeInFrames === 0 && fadeOutFrames === 0)
+          ? targetVol
+          : (frame: number) => {
+              // Inside fade-in window: ramp 0 -> targetVol.
+              if (fadeInFrames > 0 && frame < fadeInFrames) {
+                return targetVol * (frame / fadeInFrames)
+              }
+              // Inside fade-out window: ramp targetVol -> 0. Anchored
+              // to the END of the segment (durationInFrames).
+              const outStart = durationInFrames - fadeOutFrames
+              if (fadeOutFrames > 0 && frame >= outStart) {
+                const remaining = durationInFrames - frame
+                return targetVol * Math.max(0, remaining / fadeOutFrames)
+              }
+              return targetVol
+            }
       const video = (
         <OffthreadVideo
           src={src}
           muted={muted}
-          volume={muted ? 0 : Math.max(0, Math.min(1, volume))}
+          volume={volumeFn}
           playbackRate={playbackRate}
           trimBefore={trimBeforeFrames || undefined}
           style={mediaStyle}

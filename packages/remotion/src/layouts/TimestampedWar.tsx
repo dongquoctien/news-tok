@@ -119,6 +119,8 @@ export function TimestampedWar({
             loop={segment.videoLoop}
             muted={segment.videoMuted}
             volume={segment.videoVolume}
+            audioFadeInSec={segment.videoAudioFadeInSec}
+            audioFadeOutSec={segment.videoAudioFadeOutSec}
             playbackRate={segment.videoPlaybackRate}
             fit={segment.videoFit}
             align={segment.videoAlign}

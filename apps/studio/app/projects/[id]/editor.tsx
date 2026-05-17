@@ -1900,6 +1900,8 @@ function SegmentEditor({
                       segment.videoLoop === false ||
                       segment.videoMuted === false ||
                       (segment.videoVolume !== undefined && segment.videoVolume !== 1) ||
+                      (segment.videoAudioFadeInSec ?? 0) > 0 ||
+                      (segment.videoAudioFadeOutSec ?? 0) > 0 ||
                       (segment.videoPlaybackRate !== undefined &&
                         segment.videoPlaybackRate !== 1) ||
                       (segment.videoFit !== undefined && segment.videoFit !== 'cover') ||
@@ -1991,6 +1993,8 @@ function SegmentEditor({
                 videoLoop: next.videoLoop,
                 videoMuted: next.videoMuted,
                 videoVolume: next.videoVolume,
+                videoAudioFadeInSec: next.videoAudioFadeInSec,
+                videoAudioFadeOutSec: next.videoAudioFadeOutSec,
                 videoPlaybackRate: next.videoPlaybackRate,
                 videoFit: next.videoFit,
                 videoAlign: next.videoAlign,

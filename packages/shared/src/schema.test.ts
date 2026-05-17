@@ -385,6 +385,32 @@ describe('SegmentSchema', () => {
     expect(() => SegmentSchema.parse({ ...baseSeg, fadeInSec: -0.1 })).toThrow()
     expect(() => SegmentSchema.parse({ ...baseSeg, fadeOutSec: -0.5 })).toThrow()
   })
+
+  it('accepts videoAudioFadeInSec / videoAudioFadeOutSec within 0..3s', () => {
+    const seg = SegmentSchema.parse({
+      ...baseSeg,
+      videoAudioFadeInSec: 0.5,
+      videoAudioFadeOutSec: 1.5,
+    })
+    expect(seg.videoAudioFadeInSec).toBe(0.5)
+    expect(seg.videoAudioFadeOutSec).toBe(1.5)
+  })
+
+  it('leaves audio fade fields undefined when absent', () => {
+    const seg = SegmentSchema.parse(baseSeg)
+    expect(seg.videoAudioFadeInSec).toBeUndefined()
+    expect(seg.videoAudioFadeOutSec).toBeUndefined()
+  })
+
+  it('rejects audio fade values above 3 seconds', () => {
+    // Cap at 3s so a typical 5-10s segment isn't dominated by ramps.
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoAudioFadeInSec: 3.5 })
+    ).toThrow()
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoAudioFadeOutSec: 5 })
+    ).toThrow()
+  })
 })
 
 // ---------------------------------------------------------------------------
