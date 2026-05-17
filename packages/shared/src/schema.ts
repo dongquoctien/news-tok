@@ -318,6 +318,23 @@ export const SegmentSchema = z.object({
     })
     .optional(),
   /**
+   * Fade-in duration in seconds, anchored to the START of the segment.
+   * Renders as a black overlay that goes from opacity 1 → 0 over the
+   * first `fadeInSec` seconds of the segment. Applies to BOTH image and
+   * video backgrounds so transitions between cuts feel cinematic
+   * regardless of the source media.
+   *
+   * Absent / undefined = no fade-in (legacy behavior). Cap 2s — longer
+   * fades on a 5s segment eat too much of the content.
+   */
+  fadeInSec: z.number().min(0).max(2).optional(),
+  /**
+   * Fade-out duration in seconds, anchored to the END of the segment.
+   * Mirrors `fadeInSec`: black overlay opacity 0 → 1 over the last
+   * `fadeOutSec` seconds.
+   */
+  fadeOutSec: z.number().min(0).max(2).optional(),
+  /**
    * Loop the trimmed video clip when the segment is longer than the clip.
    * Renderer treats absent as `true` to preserve phase-1 behavior (always
    * loop when a clip is shorter than the segment). Set `false` to play

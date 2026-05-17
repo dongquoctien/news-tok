@@ -357,6 +357,34 @@ describe('SegmentSchema', () => {
       SegmentSchema.parse({ ...baseSeg, videoAlign: 'middle' })
     ).toThrow()
   })
+
+  it('accepts fadeInSec / fadeOutSec within 0..2s', () => {
+    const seg = SegmentSchema.parse({
+      ...baseSeg,
+      fadeInSec: 0.3,
+      fadeOutSec: 0.5,
+    })
+    expect(seg.fadeInSec).toBe(0.3)
+    expect(seg.fadeOutSec).toBe(0.5)
+  })
+
+  it('leaves fade fields undefined when absent (legacy renders unchanged)', () => {
+    const seg = SegmentSchema.parse(baseSeg)
+    expect(seg.fadeInSec).toBeUndefined()
+    expect(seg.fadeOutSec).toBeUndefined()
+  })
+
+  it('rejects fade values above 2 seconds', () => {
+    // Cap at 2s so a 5s segment can't be dominated by fades that eat
+    // the entire content window.
+    expect(() => SegmentSchema.parse({ ...baseSeg, fadeInSec: 2.5 })).toThrow()
+    expect(() => SegmentSchema.parse({ ...baseSeg, fadeOutSec: 3 })).toThrow()
+  })
+
+  it('rejects negative fade values', () => {
+    expect(() => SegmentSchema.parse({ ...baseSeg, fadeInSec: -0.1 })).toThrow()
+    expect(() => SegmentSchema.parse({ ...baseSeg, fadeOutSec: -0.5 })).toThrow()
+  })
 })
 
 // ---------------------------------------------------------------------------

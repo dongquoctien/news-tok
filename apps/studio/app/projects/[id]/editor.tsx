@@ -1435,6 +1435,48 @@ function SegmentEditor({
         </div>
       </div>
 
+      {/* Fade-in / fade-out transitions. Both default to 0 (no fade) so
+          legacy storyboards render unchanged; cap at 2s so a 5s segment
+          can't be dominated by fades. Storing `undefined` instead of 0
+          keeps the storyboard tidy — the schema treats them
+          interchangeably. */}
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <Label htmlFor="segment-fade-in">Fade in (s)</Label>
+          <Input
+            id="segment-fade-in"
+            className="mt-1"
+            type="number"
+            min={0}
+            max={2}
+            step={0.1}
+            value={segment.fadeInSec ?? 0}
+            onChange={(e) => {
+              const v = Number.parseFloat(e.target.value)
+              const next = Number.isFinite(v) ? Math.max(0, Math.min(2, v)) : 0
+              onChange({ fadeInSec: next > 0 ? next : undefined })
+            }}
+          />
+        </div>
+        <div>
+          <Label htmlFor="segment-fade-out">Fade out (s)</Label>
+          <Input
+            id="segment-fade-out"
+            className="mt-1"
+            type="number"
+            min={0}
+            max={2}
+            step={0.1}
+            value={segment.fadeOutSec ?? 0}
+            onChange={(e) => {
+              const v = Number.parseFloat(e.target.value)
+              const next = Number.isFinite(v) ? Math.max(0, Math.min(2, v)) : 0
+              onChange({ fadeOutSec: next > 0 ? next : undefined })
+            }}
+          />
+        </div>
+      </div>
+
       <div>
         <Label>Voice</Label>
         <div className="mt-1 flex items-center gap-2">
