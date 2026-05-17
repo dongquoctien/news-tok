@@ -7,6 +7,7 @@ import {
   Layers,
   Loader2,
   Pencil,
+  Play,
   Search,
   Sparkles,
   Trash2,
@@ -147,9 +148,16 @@ export function ImageLibrary({
 
   const upload = async (files: File[]) => {
     if (files.length === 0) return
-    const images = files.filter((f) => f.type.startsWith('image/'))
-    if (images.length === 0) {
-      setError('No image files in your selection (JPG / PNG / WebP / GIF).')
+    // Accept both images and videos — the upload API + AssetRef schema +
+    // renderer are all media-kind aware. Audio is intentionally rejected
+    // here so a stray music folder doesn't pollute the visual library.
+    const media = files.filter(
+      (f) => f.type.startsWith('image/') || f.type.startsWith('video/')
+    )
+    if (media.length === 0) {
+      setError(
+        'No image or video files in your selection (JPG / PNG / WebP / GIF / MP4 / WebM / MOV).'
+      )
       setTimeout(() => setError(null), 4000)
       return
     }
@@ -158,7 +166,7 @@ export function ImageLibrary({
     setUploading(true)
     try {
       const form = new FormData()
-      for (const f of images) form.append('file', f)
+      for (const f of media) form.append('file', f)
       const res = await fetch(`/api/projects/${projectId}/library`, {
         method: 'POST',
         body: form,
@@ -244,7 +252,7 @@ export function ImageLibrary({
             size="sm"
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            title="Pick one or more image files (Ctrl-click to multi-select)"
+            title="Pick one or more image or video files (Ctrl-click to multi-select)"
             className="h-7 px-2 text-xs"
           >
             {uploading ? (
@@ -281,15 +289,15 @@ export function ImageLibrary({
         {isEmpty ? (
           <div className="flex flex-col items-center gap-1.5">
             <FolderUp className="size-7 text-muted-foreground" />
-            <p className="text-xs font-medium">Drop a folder of images</p>
+            <p className="text-xs font-medium">Drop a folder of images or videos</p>
             <p className="text-[10px] leading-snug text-muted-foreground">
               Bulk-import once, then click any thumbnail to use it as a
-              segment background. JPG / PNG / WebP / GIF.
+              segment background. JPG / PNG / WebP / GIF / MP4 / WebM / MOV.
             </p>
           </div>
         ) : (
           <p className="text-[10px] text-muted-foreground">
-            Drop more images here, or
+            Drop more files here, or
             <button
               type="button"
               onClick={(e) => {
@@ -313,7 +321,7 @@ export function ImageLibrary({
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*"
+        accept="image/*,video/*"
         multiple
         className="hidden"
         onChange={onPick}
@@ -356,8 +364,20 @@ export function ImageLibrary({
       {filtered.length > 0 ? (
         <div className="grid grid-cols-4 gap-1.5">
           {filtered.map((asset) => {
-            const url = assetUrl(asset.path)
+            const isVideo = asset.kind === 'video'
+            // For images use the asset URL directly; for video grab a
+            // cached poster frame so the grid stays lightweight even
+            // when every tile is a 200MB clip. /api/video-poster
+            // content-hash-caches the JPEG so this only runs ffmpeg once.
+            const url = isVideo
+              ? `/api/video-poster?path=${encodeURIComponent(asset.path)}`
+              : assetUrl(asset.path)
             const name = asset.source?.attribution || asset.source?.id || ''
+            const tooltipLabel = isVideo
+              ? `Apply video "${name}" to current segment${
+                  asset.durationSec ? ` (${asset.durationSec.toFixed(1)}s)` : ''
+                }`
+              : `Apply "${name}" to current segment`
             return (
               <div key={asset.path} className="group relative">
                 <button
@@ -370,11 +390,7 @@ export function ImageLibrary({
                       ? 'cursor-pointer hover:ring-2 hover:ring-primary'
                       : 'cursor-not-allowed opacity-50'
                   )}
-                  title={
-                    hasSelectedSegment
-                      ? `Apply "${name}" to current segment`
-                      : 'Select a segment first to apply'
-                  }
+                  title={hasSelectedSegment ? tooltipLabel : 'Select a segment first to apply'}
                 >
                   {url ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -389,6 +405,29 @@ export function ImageLibrary({
                       <ImageOff className="size-4 text-muted-foreground" />
                     </div>
                   )}
+                  {/* Video badge — Play icon bottom-left + duration
+                      chip bottom-right. Sits inside the button so the
+                      whole tile remains the click target; pointer-events
+                      none so the underlying button still receives the
+                      click. */}
+                  {isVideo ? (
+                    <>
+                      <span
+                        className="pointer-events-none absolute bottom-1 left-1 rounded-full bg-black/70 p-0.5 text-white"
+                        aria-hidden
+                      >
+                        <Play className="size-2.5" fill="currentColor" />
+                      </span>
+                      {typeof asset.durationSec === 'number' ? (
+                        <span className="pointer-events-none absolute bottom-1 right-1 rounded bg-black/70 px-1 py-px text-[9px] font-medium text-white">
+                          {asset.durationSec < 10
+                            ? asset.durationSec.toFixed(1)
+                            : Math.round(asset.durationSec)}
+                          s
+                        </span>
+                      ) : null}
+                    </>
+                  ) : null}
                 </button>
                 {onEditAndApply && hasSelectedSegment ? (
                   <button

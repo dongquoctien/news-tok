@@ -1,9 +1,10 @@
-import { copyFile, mkdir, mkdtemp, readFile, rm } from 'node:fs/promises'
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve as resolvePath } from 'node:path'
 import { MsEdgeTTS, OUTPUT_FORMAT, type Voice } from 'msedge-tts'
 import type { AssetRef, Language } from '@news-tok/shared/schema'
 import { cacheExists, cacheKey, cachePath, writeAtomic } from './cache.js'
+import { probeDurationSec } from './ffmpeg.js'
 
 export type WordBoundary = {
   /** Offset in seconds from start of audio. */
@@ -101,7 +102,17 @@ export async function synthesize(opts: SynthesizeOptions): Promise<SynthesizeRes
   if (cacheExists(mp3Path) && cacheExists(wbPath)) {
     const wb = JSON.parse(await readFile(wbPath, 'utf8')) as WordBoundary[]
     const last = wb[wb.length - 1]
-    const durationSec = last ? last.offsetSec + last.durationSec : 0
+    let durationSec = last ? last.offsetSec + last.durationSec : 0
+    // Older cache entries (or entries written before the no-boundary
+    // retry path got its ffmpeg fallback) may carry durationSec=0.
+    // Recompute from the cached mp3 so the AssetRef still validates.
+    if (durationSec <= 0) {
+      try {
+        durationSec = await probeDurationSec(mp3Path)
+      } catch {
+        durationSec = 0.1
+      }
+    }
     return {
       asset: buildAsset(mp3Path, opts.voiceId, durationSec),
       durationSec,
@@ -139,8 +150,24 @@ export async function synthesize(opts: SynthesizeOptions): Promise<SynthesizeRes
     await copyFile(audioFilePath, mp3Path)
     await writeAtomic(wbPath, JSON.stringify(wb, null, 2))
 
+    // Prefer the last word boundary's `offset + duration` as the clip
+    // length — it matches what the renderer's narration alignment will
+    // see. Fall back to an ffmpeg probe of the saved mp3 when Edge TTS
+    // returned audio but no boundaries (the retry path), so the AssetRef
+    // still carries a positive duration (`AssetRefSchema.durationSec` is
+    // `.positive()` and would reject 0).
     const last = wb[wb.length - 1]
-    const durationSec = last ? last.offsetSec + last.durationSec : 0
+    let durationSec = last ? last.offsetSec + last.durationSec : 0
+    if (durationSec <= 0) {
+      try {
+        durationSec = await probeDurationSec(mp3Path)
+      } catch {
+        // ffmpeg probe failed too — leave a tiny positive sentinel so
+        // the schema accepts the asset. Downstream renderers tolerate
+        // a stale duration better than they tolerate a missing one.
+        durationSec = 0.1
+      }
+    }
     return {
       asset: buildAsset(mp3Path, opts.voiceId, durationSec),
       durationSec,
@@ -162,6 +189,24 @@ async function runToFile(
   await tts.setMetadata(voiceId, OUTPUT_FORMAT.AUDIO_24KHZ_48KBITRATE_MONO_MP3, {
     wordBoundaryEnabled,
   })
+  // Workaround for msedge-tts@2.0.5 bug at MsEdgeTTS.js:367: when the
+  // metadata stream closes with zero items, the library calls
+  // `unlinkSync(metadataFilePath)` AFTER `reject("No metadata received")`
+  // — but the file was never written, so the unlink throws ENOENT from
+  // inside an event handler, which Node surfaces as an uncaught
+  // exception and Next.js treats as a fatal crash. Pre-creating an
+  // empty `metadata.json` makes the unlink succeed; the surrounding
+  // promise still rejects with "No metadata received", which our
+  // callWithRetry path already handles by retrying with boundaries
+  // disabled.
+  if (wordBoundaryEnabled) {
+    try {
+      await writeFile(resolvePath(tmpDir, 'metadata.json'), '')
+    } catch {
+      // best-effort — if the touch fails the original bug will still
+      // bite, but at least we tried.
+    }
+  }
   try {
     return await tts.toFile(tmpDir, text, rate ? { rate } : undefined)
   } finally {

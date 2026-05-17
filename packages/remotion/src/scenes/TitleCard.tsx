@@ -55,6 +55,15 @@ export const TitleCard = ({
       {bg ? (
         <KenBurns
           src={bg.path}
+          kind={bg.kind}
+          durationSec={bg.durationSec}
+          videoTrim={segment.videoTrim}
+          loop={segment.videoLoop}
+          muted={segment.videoMuted}
+          volume={segment.videoVolume}
+          playbackRate={segment.videoPlaybackRate}
+          fit={segment.videoFit}
+          align={segment.videoAlign}
           from={1.08}
           to={1.18}
           panX={0.04}

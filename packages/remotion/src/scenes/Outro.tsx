@@ -43,6 +43,15 @@ export const Outro = ({ segment, project, textStyle, fontOverride, colorOverride
       {bg ? (
         <KenBurns
           src={bg.path}
+          kind={bg.kind}
+          durationSec={bg.durationSec}
+          videoTrim={segment.videoTrim}
+          loop={segment.videoLoop}
+          muted={segment.videoMuted}
+          volume={segment.videoVolume}
+          playbackRate={segment.videoPlaybackRate}
+          fit={segment.videoFit}
+          align={segment.videoAlign}
           from={1.05}
           to={1.15}
           panX={0}

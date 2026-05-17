@@ -304,6 +304,79 @@ export const SegmentSchema = z.object({
    * image can be cropped differently across two segments.
    */
   backgroundEdits: BackgroundEditsSchema.optional(),
+  /**
+   * Optional trim window applied when `visuals.background.kind === 'video'`.
+   * Stored on the segment so the same library clip can be trimmed
+   * differently across segments. The renderer wraps the trimmed clip in
+   * `<Loop>` so segments longer than `(endSec - startSec)` repeat the
+   * trimmed window. Ignored entirely when the background is an image.
+   */
+  videoTrim: z
+    .object({
+      startSec: z.number().min(0).default(0),
+      endSec: z.number().min(0).optional(),
+    })
+    .optional(),
+  /**
+   * Loop the trimmed video clip when the segment is longer than the clip.
+   * Renderer treats absent as `true` to preserve phase-1 behavior (always
+   * loop when a clip is shorter than the segment). Set `false` to play
+   * the clip once and freeze on the final frame.
+   *
+   * Stored as optional so a fresh `{ scene, text, voice, visuals }`
+   * object literal still parses without naming every video knob; render
+   * code applies `?? true` at the point of use.
+   *
+   * Ignored when `visuals.background.kind !== 'video'`.
+   */
+  videoLoop: z.boolean().optional(),
+  /**
+   * Mute the source audio of the background video clip. Absent = `true`
+   * (silent) to keep narration TTS clean for the common news-b-roll
+   * case. Set `false` for interview clips where the on-camera audio
+   * matters; the renderer drops this segment's narration when this is
+   * explicitly `false`.
+   */
+  videoMuted: z.boolean().optional(),
+  /**
+   * Volume multiplier (0..1) applied when `videoMuted === false`. Ignored
+   * otherwise. Absent = 1. The narration auto-mute rule does NOT consult
+   * this field — any explicit unmute (regardless of volume) drops
+   * narration so a "mute with volume 0" mistake can't leak both tracks.
+   */
+  videoVolume: z.number().min(0).max(1).optional(),
+  /**
+   * Playback rate for the background video. Absent = 1 (normal speed).
+   * Clamped to [0.25, 2] to keep the pitch shift (when unmuted) within
+   * the range Remotion's <OffthreadVideo> handles cleanly.
+   */
+  videoPlaybackRate: z.number().min(0.25).max(2).optional(),
+  /**
+   * CSS object-fit equivalent for the background video. Absent = `cover`
+   * (phase-1 behavior). `contain` letterboxes the clip inside the
+   * segment, making `videoAlign` load-bearing. `fill` stretches the
+   * clip to the segment aspect.
+   */
+  videoFit: z.enum(['cover', 'contain', 'fill']).optional(),
+  /**
+   * Nine-position align grid that controls `objectPosition` when the
+   * clip doesn't fill the segment frame. Absent = `center`. Only
+   * meaningful when `videoFit === 'contain'` — `cover` and `fill`
+   * always occupy the full frame.
+   */
+  videoAlign: z
+    .enum([
+      'top-left',
+      'top-center',
+      'top-right',
+      'center-left',
+      'center',
+      'center-right',
+      'bottom-left',
+      'bottom-center',
+      'bottom-right',
+    ])
+    .optional(),
   effects: z.array(EffectSpecSchema).default([]),
   audio: z
     .object({

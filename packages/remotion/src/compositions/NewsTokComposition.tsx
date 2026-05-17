@@ -366,6 +366,11 @@ export const NewsTokComposition = ({
         const Scene = resolveScene(segment.scene)
         const from = cursor
         cursor += durationInFrames
+        // Narration + video clip audio are mixed by default: when the
+        // user un-mutes the background video, both tracks play in
+        // parallel. The user controls the balance via the clip volume
+        // slider (segment.videoVolume) — narration stays at its
+        // declared loudness.
         const hasSubs =
           subtitlesEnabled && segment.wordBoundaries && segment.wordBoundaries.length > 0
         const style = resolveStyle(segment, activeVariant, userStyles)

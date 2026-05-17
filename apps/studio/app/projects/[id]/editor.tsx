@@ -44,6 +44,10 @@ import { VoicePicker } from '@/components/studio/voice-picker'
 import { ImagePicker } from '@/components/studio/image-picker'
 import { ImageLibrary } from '@/components/studio/image-library'
 import { ImageEditorDialog } from '@/components/studio/image-editor-dialog'
+import {
+  VideoEditorDialog,
+  videoEditorInitial,
+} from '@/components/studio/video-editor-dialog'
 import { MusicPicker } from '@/components/studio/music-picker'
 import { BgMusicTrimDialog } from '@/components/studio/bg-music-trim-dialog'
 import { LayoutPicker } from '@/components/studio/layout-picker'
@@ -1207,6 +1211,8 @@ function SegmentEditor({
   const [synthError, setSynthError] = useState<string | null>(null)
   /** Image editor modal state. Null = closed. */
   const [editorOpen, setEditorOpen] = useState(false)
+  /** Video editor modal state. Mirrors editorOpen for video kind. */
+  const [videoEditorOpen, setVideoEditorOpen] = useState(false)
   /**
    * Right-aside inspector is split into 4 tabs so users aren't scrolling
    * through 11 stacked sections to find a single control. The grouping
@@ -1796,19 +1802,28 @@ function SegmentEditor({
             // Apply the bare asset first (and clear stale edits from
             // a previously-attached image) so the editor opens against
             // the new background. The user's Apply click then sets
-            // backgroundEdits via the editor's own onApply callback.
+            // backgroundEdits / video knobs via the editor's own
+            // onApply callback.
             onChange({
               visuals: { ...segment.visuals, background: asset },
               backgroundEdits: undefined,
             })
-            setEditorOpen(true)
+            if (asset.kind === 'video') {
+              setVideoEditorOpen(true)
+            } else {
+              setEditorOpen(true)
+            }
           }}
           onAutoFillEmpty={onAutoFillEmpty}
           emptySegmentCount={emptySegmentCount}
           hasSelectedSegment
         />
         <div className="border-t pt-2">
-          <Label>Background image</Label>
+          <Label>
+            {segment.visuals.background?.kind === 'video'
+              ? 'Background video'
+              : 'Background image'}
+          </Label>
           <div className="mt-1 space-y-2">
             {segment.visuals.background ? (
               <BackgroundThumb
@@ -1833,25 +1848,61 @@ function SegmentEditor({
                 }
               />
               {segment.visuals.background ? (
-                <Button
-                  variant={segment.backgroundEdits ? 'default' : 'outline'}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setEditorOpen(true)}
-                  title={
-                    segment.backgroundEdits
-                      ? 'Edit current adjustments'
-                      : 'Crop / rotate / overlay'
-                  }
-                >
-                  <Crop />
-                  Edit
-                  {segment.backgroundEdits ? (
-                    <span className="ml-1 rounded bg-primary-foreground/20 px-1 text-[9px]">
-                      ON
-                    </span>
-                  ) : null}
-                </Button>
+                segment.visuals.background.kind === 'video' ? (
+                  // Video branch: edit knobs live in a separate dialog;
+                  // ON indicator surfaces when any of the six video
+                  // fields is non-default.
+                  (() => {
+                    const hasVideoEdits =
+                      segment.videoTrim !== undefined ||
+                      segment.videoLoop === false ||
+                      segment.videoMuted === false ||
+                      (segment.videoVolume !== undefined && segment.videoVolume !== 1) ||
+                      (segment.videoPlaybackRate !== undefined &&
+                        segment.videoPlaybackRate !== 1) ||
+                      (segment.videoFit !== undefined && segment.videoFit !== 'cover') ||
+                      (segment.videoAlign !== undefined && segment.videoAlign !== 'center') ||
+                      segment.backgroundEdits?.flipH === true ||
+                      segment.backgroundEdits?.flipV === true
+                    return (
+                      <Button
+                        variant={hasVideoEdits ? 'default' : 'outline'}
+                        size="sm"
+                        className="flex-1"
+                        onClick={() => setVideoEditorOpen(true)}
+                        title="Trim, loop, mute, speed, fit"
+                      >
+                        <Crop />
+                        Edit
+                        {hasVideoEdits ? (
+                          <span className="ml-1 rounded bg-primary-foreground/20 px-1 text-[9px]">
+                            ON
+                          </span>
+                        ) : null}
+                      </Button>
+                    )
+                  })()
+                ) : (
+                  <Button
+                    variant={segment.backgroundEdits ? 'default' : 'outline'}
+                    size="sm"
+                    className="flex-1"
+                    onClick={() => setEditorOpen(true)}
+                    title={
+                      segment.backgroundEdits
+                        ? 'Edit current adjustments'
+                        : 'Crop / rotate / overlay'
+                    }
+                  >
+                    <Crop />
+                    Edit
+                    {segment.backgroundEdits ? (
+                      <span className="ml-1 rounded bg-primary-foreground/20 px-1 text-[9px]">
+                        ON
+                      </span>
+                    ) : null}
+                  </Button>
+                )
               ) : null}
             </div>
           </div>
@@ -1864,6 +1915,48 @@ function SegmentEditor({
           projectAspect={aspect}
           onApply={(nextEdits) => onChange({ backgroundEdits: nextEdits })}
         />
+        {segment.visuals.background?.kind === 'video' ? (
+          <VideoEditorDialog
+            open={videoEditorOpen}
+            onOpenChange={setVideoEditorOpen}
+            asset={segment.visuals.background}
+            initial={videoEditorInitial(segment)}
+            projectAspect={aspect}
+            onApply={(next) => {
+              // Stitch flip flags onto backgroundEdits — that's where
+              // KenBurns reads them. We collapse the whole edits object
+              // back to undefined when nothing is set, so a "no edits"
+              // segment doesn't bloat storyboard.json.
+              const prevEdits = segment.backgroundEdits
+              const nextFlipH = next.flipH ?? false
+              const nextFlipV = next.flipV ?? false
+              const hasOtherEdits =
+                prevEdits !== undefined &&
+                (prevEdits.crop !== undefined ||
+                  (prevEdits.rotateDeg ?? 0) !== 0 ||
+                  (prevEdits.vignette ?? 0) !== 0 ||
+                  prevEdits.overlay !== undefined)
+              const nextBackgroundEdits =
+                !nextFlipH && !nextFlipV && !hasOtherEdits
+                  ? undefined
+                  : {
+                      ...(prevEdits ?? { rotateDeg: 0, flipH: false, flipV: false, vignette: 0 }),
+                      flipH: nextFlipH,
+                      flipV: nextFlipV,
+                    }
+              onChange({
+                videoTrim: next.videoTrim,
+                videoLoop: next.videoLoop,
+                videoMuted: next.videoMuted,
+                videoVolume: next.videoVolume,
+                videoPlaybackRate: next.videoPlaybackRate,
+                videoFit: next.videoFit,
+                videoAlign: next.videoAlign,
+                backgroundEdits: nextBackgroundEdits,
+              })
+            }}
+          />
+        ) : null}
       </div>
       ) : null}
 

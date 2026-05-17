@@ -17,6 +17,7 @@ const ALLOWED_ROOTS = [resolve(REPO_ROOT, 'data', 'cache'), resolve(REPO_ROOT, '
 
 const MIME: Record<string, string> = {
   '.mp4': 'video/mp4',
+  '.mov': 'video/quicktime',
   '.mp3': 'audio/mpeg',
   '.wav': 'audio/wav',
   '.ogg': 'audio/ogg',

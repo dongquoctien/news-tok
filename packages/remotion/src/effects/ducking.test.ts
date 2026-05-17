@@ -19,7 +19,7 @@ function makeSegment(
     visuals: {},
     effects: [],
     wordBoundaries,
-  } as Segment
+  } as unknown as Segment
 }
 
 const OPTS = {

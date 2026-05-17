@@ -11,17 +11,21 @@ import {
   stripEmoji,
 } from '@news-tok/shared/sanitize'
 import { resolveDataPath, toRelativeDataPath } from '@news-tok/shared/paths'
+import { probeVideoMetadata } from '@news-tok/media'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Single file cap — keep parity with /api/upload and stop a stray 4K RAW
-// from bricking the project folder.
-const MAX_BYTES = 50 * 1024 * 1024
-// Total batch cap — drag-folder can balloon fast; 80 files / 400 MB is
-// plenty for a typical short video and keeps memory bounded.
+// Per-file caps — images stay at 50 MB (no reason to grow with the new
+// video support), videos are allowed up to 200 MB so a 30s 1080p H.264
+// clip from a news source fits comfortably.
+const MAX_IMAGE_BYTES = 50 * 1024 * 1024
+const MAX_VIDEO_BYTES = 200 * 1024 * 1024
+// Total batch cap — drag-folder can balloon fast; 80 files / 800 MB is
+// plenty for a typical short-form project (mixed images + a couple
+// videos) and keeps memory bounded.
 const MAX_FILES = 80
-const MAX_TOTAL_BYTES = 400 * 1024 * 1024
+const MAX_TOTAL_BYTES = 800 * 1024 * 1024
 
 const EXT_BY_MIME: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -29,6 +33,17 @@ const EXT_BY_MIME: Record<string, string> = {
   'image/png': 'png',
   'image/webp': 'webp',
   'image/gif': 'gif',
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+}
+
+function isAcceptedMime(mime: string): boolean {
+  return mime.startsWith('image/') || mime.startsWith('video/')
+}
+
+function perFileCap(mime: string): number {
+  return mime.startsWith('video/') ? MAX_VIDEO_BYTES : MAX_IMAGE_BYTES
 }
 
 function extFromName(name: string): string | null {
@@ -45,13 +60,16 @@ function sanitizeProject(project: Project): Project {
 }
 
 /**
- * Append one or more images to the project's image library. Files are
- * hashed by content so re-dropping the same folder is a no-op rather
- * than duplicating disk usage.
+ * Append one or more images or video clips to the project's library.
+ * Files are hashed by content so re-dropping the same folder is a no-op
+ * rather than duplicating disk usage.
  *
- * Body: multipart/form-data with one or more `file` fields. All files
- * MUST be `image/*`; non-image MIME types are rejected so a misclick on
- * a music folder doesn't end up here.
+ * Body: multipart/form-data with one or more `file` fields. Accepts
+ * `image/*` and `video/*`; non-media MIME types are rejected so a
+ * misclick on a music folder doesn't end up here. Videos additionally
+ * get probed by ffmpeg so the AssetRef carries `durationSec` + frame
+ * dimensions — the renderer needs `durationSec` to compute the loop
+ * window when the clip is shorter than the segment.
  */
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   if (!/^[A-Za-z0-9_-]+$/.test(params.id)) {
@@ -123,16 +141,19 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       skipped.push({ name: fileName, reason: 'empty' })
       continue
     }
-    if (blob.size > MAX_BYTES) {
-      skipped.push({ name: fileName, reason: `>${MAX_BYTES} bytes` })
+    if (!isAcceptedMime(blob.type)) {
+      skipped.push({ name: fileName, reason: `unsupported type "${blob.type}"` })
       continue
     }
-    if (!blob.type.startsWith('image/')) {
-      skipped.push({ name: fileName, reason: `non-image type "${blob.type}"` })
+    const cap = perFileCap(blob.type)
+    if (blob.size > cap) {
+      skipped.push({ name: fileName, reason: `>${cap} bytes` })
       continue
     }
 
-    const ext = EXT_BY_MIME[blob.type] ?? extFromName(fileName) ?? 'jpg'
+    const isVideo = blob.type.startsWith('video/')
+    const ext =
+      EXT_BY_MIME[blob.type] ?? extFromName(fileName) ?? (isVideo ? 'mp4' : 'jpg')
     const buffer = Buffer.from(await blob.arrayBuffer())
     const hash = createHash('sha256').update(buffer).digest('hex').slice(0, 24)
     const outPath = resolve(libDir, `${hash}.${ext}`)
@@ -152,10 +173,30 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       continue
     }
     existingPaths.add(relPath)
+
+    // For video we run ffmpeg probe so the AssetRef carries duration +
+    // dimensions. The renderer reads `durationSec` to wrap the clip in
+    // <Loop> when it's shorter than the segment; width/height let
+    // Studio pick a thumbnail layout that won't letterbox. If probe
+    // fails (unsupported codec, corrupt file), we still accept the
+    // upload but mark it kind:'video' without metadata — the renderer
+    // falls back to no-loop behaviour.
+    let metadata: { durationSec?: number; width?: number; height?: number } = {}
+    if (isVideo) {
+      try {
+        metadata = await probeVideoMetadata(outPath)
+      } catch {
+        // best-effort — bare AssetRef is still useful enough to render
+      }
+    }
+
     added.push({
-      kind: 'image',
+      kind: isVideo ? 'video' : 'image',
       path: relPath,
       source: { provider: 'local', id: fileName, attribution: fileName },
+      ...(metadata.durationSec !== undefined ? { durationSec: metadata.durationSec } : {}),
+      ...(metadata.width !== undefined ? { width: metadata.width } : {}),
+      ...(metadata.height !== undefined ? { height: metadata.height } : {}),
     })
   }
 
