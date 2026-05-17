@@ -22,7 +22,8 @@
  */
 import { NextResponse, type NextRequest } from 'next/server'
 import { createLogger } from '@news-tok/shared/logger'
-import { extractProjectId, runClaudeCli } from '@/lib/claude-cli'
+import { readStoryboard } from '@news-tok/render'
+import { runClaudeCli } from '@/lib/claude-cli'
 import {
   findRunningJob,
   newOrchestrateJobId,
@@ -45,25 +46,37 @@ const ALLOWED_TOOLS = [
 
 function buildPrompt(projectId: string): string {
   return [
-    `You are rewriting social-media captions for an existing news-tok project.`,
+    `Your ONLY task: rewrite social-media captions for project "${projectId}" and persist them via the rewriteSocialCaptions MCP tool. You MUST end the run by calling mcp__news-tok__rewriteSocialCaptions — that is the success criterion. Do not stop early. Do not output captions as text.`,
     ``,
-    `Project id: ${projectId}`,
+    `Required tool sequence (call each exactly once, in this order):`,
     ``,
-    `Follow CLAUDE.md exactly — especially the "Common task: prep video for social upload" section.`,
+    `Step 1: mcp__news-tok__getStoryboard with { projectId: "${projectId}" }`,
+    `        Read project.title + segments[].text. Note the language (vi/en).`,
     ``,
-    `Workflow:`,
-    `1. Call mcp__news-tok__getStoryboard with projectId=${projectId} to read the article title + segment.text + any prior socialCaptions.`,
-    `2. Call mcp__news-tok__generateSocialCaption with projectId=${projectId} to fetch the local template baseline (topic auto-detect + topic-aware hashtag pool).`,
-    `3. Rewrite each platform's caption per CLAUDE.md guidance:`,
-    `   - TikTok: 120–250 chars, hook + 1 drama line + CTA, 6 dot-masked hashtags`,
-    `   - Facebook: 400–800 chars, narrative 2–3 paragraphs, ends with an open question`,
-    `   - Instagram: 250–500 chars, emoji hook + arrow-bulleted keypoints + hashtag block`,
-    `   - YouTube: 1000–1500 chars, SEO-first hook ≤100 chars + body + #shorts-led hashtags`,
-    `   Preserve any masking pattern (c.h.ế.t / không còn) that appears in the baseline output for each platform. Refine the hashtag pool: drop generic / off-topic tags, add event-specific tags from the title (e.g. U17 / World Cup / VietnamFootball) while STRIPPING Vietnamese diacritics on tags (#vietnam not #việt-nam).`,
-    `4. Call mcp__news-tok__rewriteSocialCaptions with projectId=${projectId}, topic (the one returned by generateSocialCaption), captions = [{platform, text}, ...] for all 4 platforms, hashtags = [the refined union, capped at 12]. The tool persists this into project.socialCaptions and Studio's caption dialog reads it on next open.`,
-    `5. Done. Do NOT call any other tool. Do NOT render the project.`,
+    `Step 2: mcp__news-tok__generateSocialCaption with { projectId: "${projectId}" }`,
+    `        Returns { topic, hashtags, captions: [{ platform, text, charCount }] }. Use this as the BASELINE — do NOT just copy it back.`,
     ``,
-    `Important: this is non-interactive. Make sensible defaults — never call AskUserQuestion.`,
+    `Step 3: Rewrite each platform's caption text in your head following these targets:`,
+    `   - tiktok    120-250 chars, hook + 1 drama line + CTA, ≤6 hashtags (preserve any dot-masking from baseline like c.h.ế.t)`,
+    `   - facebook  400-800 chars, narrative 2-3 paragraphs, end with an open question`,
+    `   - instagram 250-500 chars, emoji hook + arrow bullets (→) + hashtag block at the end`,
+    `   - youtube   1000-1500 chars, SEO-first hook ≤100 chars, then 2-3 body paragraphs, hashtags start with #shorts`,
+    `   For hashtags: STRIP Vietnamese diacritics (#vietnam not #việt-nam, #u17vietnam not #u17việt-nam). Drop verb-form keywords. Add event-specific tags from the title (e.g. #U17AsianCup, #VietnamFootball). Cap at 12.`,
+    ``,
+    `Step 4 (REQUIRED — this is the success criterion): Call mcp__news-tok__rewriteSocialCaptions with:`,
+    `  {`,
+    `    "projectId": "${projectId}",`,
+    `    "topic": <the topic string returned by generateSocialCaption in step 2>,`,
+    `    "captions": [`,
+    `      { "platform": "tiktok",    "text": "<your rewritten tiktok caption>" },`,
+    `      { "platform": "facebook",  "text": "<your rewritten facebook caption>" },`,
+    `      { "platform": "instagram", "text": "<your rewritten instagram caption>" },`,
+    `      { "platform": "youtube",   "text": "<your rewritten youtube caption>" }`,
+    `    ],`,
+    `    "hashtags": ["#tag1", "#tag2", ...]`,
+    `  }`,
+    ``,
+    `Stop immediately after step 4 succeeds. Do NOT call any other MCP tool. Do NOT call renderProject. Do NOT call updateStoryboard. Do NOT call AskUserQuestion. If a step fails, retry that step once; do not give up silently.`,
   ].join('\n')
 }
 
@@ -140,15 +153,38 @@ async function runRewrite(job: OrchestrateJob): Promise<void> {
   const projectId = job.projectId!
   const prompt = buildPrompt(projectId)
 
-  let saved = false
+  // Capture the generatedAt timestamp BEFORE Claude runs so we can
+  // verify (post-flight) that the storyboard's socialCaptions got
+  // refreshed. This is more reliable than scraping the stream-json
+  // tool_result text, which depends on MCP server output formatting.
+  let preGeneratedAt: string | undefined
+  try {
+    const pre = await readStoryboard(projectId)
+    preGeneratedAt = pre.socialCaptions?.generatedAt
+  } catch {
+    // best-effort — if read fails, post-flight check still works as
+    // long as Claude writes ANY socialCaptions entry.
+  }
+
+  // Track what Claude actually did so an error message can tell the
+  // user "Claude called X, Y but never called rewriteSocialCaptions"
+  // rather than the opaque current one.
+  const toolsCalled: string[] = []
+
   try {
     const result = await runClaudeCli({
       prompt,
       allowedTools: ALLOWED_TOOLS,
+      // 5 min hard timeout — a healthy run is 30-60s. If we're past 5
+      // min something is wedged (network, MCP crash) and we should
+      // surface that to the user instead of leaving the dialog
+      // spinning forever.
+      timeoutMs: 5 * 60 * 1000,
       onPid: async (pid) => {
         await writeOrchestrateJob({ ...job, pid, step: 'AI đã sẵn sàng…' })
       },
       onToolUse: async ({ name }) => {
+        toolsCalled.push(name)
         const current = await readOrchestrateJob(job.jobId)
         if (!current || current.status !== 'running') return
         // Surface progress without changing phase — there's only one
@@ -164,17 +200,35 @@ async function runRewrite(job: OrchestrateJob): Promise<void> {
                 : 'Claude đang viết caption và hashtag…'
         await writeOrchestrateJob({ ...current, step: label })
       },
-      onToolResult: async ({ text }) => {
-        // The rewriteSocialCaptions tool returns { projectId, captionsCount, ... }.
-        // Treat its success as the signal that we've persisted captions.
-        if (text.includes('captionsCount') && extractProjectId(text) === projectId) {
-          saved = true
-        }
-      },
     })
+
+    // Post-flight verify: read the storyboard and check the
+    // socialCaptions.generatedAt advanced. This works regardless of
+    // how the MCP stream-json wraps tool output.
+    let saved = false
+    try {
+      const post = await readStoryboard(projectId)
+      const postGeneratedAt = post.socialCaptions?.generatedAt
+      saved =
+        !!postGeneratedAt && postGeneratedAt !== preGeneratedAt
+    } catch (err) {
+      void log.error('post-flight read failed', {
+        jobId: job.jobId,
+        message: err instanceof Error ? err.message : String(err),
+      })
+    }
+
     if (!saved) {
+      void log.warn('captions not persisted', {
+        jobId: job.jobId,
+        toolsCalled,
+        stderrTail: result.stderr.slice(-500),
+      })
+      const calledLabel = toolsCalled.length
+        ? `Claude called: ${toolsCalled.join(', ')}.`
+        : 'Claude did not call any MCP tool.'
       throw new Error(
-        `Claude finished without calling rewriteSocialCaptions. stderr tail: ${result.stderr.slice(-300)}`
+        `${calledLabel} rewriteSocialCaptions was not persisted. ${result.stderr ? `stderr tail: ${result.stderr.slice(-300)}` : ''}`
       )
     }
   } catch (err) {
