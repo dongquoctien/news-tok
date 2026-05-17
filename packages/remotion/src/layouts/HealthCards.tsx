@@ -109,6 +109,15 @@ export function HealthCards({
         {media ? (
           <KenBurns
             src={media.path}
+            kind={media.kind}
+            durationSec={media.durationSec}
+            videoTrim={segment.videoTrim}
+            loop={segment.videoLoop}
+            muted={segment.videoMuted}
+            volume={segment.videoVolume}
+            playbackRate={segment.videoPlaybackRate}
+            fit={segment.videoFit}
+            align={segment.videoAlign}
             from={1.02}
             to={1.08}
             panX={0}

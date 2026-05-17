@@ -258,6 +258,105 @@ describe('SegmentSchema', () => {
       })
     ).toThrow()
   })
+
+  it('accepts a video background with videoTrim window', () => {
+    // Mirrors what Studio writes when the user drops an mp4 into the
+    // Library and gates the start of the clip — `endSec` is intentionally
+    // optional so "trim from 0.5s to end of clip" stays terse.
+    const seg = SegmentSchema.parse({
+      ...baseSeg,
+      visuals: {
+        background: {
+          kind: 'video',
+          path: 'projects/p1/library/abc.mp4',
+          source: { provider: 'local', id: 'clip.mp4' },
+          durationSec: 4,
+          width: 1080,
+          height: 1920,
+        },
+      },
+      videoTrim: { startSec: 0.5 },
+    })
+    expect(seg.visuals.background?.kind).toBe('video')
+    expect(seg.visuals.background?.durationSec).toBe(4)
+    expect(seg.videoTrim?.startSec).toBe(0.5)
+    expect(seg.videoTrim?.endSec).toBeUndefined()
+  })
+
+  it('rejects videoTrim.startSec below 0', () => {
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoTrim: { startSec: -1 } })
+    ).toThrow()
+  })
+
+  it('defaults videoTrim.startSec to 0 when only endSec is provided', () => {
+    const seg = SegmentSchema.parse({ ...baseSeg, videoTrim: { endSec: 3 } })
+    expect(seg.videoTrim?.startSec).toBe(0)
+    expect(seg.videoTrim?.endSec).toBe(3)
+  })
+
+  it('leaves the six video control fields undefined when absent (renderer applies defaults)', () => {
+    // Schema stores video knobs as optional so a fresh segment literal
+    // still parses without naming every flag. The renderer (KenBurns +
+    // NewsTokComposition) applies the documented defaults at point of
+    // use — loop=true, muted=true, volume=1, rate=1, fit=cover,
+    // align=center — so phase-1 video output stays byte-identical.
+    const seg = SegmentSchema.parse(baseSeg)
+    expect(seg.videoLoop).toBeUndefined()
+    expect(seg.videoMuted).toBeUndefined()
+    expect(seg.videoVolume).toBeUndefined()
+    expect(seg.videoPlaybackRate).toBeUndefined()
+    expect(seg.videoFit).toBeUndefined()
+    expect(seg.videoAlign).toBeUndefined()
+  })
+
+  it('round-trips explicit video control values', () => {
+    const seg = SegmentSchema.parse({
+      ...baseSeg,
+      videoLoop: false,
+      videoMuted: false,
+      videoVolume: 0.8,
+      videoPlaybackRate: 1.5,
+      videoFit: 'contain',
+      videoAlign: 'top-center',
+    })
+    expect(seg.videoLoop).toBe(false)
+    expect(seg.videoMuted).toBe(false)
+    expect(seg.videoVolume).toBe(0.8)
+    expect(seg.videoPlaybackRate).toBe(1.5)
+    expect(seg.videoFit).toBe('contain')
+    expect(seg.videoAlign).toBe('top-center')
+  })
+
+  it('rejects videoVolume outside 0..1', () => {
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoVolume: 1.5 })
+    ).toThrow()
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoVolume: -0.1 })
+    ).toThrow()
+  })
+
+  it('rejects videoPlaybackRate outside 0.25..2', () => {
+    // 0.25x is the slowest Remotion <OffthreadVideo> handles cleanly
+    // without audio-pitch tearing; 2x is the fastest before the codec
+    // pipeline starts dropping frames.
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoPlaybackRate: 3 })
+    ).toThrow()
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoPlaybackRate: 0.1 })
+    ).toThrow()
+  })
+
+  it('rejects unknown videoFit / videoAlign values', () => {
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoFit: 'stretch' })
+    ).toThrow()
+    expect(() =>
+      SegmentSchema.parse({ ...baseSeg, videoAlign: 'middle' })
+    ).toThrow()
+  })
 })
 
 // ---------------------------------------------------------------------------

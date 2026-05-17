@@ -43,6 +43,15 @@ export const KeyPoint = ({ segment, project, textStyle, fontOverride, colorOverr
       {bg ? (
         <KenBurns
           src={bg.path}
+          kind={bg.kind}
+          durationSec={bg.durationSec}
+          videoTrim={segment.videoTrim}
+          loop={segment.videoLoop}
+          muted={segment.videoMuted}
+          volume={segment.videoVolume}
+          playbackRate={segment.videoPlaybackRate}
+          fit={segment.videoFit}
+          align={segment.videoAlign}
           from={1.12}
           to={1.0}
           panX={-0.05}

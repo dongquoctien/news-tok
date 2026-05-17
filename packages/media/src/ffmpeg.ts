@@ -169,7 +169,47 @@ export function ffmpegBinary(): string {
  * ships only `ffmpeg.exe`.
  */
 export async function probeDurationSec(path: string): Promise<number> {
-  const stderr = await new Promise<string>((resolveRun, rejectRun) => {
+  const stderr = await runFfmpegProbe(path)
+  return parseDurationFromStderr(stderr)
+}
+
+export type VideoMetadata = {
+  /** Total duration in seconds. */
+  durationSec: number
+  /** Frame width in pixels — undefined if no video stream was detected. */
+  width?: number
+  /** Frame height in pixels — undefined if no video stream was detected. */
+  height?: number
+}
+
+/**
+ * Probe a video file for duration + frame dimensions in one ffmpeg call.
+ * Used by the Studio library upload route to populate AssetRef metadata
+ * (`durationSec` so the renderer can loop the clip; `width`/`height` so
+ * Studio can pick a fitting thumbnail size).
+ *
+ * Reuses the same `ffmpeg -i ... -f null -` trick as `probeDurationSec`
+ * so we don't need a separate ffprobe binary (ffmpeg-static ships only
+ * `ffmpeg.exe`). Dimensions come from the `Stream #0:0(...): Video: ...
+ * <w>x<h>` line ffmpeg prints to stderr alongside the duration.
+ */
+export async function probeVideoMetadata(path: string): Promise<VideoMetadata> {
+  const stderr = await runFfmpegProbe(path)
+  const durationSec = parseDurationFromStderr(stderr)
+  // Match the first "Video:" stream line and pull WxH out of it. ffmpeg
+  // sometimes appends " [SAR ...]" after the dimensions so we anchor on
+  // a comma or space boundary after the trailing digit.
+  const dimMatch = stderr.match(/Video:[^\n]*?\s(\d{2,5})x(\d{2,5})(?:[\s,\]]|$)/)
+  if (!dimMatch) return { durationSec }
+  return {
+    durationSec,
+    width: Number.parseInt(dimMatch[1]!, 10),
+    height: Number.parseInt(dimMatch[2]!, 10),
+  }
+}
+
+function runFfmpegProbe(path: string): Promise<string> {
+  return new Promise<string>((resolveRun, rejectRun) => {
     const proc = spawn(bin(), ['-hide_banner', '-i', path, '-f', 'null', '-'], {
       stdio: ['ignore', 'ignore', 'pipe'],
     })
@@ -178,9 +218,11 @@ export async function probeDurationSec(path: string): Promise<number> {
       buf += chunk.toString('utf8')
     })
     proc.on('error', rejectRun)
-    // ffmpeg exits 0 here; even on missing output container it still reports.
     proc.on('close', () => resolveRun(buf))
   })
+}
+
+function parseDurationFromStderr(stderr: string): number {
   const match = stderr.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/)
   if (!match) throw new Error('Could not parse duration from ffmpeg output')
   const hours = Number.parseInt(match[1]!, 10)
