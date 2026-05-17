@@ -16,6 +16,33 @@ import { resolve } from 'node:path'
 import { REPO_ROOT } from '@news-tok/render'
 
 /**
+ * Resolve the path to the news-tok MCP config so Claude CLI can spawn
+ * the workspace MCP server (which exposes `mcp__news-tok__*` tools).
+ *
+ * Order:
+ *   1. `.mcp.json` at the repo root — the canonical, gitignored copy a
+ *      user creates from `.mcp.json.example`.
+ *   2. `.mcp.json.example` — committed fallback that points at
+ *      `packages/mcp-server/dist/index.js`. Same shape as a real
+ *      `.mcp.json` so we can pass it directly. Means a fresh checkout
+ *      that hasn't run `cp .mcp.json.example .mcp.json` still gets the
+ *      MCP tools attached to subprocess Claude runs.
+ *
+ * Returns `null` when neither file exists — caller decides whether to
+ * fail loudly or run without MCP.
+ */
+export function resolveMcpConfig(): string | null {
+  const candidates = [
+    resolve(REPO_ROOT, '.mcp.json'),
+    resolve(REPO_ROOT, '.mcp.json.example'),
+  ]
+  for (const path of candidates) {
+    if (existsSync(path)) return path
+  }
+  return null
+}
+
+/**
  * Resolve the Claude CLI binary path. Honors `CLAUDE_CLI_PATH` env var
  * for custom installs, then falls back to:
  *   - `claude` on macOS / Linux (PATH lookup)
@@ -74,6 +101,15 @@ export type RunClaudeCliOptions = {
    * Claude CLI can read CLAUDE.md + load the workspace MCP server.
    */
   cwd?: string
+  /**
+   * Hard timeout in milliseconds. If the subprocess doesn't exit in
+   * time, it gets killed and the promise rejects with a timeout
+   * error. Default is unset (no timeout) for the orchestrate flow —
+   * caller routes that have a known upper bound (caption regenerate
+   * ~60s) should pass a value so a stuck Claude doesn't keep the
+   * route hanging indefinitely.
+   */
+  timeoutMs?: number
 }
 
 export type RunClaudeCliResult = {
@@ -93,6 +129,7 @@ export type RunClaudeCliResult = {
  */
 export async function runClaudeCli(opts: RunClaudeCliOptions): Promise<RunClaudeCliResult> {
   const cliPath = resolveClaudeCli()
+  const mcpConfig = resolveMcpConfig()
   const args = [
     '-p',
     opts.prompt,
@@ -104,6 +141,15 @@ export async function runClaudeCli(opts: RunClaudeCliOptions): Promise<RunClaude
     '--add-dir',
     REPO_ROOT,
   ]
+  // Without --mcp-config Claude CLI inherits whatever MCP servers the
+  // user has set up in their global Claude config (or none). Force-pin
+  // the workspace `news-tok` MCP server so the subprocess can call
+  // mcp__news-tok__* tools regardless of how the user's machine is
+  // configured. Falls through to the user's global config when neither
+  // .mcp.json nor .mcp.json.example exists in the repo.
+  if (mcpConfig) {
+    args.push('--mcp-config', mcpConfig)
+  }
 
   // shell:false + native .exe (on Windows) gives a single faithful argv
   // handoff. stdio[0]='ignore' explicitly closes claude's stdin so it
@@ -192,10 +238,37 @@ export async function runClaudeCli(opts: RunClaudeCliOptions): Promise<RunClaude
     stderr += chunk.toString('utf8')
   })
 
+  // Hard-kill the subprocess if it overshoots the caller's timeout.
+  // Without this, a Claude run that hangs on a tool call (network
+  // wedge, MCP server crash, etc.) keeps the Node process busy until
+  // someone manually cancels the job.
+  let timedOut = false
+  let timer: ReturnType<typeof setTimeout> | null = null
+  if (opts.timeoutMs && opts.timeoutMs > 0) {
+    timer = setTimeout(() => {
+      timedOut = true
+      if (child.pid) {
+        try {
+          process.kill(child.pid)
+        } catch {
+          // already gone
+        }
+      }
+    }, opts.timeoutMs)
+  }
+
   const exitCode = await new Promise<number | null>((resolveExit, rejectExit) => {
     child.on('error', rejectExit)
     child.on('exit', (code) => resolveExit(code))
   })
+
+  if (timer) clearTimeout(timer)
+
+  if (timedOut) {
+    throw new Error(
+      `Claude CLI timed out after ${opts.timeoutMs}ms. stderr tail: ${stderr.slice(-300)}`
+    )
+  }
 
   if (exitCode !== 0 && !cancelled) {
     throw new Error(`claude exited ${exitCode}: ${stderr.slice(-500)}`)
