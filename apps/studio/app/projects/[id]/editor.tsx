@@ -55,6 +55,7 @@ import { layoutNeedsSlot } from '@/lib/layouts-catalog'
 import { StylePicker } from '@/components/studio/style-picker'
 import { FontPicker } from '@/components/studio/font-picker'
 import { ColorPicker } from '@/components/studio/color-picker'
+import { StyleCopyPaste } from '@/components/studio/style-copy-paste'
 import { SocialCaptionDialog } from '@/components/studio/social-caption-dialog'
 import { ProjectSettingsDialog } from '@/components/studio/project-settings-dialog'
 import { SfxPicker } from '@/components/studio/sfx-picker'
@@ -347,6 +348,119 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           return s
         })
         return { ...p, segments: next, updatedAt: new Date().toISOString() }
+      })
+    },
+    []
+  )
+
+  /**
+   * Paste a previously-copied style cluster onto one or more segments
+   * in a single atomic setProject call. The "cluster" includes layout
+   * id + slot fields (eyebrow / chips / fileId), text style id, font
+   * override, and colour override.
+   *
+   * Three modes:
+   *   - 'segment'   — paste onto `targetSegmentId` only.
+   *   - 'sceneKind' — paste onto every segment whose scene kind
+   *                   matches `targetSceneKind` (eg every title).
+   *   - 'all'       — paste onto every segment in the project.
+   *
+   * Variant-scoped behaviour: if the user is previewing a variant
+   * (variantId !== null) AND the source was copied while previewing
+   * a variant too, the variant-scoped overrides (textStyle / font /
+   * colour BySegmentId) are written too so the paste is faithful to
+   * what the user was looking at. Otherwise we touch only the
+   * segment-level fields and leave variant overrides alone.
+   *
+   * One setProject call so React Studio doesn't re-render four times
+   * for one user action — important when "Paste to all" hits 12
+   * segments.
+   */
+  const applyStylePaste = useCallback(
+    (input: {
+      snapshot: {
+        layoutId: string | undefined
+        eyebrow: string | undefined
+        chips: string[] | undefined
+        fileId: string | undefined
+        textStyleId: string | undefined
+        fontOverride: string | undefined
+        colorOverride: ColorOverride | undefined
+        sourceVariantId: string | null
+      }
+      mode: 'segment' | 'sceneKind' | 'all'
+      targetSegmentId: string
+      targetSceneKind: string
+      variantId: string | null
+    }) => {
+      const { snapshot, mode, targetSegmentId, targetSceneKind, variantId } = input
+      const writeVariantOverrides =
+        !!variantId && variantId === snapshot.sourceVariantId
+
+      const shouldTouch = (s: Segment): boolean => {
+        if (mode === 'segment') return s.id === targetSegmentId
+        if (mode === 'sceneKind') return String(s.scene) === targetSceneKind
+        return true
+      }
+
+      setProject((p) => {
+        const segments = p.segments.map((s) => {
+          if (!shouldTouch(s)) return s
+          // Build the segment-level patch. Always copy the layout
+          // cluster + style overrides — pasting "nothing" (undefined)
+          // for a field is intentional, the user wants the target to
+          // match the source exactly even if the source had no value.
+          return {
+            ...s,
+            layoutId: snapshot.layoutId,
+            eyebrow: snapshot.eyebrow,
+            chips: snapshot.chips,
+            fileId: snapshot.fileId,
+            textStyleId: snapshot.textStyleId,
+            fontOverride: snapshot.fontOverride,
+            colorOverride: snapshot.colorOverride,
+          }
+        })
+
+        let variants = p.variants ?? []
+        if (writeVariantOverrides && variantId) {
+          // Determine which segment ids the paste targeted so we can
+          // mirror the override write into the variant maps. Same
+          // shouldTouch rule, just collected to a list.
+          const targetIds = p.segments.filter(shouldTouch).map((s) => s.id)
+          variants = variants.map((v) => {
+            if (v.id !== variantId) return v
+            const nextStyle = { ...(v.textStyleBySegmentId ?? {}) }
+            const nextFont = { ...(v.fontOverrideBySegmentId ?? {}) }
+            const nextColor = { ...(v.colorOverrideBySegmentId ?? {}) }
+            for (const id of targetIds) {
+              // Setting to the snapshot value (including undefined)
+              // overrides the variant's previous pin. We delete the
+              // key when the snapshot has no value, so the variant
+              // falls back to the segment-level write above instead
+              // of a stale variant pin.
+              if (snapshot.textStyleId) nextStyle[id] = snapshot.textStyleId
+              else delete nextStyle[id]
+              if (snapshot.fontOverride) nextFont[id] = snapshot.fontOverride
+              else delete nextFont[id]
+              if (snapshot.colorOverride) nextColor[id] = snapshot.colorOverride
+              else delete nextColor[id]
+            }
+            return {
+              ...v,
+              textStyleBySegmentId: nextStyle,
+              fontOverrideBySegmentId: nextFont,
+              colorOverrideBySegmentId: nextColor,
+            }
+          })
+        }
+
+        return {
+          ...p,
+          segments,
+          variants,
+          updatedAt: new Date().toISOString(),
+        }
       })
     },
     []
@@ -1077,6 +1191,13 @@ export function ProjectEditor({ initial }: { initial: Project }) {
           {selected ? (
             <SegmentEditor
               segment={selected}
+              segmentIndex={
+                // 1-based — matches how the segment list numbers
+                // them ("1. TITLE 5.0s …"). findIndex is O(n)
+                // per render but the list maxes at a couple dozen
+                // segments; a memo would be heavier than the lookup.
+                project.segments.findIndex((s) => s.id === selected.id) + 1
+              }
               language={project.language}
               aspect={project.aspect}
               activeVariantId={previewVariantId}
@@ -1101,6 +1222,15 @@ export function ProjectEditor({ initial }: { initial: Project }) {
                 applyColor({
                   ...args,
                   segmentId: selected.id,
+                  variantId: previewVariantId,
+                })
+              }
+              onPasteStyle={(args) =>
+                applyStylePaste({
+                  snapshot: args.snapshot,
+                  mode: args.mode,
+                  targetSegmentId: selected.id,
+                  targetSceneKind: String(selected.scene),
                   variantId: previewVariantId,
                 })
               }
@@ -1165,10 +1295,12 @@ function SegmentEditor({
   aspect,
   activeVariantId,
   variants,
+  segmentIndex,
   onChange,
   onApplyStyle,
   onApplyFont,
   onApplyColor,
+  onPasteStyle,
   onUserStyleSaved,
   projectId,
   customSfx,
@@ -1180,6 +1312,9 @@ function SegmentEditor({
   emptySegmentCount,
 }: {
   segment: Segment
+  /** 1-based position in the storyboard. Used by the style-clipboard
+   *  hint copy ("Đã chép từ segment 2 (…)"). */
+  segmentIndex: number
   language: Project['language']
   aspect: Project['aspect']
   activeVariantId: string | null
@@ -1196,6 +1331,23 @@ function SegmentEditor({
   onApplyColor: (input: {
     colorOverride: ColorOverride
     scope: 'segmentInVariant' | 'segment' | 'all'
+  }) => void
+  /** Paste a previously-copied style cluster onto one (mode=segment),
+   *  some (mode=sceneKind), or all (mode=all) segments. The snapshot
+   *  is the StyleSnapshot from style-clipboard; we widen to a
+   *  structural type so editor.tsx doesn't need to import the hook. */
+  onPasteStyle: (input: {
+    snapshot: {
+      layoutId: string | undefined
+      eyebrow: string | undefined
+      chips: string[] | undefined
+      fileId: string | undefined
+      textStyleId: string | undefined
+      fontOverride: string | undefined
+      colorOverride: ColorOverride | undefined
+      sourceVariantId: string | null
+    }
+    mode: 'segment' | 'sceneKind' | 'all'
   }) => void
   onUserStyleSaved: (style: TextStyle) => void
   projectId: string
@@ -1543,6 +1695,17 @@ function SegmentEditor({
 
       {tab === 'style' ? (
         <>
+      {/* Copy/paste the entire style cluster (layout + slots + text
+          style + font + colour) so users can configure one segment
+          and clone its look onto others instead of repeating every
+          picker by hand. In-memory clipboard, cleared on reload. */}
+      <StyleCopyPaste
+        segment={segment}
+        segmentIndex={segmentIndex}
+        activeVariantId={activeVariantId}
+        variants={variants ?? []}
+        onPaste={(mode, snapshot) => onPasteStyle({ snapshot, mode })}
+      />
       <div>
         <Label>Layout</Label>
         <div className="mt-1 space-y-2">
