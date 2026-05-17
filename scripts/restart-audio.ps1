@@ -35,26 +35,63 @@ function Write-Step {
     Write-Host "==> $Message" -ForegroundColor Cyan
 }
 
+function Kill-StubbornDependents {
+    # On Lenovo laptops, TPHKLOAD (Lenovo Hotkey Client Loader) depends
+    # on Audiosrv AND refuses to stop via SCM -- both `Stop-Service
+    # -Force` and `sc.exe stop` silently no-op. As long as it's running
+    # and "depending" on Audiosrv, Windows refuses to stop Audiosrv.
+    #
+    # Workaround: kill the process directly with taskkill /F. Windows
+    # SCM then sees the service as crashed and auto-respawns it after
+    # ~30s (because StartType=Automatic). During that gap Audiosrv is
+    # free to restart, which is the only thing we actually need.
+    #
+    # Same pattern catches Toshiba's TPHKLOAD, Dell's stuck audio
+    # helpers, and any other OEM service that has the same misbehavior.
+    $known = @('TPHKLOAD')
+    foreach ($name in $known) {
+        $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+        if (-not $svc -or $svc.Status -ne 'Running') { continue }
+
+        $procInfo = Get-CimInstance Win32_Service -Filter "Name='$name'" -ErrorAction SilentlyContinue
+        if (-not $procInfo -or -not $procInfo.ProcessId) { continue }
+
+        Write-Host "    Killing stubborn dependent: $name (PID $($procInfo.ProcessId))" -ForegroundColor DarkGray
+        & taskkill.exe /F /PID $procInfo.ProcessId /T 2>&1 | Out-Null
+        Start-Sleep -Milliseconds 400
+    }
+}
+
 function Restart-AudiosrvOnly {
     # We only restart Audiosrv (Windows Audio), NOT AudioEndpointBuilder.
     #
-    # Why: AudioEndpointBuilder commonly has OEM dependents (TPHKLOAD on
-    # Lenovo / Toshiba hotkey loaders, plus a few Realtek + Dell helpers)
-    # that refuse to stop even via `sc.exe stop` because the OEM software
-    # marks them non-stoppable. Trying to restart AudioEndpointBuilder
-    # then fails and the whole script bails out before Audiosrv even
-    # gets a chance.
-    #
     # Audiosrv is the one that actually holds the WASAPI session handles
-    # we want to free, and it has NO dependents on a clean Windows
-    # install -- so restarting just Audiosrv is both sufficient for the
-    # stale-handle freeze AND safe across OEM machines.
+    # we want to free. AudioEndpointBuilder is just the device enumerator
+    # and bouncing it on OEM laptops triggers exactly the dependent-locked
+    # bail-out we're trying to avoid.
     Write-Step "Restarting Audiosrv (Windows Audio) ..."
     try {
         Restart-Service -Name 'Audiosrv' -Force -ErrorAction Stop
         Write-Host "    OK" -ForegroundColor Green
     } catch {
-        Write-Warning "Failed to restart Audiosrv : $($_.Exception.Message)"
+        # First attempt failed -- usually because a stubborn dependent
+        # service (TPHKLOAD on Lenovo, etc.) is locking Audiosrv via
+        # SCM. Try again after killing those dependents' processes.
+        $msg = $_.Exception.Message
+        if ($msg -match 'Cannot stop (\w+)') {
+            Write-Host "    First attempt blocked by dependent. Trying harder..." -ForegroundColor DarkYellow
+            Kill-StubbornDependents
+            Start-Sleep -Milliseconds 500
+            try {
+                Restart-Service -Name 'Audiosrv' -Force -ErrorAction Stop
+                Write-Host "    OK (after killing stubborn dependents)" -ForegroundColor Green
+                Write-Host "    Note: Lenovo hotkey service will auto-respawn in ~30s." -ForegroundColor DarkGray
+                return
+            } catch {
+                Write-Warning "Still failed after kill: $($_.Exception.Message)"
+            }
+        }
+        Write-Warning "Failed to restart Audiosrv : $msg"
         Write-Warning "  (Are you running PowerShell as Administrator?)"
         exit 1
     }
