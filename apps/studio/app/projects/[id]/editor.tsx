@@ -1080,6 +1080,11 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               onSelectVariant={setPreviewVariantId}
               onRenderVariant={(variantId) => triggerRender(variantId)}
               renderingVariantId={renderingVariantId}
+              renderProgress={
+                renderStatus === 'running' && renderingVariantId
+                  ? renderProgress
+                  : undefined
+              }
               outputs={outputsByVariant}
             />
           </div>
