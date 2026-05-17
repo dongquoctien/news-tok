@@ -154,7 +154,7 @@ function CaptionCard({
       <Textarea
         readOnly
         value={text}
-        className="mt-2 min-h-[200px] flex-1 resize-y font-mono text-xs leading-relaxed"
+        className="mt-2 min-h-[140px] flex-1 resize-y font-mono text-xs leading-relaxed"
         onFocus={(e) => e.currentTarget.select()}
       />
       {/* Sanitize badge — visible only when something was actually
@@ -329,7 +329,7 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent className="max-w-5xl">
+      <DialogContent className="flex max-h-[85vh] max-w-4xl flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Share2 className="size-5" />
@@ -394,7 +394,7 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
         ) : error ? (
           <p className="text-sm text-destructive">{error}</p>
         ) : data ? (
-          <div className="relative">
+          <div className="relative flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto">
             {/* Loading overlay during Refresh. Dimmed bg keeps the
                 stale data visible underneath so the user can compare
                 old vs new once it lands; spinner + sub-text mirrors
@@ -467,7 +467,7 @@ export function SocialCaptionDialog({ projectId, trigger }: SocialCaptionDialogP
             </div>
             {/* 4 cards on desktop (1 per platform incl. YouTube), wrap
                 to 2 cols at md and 1 col on mobile. */}
-            <div className="grid auto-rows-fr grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-2 xl:grid-cols-4">
+            <div className="grid auto-rows-fr grid-cols-1 gap-3 overflow-y-auto pr-1 md:grid-cols-2">
               {data.captions.map((c) => (
                 <CaptionCard
                   key={c.platform}
