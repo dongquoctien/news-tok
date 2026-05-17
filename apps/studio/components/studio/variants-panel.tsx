@@ -19,6 +19,13 @@ export type VariantsPanelProps = {
   onRenderVariant: (variantId: string) => void
   /** Variant currently being rendered (one at a time). */
   renderingVariantId?: string | null
+  /**
+   * Live progress for the variant identified by `renderingVariantId`.
+   * Range 0..1 (matches Remotion's `onProgress` callback). The panel
+   * formats this as a percentage in the status slot beside the spinner
+   * so users can tell whether ffmpeg is 5% in or 95% in.
+   */
+  renderProgress?: number
   /** Map of variantId → output mp4 absolute path (from previous renders). */
   outputs?: Record<string, string>
 }
@@ -66,6 +73,7 @@ export function VariantsPanel({
   onSelectVariant,
   onRenderVariant,
   renderingVariantId,
+  renderProgress,
   outputs = {},
 }: VariantsPanelProps) {
   const [openedVideoUrl, setOpenedVideoUrl] = useState<string | null>(null)
@@ -149,9 +157,11 @@ export function VariantsPanel({
                       Open
                     </button>
                   ) : isRendering ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground">
+                    <span className="inline-flex items-center gap-1 text-[10px] tabular-nums text-muted-foreground">
                       <Loader2 className="size-3 animate-spin" />
-                      …
+                      {typeof renderProgress === 'number'
+                        ? `${Math.round(Math.max(0, Math.min(1, renderProgress)) * 100)}%`
+                        : '…'}
                     </span>
                   ) : (
                     <span
