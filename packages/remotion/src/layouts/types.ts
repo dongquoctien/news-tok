@@ -49,6 +49,18 @@ export type LayoutProps = {
   segment: Segment
   /** Full project for niche reads — aspect, showSceneBadges, title. */
   project: Project
+  /**
+   * URL the renderer / Studio resolved for the NEWSTOKVN brand logo
+   * PNG, e.g. `/newstokvn-logo.png` (Studio Next public) or
+   * `/public/newstokvn-logo.png` (Remotion renderer's publicDir).
+   * Outro layouts read this directly via `<Img src={brandLogoUrl}>`
+   * so the same JSX renders correctly in both environments without
+   * hardcoding a path that only works in one.
+   *
+   * Optional — non-outro layouts ignore it. When undefined the
+   * layout falls back to a placeholder or skips the logo entirely.
+   */
+  brandLogoUrl?: string
 }
 
 export type LayoutComponent = ComponentType<LayoutProps>

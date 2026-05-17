@@ -32,6 +32,19 @@ export type NewsTokCompositionProps = {
    * Ignored when `storyboard.logo.kind !== 'image'`.
    */
   logoUrl?: string
+  /**
+   * URL for the NEWSTOKVN brand logo PNG, resolved by the caller for
+   * the environment it runs in:
+   *   - Studio <Player>: `/newstokvn-logo.png` (Next public folder).
+   *   - Renderer: `/public/newstokvn-logo.png` (Remotion's publicDir
+   *     is `data/`; `stageBrandAssets()` copies the source PNG into
+   *     it before bundling).
+   *
+   * Forwarded to layouts via `LayoutProps.brandLogoUrl` so outro
+   * layouts can render the logo without knowing which environment
+   * they're running in.
+   */
+  brandLogoUrl?: string
 }
 
 /**
@@ -271,6 +284,7 @@ export const NewsTokComposition = ({
   variantId,
   sfxUrlMap = {},
   logoUrl,
+  brandLogoUrl,
 }: NewsTokCompositionProps) => {
   const { fps } = useVideoConfig()
   const subtitlesEnabled = storyboard.subtitles?.enabled
@@ -375,6 +389,7 @@ export const NewsTokComposition = ({
                 textStyle={style}
                 fontOverride={fontOverride}
                 colorOverride={colorOverride}
+                brandLogoUrl={brandLogoUrl}
               />
             ) : (
               <MissingScene segment={segment} project={storyboard} />
