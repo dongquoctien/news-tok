@@ -704,12 +704,20 @@ function PreviewedTextInline({ style, text }: { style: TextStyle; text: string }
         ? 'flex-end'
         : 'center'
   const animStyle = previewAnimationStyle(style.enter, style.enterDurationSec)
+  // Per-edge fallback: same rule as the renderer's `anchorStyle`.
+  const topPct = style.marginTopPct ?? style.marginPct
+  const rightPct = style.marginRightPct ?? style.marginPct
+  const bottomPct = style.marginBottomPct ?? style.marginPct
+  const leftPct = style.marginLeftPct ?? style.marginPct
   return (
     <div
       style={{
         position: 'absolute',
         inset: 0,
-        padding: `${style.marginPct}%`,
+        paddingTop: `${topPct}%`,
+        paddingRight: `${rightPct}%`,
+        paddingBottom: `${bottomPct}%`,
+        paddingLeft: `${leftPct}%`,
         display: 'flex',
         flexDirection: 'column',
         justifyContent: justify,
