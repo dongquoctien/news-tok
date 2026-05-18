@@ -128,6 +128,15 @@ export async function POST(
             durationSec: result.durationSec,
           },
         },
+        // Persist the per-word timings so karaoke subtitles can render
+        // against the freshly-synthesized audio. The renderer's hasSubs
+        // check requires `segment.wordBoundaries.length > 0`; without
+        // this line the SRT track silently disappears after a batch
+        // resynth. Some Edge TTS retries fall back without boundaries
+        // (very short utterances); we still write the (possibly empty)
+        // array so any stale boundaries from the prior voice never
+        // drift out of sync with the new audio.
+        wordBoundaries: result.wordBoundaries,
       }
       mutated = true
 

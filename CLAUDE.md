@@ -230,8 +230,13 @@ All MCP tools are exposed under the `mcp__news-tok__*` namespace:
 - `searchMusic({ mood, durationSec, provider? })` — returns a local cached
   audio path. Always use `provider: 'archive'` (default). Pixabay's music
   API has been deprecated (404) — do not pass `provider: 'pixabay'`.
-- `synthesizeVoice({ text, voiceId, speed? })` — returns an mp3 path plus
-  per-word timing info.
+- `synthesizeVoice({ text, voiceId, speed? })` — returns `{ asset,
+  durationSec, wordBoundaries, recommendedSegmentDurationSec }`. **You
+  MUST copy `wordBoundaries` onto the matching `segment.wordBoundaries`
+  field when you write the storyboard** — karaoke subtitles only render
+  when `segment.wordBoundaries.length > 0` (NewsTokComposition.tsx
+  gates the `<Subtitles>` block on this). Skipping this step ships
+  silent subtitles.
 - `listVoices({ language })` — returns Edge TTS voice IDs for `vi-VN` or
   `en-US`.
 - `renderSegment({ projectId, segmentId })` — renders one segment to mp4.
@@ -344,15 +349,18 @@ per segment.
    step 7) so the user can override individual backgrounds from
    Studio if they prefer the bài báo's photo.
 
-   Update the segment's `visuals` and `audio.narration` with the
-   returned paths. **Always set `segment.durationSec =
-   recommendedSegmentDurationSec`** from the `synthesizeVoice`
-   response — Edge TTS read length is content-driven (Vietnamese
-   sentences with polysyllabic words frequently run 7–8s when
-   estimated 5–6s) and the renderer will otherwise cut the audio when
-   the slot is shorter than the clip. If `recommendedSegmentDurationSec`
-   is missing (older MCP servers), compute it as
-   `Math.max(plannedSec, narrationDurationSec + 0.4)` yourself.
+   Update the segment's `visuals`, `audio.narration`, AND
+   `segment.wordBoundaries` with the returned values. **Always set
+   `segment.durationSec = recommendedSegmentDurationSec`** from the
+   `synthesizeVoice` response — Edge TTS read length is content-driven
+   (Vietnamese sentences with polysyllabic words frequently run 7–8s
+   when estimated 5–6s) and the renderer will otherwise cut the audio
+   when the slot is shorter than the clip. If
+   `recommendedSegmentDurationSec` is missing (older MCP servers),
+   compute it as `Math.max(plannedSec, narrationDurationSec + 0.4)`
+   yourself. **`wordBoundaries` is NOT optional even though the schema
+   allows omitting it** — without it, karaoke subtitles disappear from
+   the rendered video.
 7. Call `searchMusic({ mood, durationSec })` for the project background
    music and set `bgMusic`. **Use the `musicMood` returned by
    `researchProjectAesthetic` in step 3**. If that mood produces no
