@@ -179,6 +179,7 @@ export function TimestampedWar({
           wordBoundaries={segment.wordBoundaries}
           fontOverride={fontOverride}
           colorOverride={colorOverride}
+          highlightStyle={segment.highlightStyle}
         />
       </div>
 

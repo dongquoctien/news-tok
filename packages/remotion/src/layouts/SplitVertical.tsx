@@ -99,6 +99,7 @@ export function SplitVertical({
             wordBoundaries={segment.wordBoundaries}
             fontOverride={fontOverride}
             colorOverride={colorOverride}
+            highlightStyle={segment.highlightStyle}
           />
         </div>
       </AbsoluteFill>

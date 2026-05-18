@@ -1,8 +1,16 @@
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { HighlightedRun } from './highlight-run.js'
 
-export const FadeInText = ({ text, style, fontOverride, colorOverride }: TextPrimitiveProps) => {
+export const FadeInText = ({
+  text,
+  parts,
+  highlightStyle,
+  style,
+  fontOverride,
+  colorOverride,
+}: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -13,7 +21,7 @@ export const FadeInText = ({ text, style, fontOverride, colorOverride }: TextPri
   })
   return (
     <div style={{ ...typographyStyle(style, style.fontSize * r.font, fontOverride, colorOverride), opacity }}>
-      {text}
+      {parts && highlightStyle ? <HighlightedRun runs={parts} highlight={highlightStyle} /> : text}
     </div>
   )
 }

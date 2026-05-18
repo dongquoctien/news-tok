@@ -115,6 +115,7 @@ export const TitleCard = ({
         wordBoundaries={segment.wordBoundaries}
         fontOverride={fontOverride}
         colorOverride={colorOverride}
+        highlightStyle={segment.highlightStyle}
       />
       {narration ? <Audio src={narration.path} /> : null}
     </AbsoluteFill>

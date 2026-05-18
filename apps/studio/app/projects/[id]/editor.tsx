@@ -56,6 +56,7 @@ import { StylePicker } from '@/components/studio/style-picker'
 import { FontPicker } from '@/components/studio/font-picker'
 import { ColorPicker } from '@/components/studio/color-picker'
 import { StyleCopyPaste } from '@/components/studio/style-copy-paste'
+import { HighlightStyleBuilder } from '@/components/studio/highlight-style-builder'
 import { SocialCaptionDialog } from '@/components/studio/social-caption-dialog'
 import { ProjectSettingsDialog } from '@/components/studio/project-settings-dialog'
 import { SfxPicker } from '@/components/studio/sfx-picker'
@@ -386,6 +387,7 @@ export function ProjectEditor({ initial }: { initial: Project }) {
         textStyleId: string | undefined
         fontOverride: string | undefined
         colorOverride: ColorOverride | undefined
+        highlightStyle: import('@news-tok/shared/schema').HighlightStyle | undefined
         sourceVariantId: string | null
       }
       mode: 'segment' | 'sceneKind' | 'all'
@@ -419,6 +421,10 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             textStyleId: snapshot.textStyleId,
             fontOverride: snapshot.fontOverride,
             colorOverride: snapshot.colorOverride,
+            // Highlight style — segment-scoped only; no variant map
+            // because the segment-level field already captures every
+            // `**...**` look the user can configure.
+            highlightStyle: snapshot.highlightStyle,
           }
         })
 
@@ -1350,6 +1356,7 @@ function SegmentEditor({
       textStyleId: string | undefined
       fontOverride: string | undefined
       colorOverride: ColorOverride | undefined
+      highlightStyle: import('@news-tok/shared/schema').HighlightStyle | undefined
       sourceVariantId: string | null
     }
     mode: 'segment' | 'sceneKind' | 'all'
@@ -1919,6 +1926,12 @@ function SegmentEditor({
           </p>
         </div>
       </div>
+
+      <HighlightStyleBuilder
+        segmentText={segment.text}
+        value={segment.highlightStyle}
+        onChange={(next) => onChange({ highlightStyle: next })}
+      />
         </>
       ) : null}
 

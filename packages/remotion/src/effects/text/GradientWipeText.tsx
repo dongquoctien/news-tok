@@ -1,6 +1,7 @@
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { HighlightedRun } from './highlight-run.js'
 
 /**
  * Reveals the text behind a gradient mask that wipes left → right over
@@ -9,6 +10,8 @@ import { useResponsive } from '../../scenes/sizing.js'
  */
 export const GradientWipeText = ({
   text,
+  parts,
+  highlightStyle,
   style,
   fontOverride,
   colorOverride,
@@ -26,7 +29,7 @@ export const GradientWipeText = ({
   const clip = `inset(0 ${(1 - progress) * 100}% 0 0)`
   return (
     <div style={{ ...css, clipPath: clip, WebkitClipPath: clip }}>
-      {text}
+      {parts && highlightStyle ? <HighlightedRun runs={parts} highlight={highlightStyle} /> : text}
     </div>
   )
 }

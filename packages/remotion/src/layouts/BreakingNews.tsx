@@ -189,6 +189,7 @@ export function BreakingNews({
           wordBoundaries={segment.wordBoundaries}
           fontOverride={fontOverride}
           colorOverride={colorOverride}
+          highlightStyle={segment.highlightStyle}
         />
       </div>
 

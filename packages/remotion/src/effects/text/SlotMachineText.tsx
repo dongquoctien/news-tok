@@ -1,6 +1,7 @@
 import { useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { highlightCss } from './highlight-run.js'
 
 const POOL = [
   'breaking', 'update', 'news', 'live', 'alert', 'hot', 'just-in', 'today',
@@ -14,6 +15,8 @@ const POOL = [
  */
 export const SlotMachineText = ({
   text,
+  wordHighlightMask,
+  highlightStyle,
   style,
   fontOverride,
   colorOverride,
@@ -32,6 +35,8 @@ export const SlotMachineText = ({
       {words.map((real, i) => {
         const localFrame = frame - i * wordStartStride
         const cycleIndex = Math.floor(localFrame / cycleFramesPerWord)
+        const isFlagged = highlightStyle && wordHighlightMask?.[i]
+        const hcss = isFlagged ? highlightCss(highlightStyle, r.unit) : undefined
         if (localFrame < 0) {
           return (
             <span key={i} style={{ display: 'inline-block', marginRight: '0.28em', opacity: 0 }}>
@@ -41,7 +46,7 @@ export const SlotMachineText = ({
         }
         if (cycleIndex >= cyclesPerWord) {
           return (
-            <span key={i} style={{ display: 'inline-block', marginRight: '0.28em' }}>
+            <span key={i} style={{ display: 'inline-block', marginRight: '0.28em', ...hcss }}>
               {real}
             </span>
           )

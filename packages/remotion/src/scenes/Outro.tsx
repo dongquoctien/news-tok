@@ -91,6 +91,7 @@ export const Outro = ({ segment, project, textStyle, fontOverride, colorOverride
         wordBoundaries={segment.wordBoundaries}
         fontOverride={fontOverride}
         colorOverride={colorOverride}
+        highlightStyle={segment.highlightStyle}
       />
       {narration ? <Audio src={narration.path} /> : null}
     </AbsoluteFill>

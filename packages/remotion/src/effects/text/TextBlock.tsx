@@ -1,7 +1,8 @@
 import type { CSSProperties } from 'react'
 import { AbsoluteFill } from 'remotion'
-import type { ColorOverride, TextStyle, WordBoundary } from '@news-tok/shared/schema'
+import type { ColorOverride, HighlightStyle, TextStyle, WordBoundary } from '@news-tok/shared/schema'
 import { useResponsive } from '../../scenes/sizing.js'
+import { parseHighlightMarkers } from './parse-highlight.js'
 import { FadeInText } from './FadeInText.js'
 import { SlideUpText } from './SlideUpText.js'
 import { SlideDownText } from './SlideDownText.js'
@@ -30,6 +31,9 @@ import {
 
 type PrimitiveProps = {
   text: string
+  parts?: ReturnType<typeof parseHighlightMarkers>['runs']
+  wordHighlightMask?: boolean[]
+  highlightStyle?: HighlightStyle
   style: TextStyle
   wordBoundaries?: WordBoundary[]
   fontOverride?: string
@@ -37,9 +41,12 @@ type PrimitiveProps = {
 }
 
 const PRIMITIVES: Record<TextStyle['enter'], (p: PrimitiveProps) => React.JSX.Element> = {
-  none: ({ text, style, fontOverride, colorOverride }) => (
+  none: ({ text, parts, wordHighlightMask, highlightStyle, style, fontOverride, colorOverride }) => (
     <FadeInText
       text={text}
+      parts={parts}
+      wordHighlightMask={wordHighlightMask}
+      highlightStyle={highlightStyle}
       style={{ ...style, enterDurationSec: 0 }}
       fontOverride={fontOverride}
       colorOverride={colorOverride}
@@ -135,6 +142,7 @@ export function TextBlock({
   wordBoundaries,
   fontOverride,
   colorOverride,
+  highlightStyle,
 }: {
   text: string
   style: TextStyle
@@ -144,13 +152,28 @@ export function TextBlock({
   wordBoundaries?: WordBoundary[]
   fontOverride?: string
   colorOverride?: ColorOverride
+  /**
+   * When set together with `**...**` markers in `text`, every match is
+   * repainted by the renderer using this style. When absent (or text
+   * has no markers), the headline renders verbatim — primitives skip
+   * the highlight branch.
+   */
+  highlightStyle?: HighlightStyle
 }) {
   const r = useResponsive()
   const Primitive = PRIMITIVES[style.enter] ?? FadeInText
   const plate = plateStyle(style, r.unit * 16)
+  // Parse `**...**` markers once and feed the result to the primitive.
+  // Primitives that need a single string use `parsed.strippedText` (via
+  // the `text` prop); whole-string primitives read `parsed.runs`; per-
+  // word primitives read `parsed.wordMask`.
+  const parsed = parseHighlightMarkers(text)
   const wrap = (
     <Primitive
-      text={text}
+      text={parsed.strippedText}
+      parts={parsed.hasHighlight ? parsed.runs : undefined}
+      wordHighlightMask={parsed.hasHighlight ? parsed.wordMask : undefined}
+      highlightStyle={parsed.hasHighlight ? highlightStyle : undefined}
       style={style}
       wordBoundaries={wordBoundaries}
       fontOverride={fontOverride}

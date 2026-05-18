@@ -1,6 +1,7 @@
 import { spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { highlightCss } from './highlight-run.js'
 
 /**
  * Each word flips from flat (rotateX 90deg) to upright. CSS equivalent:
@@ -10,6 +11,8 @@ import { useResponsive } from '../../scenes/sizing.js'
  */
 export const WordReveal3dText = ({
   text,
+  wordHighlightMask,
+  highlightStyle,
   style,
   fontOverride,
   colorOverride,
@@ -36,6 +39,8 @@ export const WordReveal3dText = ({
           config: { damping: 10, mass: 0.55, stiffness: 170 },
         })
         const rotateX = (1 - s) * -90
+        const isFlagged = highlightStyle && wordHighlightMask?.[i]
+        const hcss = isFlagged ? highlightCss(highlightStyle, r.unit) : undefined
         return (
           <span
             key={i}
@@ -46,6 +51,7 @@ export const WordReveal3dText = ({
               transform: `rotateX(${rotateX}deg)`,
               marginRight: '0.28em',
               whiteSpace: 'nowrap',
+              ...hcss,
             }}
           >
             {w}

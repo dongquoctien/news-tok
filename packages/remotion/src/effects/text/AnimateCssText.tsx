@@ -1,6 +1,15 @@
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { HighlightedRun } from './highlight-run.js'
+
+/** Render `parts` with highlight when both are present; otherwise plain `text`. */
+function renderBody(props: TextPrimitiveProps): React.ReactNode {
+  if (props.parts && props.highlightStyle) {
+    return <HighlightedRun runs={props.parts} highlight={props.highlightStyle} />
+  }
+  return props.text
+}
 
 /**
  * Frame-driven ports of seven animate.css entrance / attention seekers.
@@ -47,7 +56,7 @@ export const BounceInText = (props: TextPrimitiveProps) => {
   const opacity = interpolate(t, [0, 0.6], [0, 1], { extrapolateRight: 'clamp' })
   return (
     <div style={wrapStyle(props, props.style.fontSize * r.font, `scale(${scale})`, opacity)}>
-      {props.text}
+      {renderBody(props)}
     </div>
   )
 }
@@ -76,7 +85,7 @@ export const RubberBandText = (props: TextPrimitiveProps) => {
   )
   return (
     <div style={wrapStyle(props, props.style.fontSize * r.font, `scaleX(${sx}) scaleY(${sy})`, 1)}>
-      {props.text}
+      {renderBody(props)}
     </div>
   )
 }
@@ -109,7 +118,7 @@ export const FlipInXText = (props: TextPrimitiveProps) => {
           'center'
         )}
       >
-        {props.text}
+        {renderBody(props)}
       </div>
     </div>
   )
@@ -134,7 +143,7 @@ export const LightSpeedInText = (props: TextPrimitiveProps) => {
         opacity
       )}
     >
-      {props.text}
+      {renderBody(props)}
     </div>
   )
 }
@@ -167,7 +176,7 @@ export const RollInText = (props: TextPrimitiveProps) => {
         transformOrigin: 'left center',
       }}
     >
-      {props.text}
+      {renderBody(props)}
     </div>
   )
 }
@@ -196,7 +205,7 @@ export const TadaText = (props: TextPrimitiveProps) => {
         opacity
       )}
     >
-      {props.text}
+      {renderBody(props)}
     </div>
   )
 }
@@ -225,7 +234,7 @@ export const JelloText = (props: TextPrimitiveProps) => {
         opacity
       )}
     >
-      {props.text}
+      {renderBody(props)}
     </div>
   )
 }

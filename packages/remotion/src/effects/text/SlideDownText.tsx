@@ -1,8 +1,16 @@
 import { spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { HighlightedRun } from './highlight-run.js'
 
-export const SlideDownText = ({ text, style, fontOverride, colorOverride }: TextPrimitiveProps) => {
+export const SlideDownText = ({
+  text,
+  parts,
+  highlightStyle,
+  style,
+  fontOverride,
+  colorOverride,
+}: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -16,7 +24,7 @@ export const SlideDownText = ({ text, style, fontOverride, colorOverride }: Text
         transform: `translateY(${offset}px)`,
       }}
     >
-      {text}
+      {parts && highlightStyle ? <HighlightedRun runs={parts} highlight={highlightStyle} /> : text}
     </div>
   )
 }
