@@ -1,13 +1,21 @@
 import { spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { highlightCss } from './highlight-run.js'
 
 /**
  * Per-word stagger with an overshoot pop — the TikTok-caption look.
  * Each word kicks in 3 frames after the previous one. Once the last word
  * has popped, it stays visible for the rest of the segment.
  */
-export const WordPopText = ({ text, style, fontOverride, colorOverride }: TextPrimitiveProps) => {
+export const WordPopText = ({
+  text,
+  wordHighlightMask,
+  highlightStyle,
+  style,
+  fontOverride,
+  colorOverride,
+}: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -32,6 +40,8 @@ export const WordPopText = ({ text, style, fontOverride, colorOverride }: TextPr
         })
         // Overshoot to 1.15 (was 1.05) so the bounce is visible at 30fps.
         const scale = s < 0.7 ? 0.5 + s * (1.15 - 0.5) / 0.7 : 1.15 - (s - 0.7) * 0.15 / 0.3
+        const isHighlighted = highlightStyle && wordHighlightMask?.[i]
+        const hcss = isHighlighted ? highlightCss(highlightStyle, r.unit) : undefined
         return (
           <span
             key={i}
@@ -42,6 +52,7 @@ export const WordPopText = ({ text, style, fontOverride, colorOverride }: TextPr
               transformOrigin: 'center center',
               marginRight: '0.28em',
               whiteSpace: 'nowrap',
+              ...hcss,
             }}
           >
             {w}

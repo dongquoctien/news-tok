@@ -1,6 +1,7 @@
 import { AbsoluteFill, Audio } from 'remotion'
 import { KenBurns } from '../effects/KenBurns.js'
 import { useResponsive } from '../scenes/sizing.js'
+import { highlightCss } from '../effects/text/highlight-run.js'
 import type { LayoutProps } from './types.js'
 
 /**
@@ -151,15 +152,19 @@ export function StoryVtv({
           wordBreak: 'break-word',
         }}
       >
-        {parts.map((p, i) =>
-          p.kind === 'accent' ? (
-            <span key={i} style={{ color: '#facc15' }}>
+        {parts.map((p, i) => {
+          if (p.kind !== 'accent') return <span key={i}>{p.text}</span>
+          // segment.highlightStyle override path — same as StoryPill /
+          // StoryChip. Legacy yellow remains the default.
+          const css = segment.highlightStyle
+            ? highlightCss(segment.highlightStyle, r.unit)
+            : { color: '#facc15' }
+          return (
+            <span key={i} style={css}>
               {p.text}
             </span>
-          ) : (
-            <span key={i}>{p.text}</span>
           )
-        )}
+        })}
       </div>
 
       {narration ? <Audio src={narration.path} /> : null}

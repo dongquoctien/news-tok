@@ -1,5 +1,6 @@
-import type { ColorOverride, TextStyle, WordBoundary } from '@news-tok/shared/schema'
+import type { ColorOverride, HighlightStyle, TextStyle, WordBoundary } from '@news-tok/shared/schema'
 import { resolveFontFamily } from '../../scenes/fonts.js'
+import type { TextRun } from './parse-highlight.js'
 
 /**
  * Common props every text-motion primitive accepts. The primitive owns
@@ -7,7 +8,32 @@ import { resolveFontFamily } from '../../scenes/fonts.js'
  * margin, plate, stroke).
  */
 export type TextPrimitiveProps = {
+  /**
+   * Marker-free narration text. Always equal to `parts.map(p => p.text).join('')`
+   * — kept on the prop set so primitives that need a single string
+   * (e.g. TypewriterText measuring chars/sec) don't have to rejoin.
+   */
   text: string
+  /**
+   * Parsed runs of the headline, alternating `{ text, highlighted }`.
+   * Whole-string primitives map this directly into spans; per-word
+   * primitives ignore it in favour of `wordHighlightMask` (which is
+   * already aligned with their tokenisation).
+   */
+  parts?: TextRun[]
+  /**
+   * Per-token highlight bits, aligned with `text.split(/\s+/)` after
+   * stripping `**` markers. Per-word primitives use it to repaint just
+   * the matching word `<span>`s; whole-string primitives ignore it.
+   */
+  wordHighlightMask?: boolean[]
+  /**
+   * Optional highlight style. When set together with `parts` or
+   * `wordHighlightMask`, primitives repaint the flagged span(s) using
+   * `HighlightedRun` / `highlightCss`. When absent, the headline
+   * renders as plain text exactly like before.
+   */
+  highlightStyle?: HighlightStyle
   style: TextStyle
   /** Per-word timing from Edge TTS. Used by `wordHighlight` and `karaoke`. */
   wordBoundaries?: WordBoundary[]

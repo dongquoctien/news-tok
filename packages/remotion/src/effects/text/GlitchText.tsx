@@ -1,6 +1,7 @@
 import { useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { HighlightedRun } from './highlight-run.js'
 
 /**
  * RGB-split glitch with deterministic per-frame jitter. CSS would do this
@@ -14,6 +15,8 @@ const FLICKER = [1, 1, 0.85, 1, 1, 0.9, 1, 1, 0.95, 1]
 
 export const GlitchText = ({
   text,
+  parts,
+  highlightStyle,
   style,
   fontOverride,
   colorOverride,
@@ -43,7 +46,7 @@ export const GlitchText = ({
         transform: `translate(${dx * 0.4}px, ${dy * 0.4}px)`,
       }}
     >
-      {text}
+      {parts && highlightStyle ? <HighlightedRun runs={parts} highlight={highlightStyle} /> : text}
     </div>
   )
 }

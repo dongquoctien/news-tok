@@ -56,6 +56,11 @@ function rateString(speed: number | undefined): string | undefined {
  */
 function sanitizeSsmlText(text: string): string {
   return text
+    // Strip `**markers**` first — they exist purely to flag a phrase for
+    // on-screen highlight (segment.highlightStyle). Leaving them in would
+    // make Edge TTS literally read "sao sao" around the phrase, and the
+    // word boundaries would index the asterisks as separate tokens.
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
     // Smart quotes → ASCII to avoid SSML/XML encoding surprises.
     .replace(/[‘’‚‛]/g, "'")
     .replace(/[“”„‟]/g, '"')
@@ -95,7 +100,11 @@ export async function listVoices(language?: Language): Promise<Voice[]> {
 }
 
 export async function synthesize(opts: SynthesizeOptions): Promise<SynthesizeResult> {
-  const key = cacheKey(['edge-tts', opts.voiceId, opts.speed ?? 1, opts.text])
+  // Cache key uses the marker-stripped text so adding / removing `**...**`
+  // highlight markers (which never reach the TTS engine) does not invalidate
+  // the cached audio — same voice + same spoken words = same mp3.
+  const spokenText = opts.text.replace(/\*\*([^*]+)\*\*/g, '$1')
+  const key = cacheKey(['edge-tts', opts.voiceId, opts.speed ?? 1, spokenText])
   const mp3Path = cachePath('tts', key, 'mp3')
   const wbPath = cachePath('tts', key, 'words.json')
 
@@ -123,7 +132,7 @@ export async function synthesize(opts: SynthesizeOptions): Promise<SynthesizeRes
   await mkdir(resolvePath(mp3Path, '..'), { recursive: true })
 
   const rate = rateString(opts.speed)
-  const safeText = sanitizeSsmlText(opts.text)
+  const safeText = sanitizeSsmlText(spokenText)
   const tmpDir = await mkdtemp(resolvePath(tmpdir(), 'news-tok-tts-'))
   try {
     let audioFilePath: string

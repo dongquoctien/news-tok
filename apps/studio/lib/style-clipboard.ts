@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import type { ColorOverride } from '@news-tok/shared/schema'
+import type { ColorOverride, HighlightStyle } from '@news-tok/shared/schema'
 
 /**
  * Snapshot of the "style cluster" copied from one segment so it can
@@ -35,6 +35,12 @@ export type StyleSnapshot = {
   textStyleId: string | undefined
   fontOverride: string | undefined
   colorOverride: ColorOverride | undefined
+  /**
+   * Style for `**...**` phrases in the narration text. Captured here so
+   * paste-onto-all-segments can clone the highlight look without the
+   * user having to redo bgStyle / colors per segment.
+   */
+  highlightStyle: HighlightStyle | undefined
   // Provenance for the hint chip
   sourceSegmentId: string
   sourceSegmentLabel: string

@@ -1,6 +1,7 @@
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { HighlightedRun } from './highlight-run.js'
 
 /**
  * Diagonal clip-path wipe — text appears behind a slanted edge. CSS:
@@ -9,6 +10,8 @@ import { useResponsive } from '../../scenes/sizing.js'
  */
 export const MaskWipeText = ({
   text,
+  parts,
+  highlightStyle,
   style,
   fontOverride,
   colorOverride,
@@ -34,7 +37,7 @@ export const MaskWipeText = ({
         WebkitClipPath: clip,
       }}
     >
-      {text}
+      {parts && highlightStyle ? <HighlightedRun runs={parts} highlight={highlightStyle} /> : text}
     </div>
   )
 }

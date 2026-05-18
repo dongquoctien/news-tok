@@ -1,6 +1,7 @@
 import { spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { highlightCss } from './highlight-run.js'
 
 /**
  * Karaoke caption — each word animates in sync with `wordBoundaries`
@@ -21,6 +22,9 @@ import { useResponsive } from '../../scenes/sizing.js'
  */
 export const KaraokeText = ({
   text,
+  parts,
+  wordHighlightMask,
+  highlightStyle,
   style,
   wordBoundaries,
   fontOverride,
@@ -42,7 +46,19 @@ export const KaraokeText = ({
   const spokenColor = colorOverride?.primary ?? style.color
 
   if (!wordBoundaries || wordBoundaries.length === 0) {
-    return <div style={{ ...base, display: 'block' }}>{text}</div>
+    return (
+      <div style={{ ...base, display: 'block' }}>
+        {parts && highlightStyle
+          ? parts.map((p, i) =>
+              p.highlighted ? (
+                <span key={i} style={highlightCss(highlightStyle, r.unit)}>{p.text}</span>
+              ) : (
+                <span key={i}>{p.text}</span>
+              )
+            )
+          : text}
+      </div>
+    )
   }
 
   return (
@@ -81,6 +97,8 @@ export const KaraokeText = ({
             : 0
         const underlineWidth = mode === 'underline' ? `${underlineFrac * 100}%` : '0%'
 
+        const isFlagged = highlightStyle && wordHighlightMask?.[i]
+        const hcss = isFlagged ? highlightCss(highlightStyle, r.unit) : undefined
         return (
           <span
             key={i}
@@ -93,6 +111,13 @@ export const KaraokeText = ({
               whiteSpace: 'nowrap',
               position: 'relative',
               transition: 'none',
+              // Highlight repaint (plate / underline / glow + bold).
+              // Karaoke `color` and `transform` above stay authoritative
+              // for the live reading position, so we apply the highlight
+              // background / weight / italic on top without disturbing
+              // colour transitions.
+              ...hcss,
+              ...(isActive ? { color } : {}),
             }}
           >
             {wb.text}

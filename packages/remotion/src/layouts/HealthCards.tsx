@@ -155,6 +155,7 @@ export function HealthCards({
           wordBoundaries={segment.wordBoundaries}
           fontOverride={fontOverride}
           colorOverride={colorOverride}
+          highlightStyle={segment.highlightStyle}
         />
       </div>
 

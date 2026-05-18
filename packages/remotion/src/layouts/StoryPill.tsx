@@ -1,6 +1,7 @@
 import { AbsoluteFill, Audio } from 'remotion'
 import { KenBurns } from '../effects/KenBurns.js'
 import { useResponsive } from '../scenes/sizing.js'
+import { highlightCss } from '../effects/text/highlight-run.js'
 import type { LayoutProps } from './types.js'
 
 /**
@@ -122,26 +123,31 @@ export function StoryPill({
             wordBreak: 'break-word',
           }}
         >
-          {parts.map((p, i) =>
-            p.kind === 'accent' ? (
-              <span
-                key={i}
-                style={{
+          {parts.map((p, i) => {
+            if (p.kind !== 'accent') return <span key={i}>{p.text}</span>
+            // When the segment ships its own `highlightStyle`, the user
+            // owns the look — the layout drops its hardcoded red plate
+            // and delegates to `highlightCss` so plate / underline /
+            // glow all become reachable. The legacy red plate is the
+            // fallback so storyboards saved before this field render
+            // identically.
+            const css = segment.highlightStyle
+              ? highlightCss(segment.highlightStyle, r.unit)
+              : {
                   background: '#dc2626',
                   color: '#ffffff',
                   padding: `${4 * r.unit}px ${14 * r.unit}px`,
                   borderRadius: 8,
                   marginRight: 6 * r.unit,
-                  boxDecorationBreak: 'clone',
-                  WebkitBoxDecorationBreak: 'clone',
-                }}
-              >
+                  boxDecorationBreak: 'clone' as const,
+                  WebkitBoxDecorationBreak: 'clone' as const,
+                }
+            return (
+              <span key={i} style={css}>
                 {p.text}
               </span>
-            ) : (
-              <span key={i}>{p.text}</span>
             )
-          )}
+          })}
         </div>
       </div>
 

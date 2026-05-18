@@ -131,6 +131,7 @@ export function PhoneMockup({
           wordBoundaries={segment.wordBoundaries}
           fontOverride={fontOverride}
           colorOverride={colorOverride}
+          highlightStyle={segment.highlightStyle}
         />
 
         {chips && chips.length > 0 ? (

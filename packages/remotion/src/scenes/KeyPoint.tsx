@@ -103,6 +103,7 @@ export const KeyPoint = ({ segment, project, textStyle, fontOverride, colorOverr
         wordBoundaries={segment.wordBoundaries}
         fontOverride={fontOverride}
         colorOverride={colorOverride}
+        highlightStyle={segment.highlightStyle}
       />
       {narration ? <Audio src={narration.path} /> : null}
     </AbsoluteFill>

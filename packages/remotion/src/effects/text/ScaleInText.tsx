@@ -1,8 +1,16 @@
 import { spring, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { HighlightedRun } from './highlight-run.js'
 
-export const ScaleInText = ({ text, style, fontOverride, colorOverride }: TextPrimitiveProps) => {
+export const ScaleInText = ({
+  text,
+  parts,
+  highlightStyle,
+  style,
+  fontOverride,
+  colorOverride,
+}: TextPrimitiveProps) => {
   const frame = useCurrentFrame()
   const { fps } = useVideoConfig()
   const r = useResponsive()
@@ -20,7 +28,7 @@ export const ScaleInText = ({ text, style, fontOverride, colorOverride }: TextPr
         transformOrigin: 'center center',
       }}
     >
-      {text}
+      {parts && highlightStyle ? <HighlightedRun runs={parts} highlight={highlightStyle} /> : text}
     </div>
   )
 }

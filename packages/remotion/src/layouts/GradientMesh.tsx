@@ -123,6 +123,7 @@ export function GradientMesh({
           wordBoundaries={segment.wordBoundaries}
           fontOverride={fontOverride}
           colorOverride={colorOverride}
+          highlightStyle={segment.highlightStyle}
         />
       </div>
       {narration ? <Audio src={narration.path} /> : null}

@@ -58,6 +58,10 @@ export function StyleCopyPaste({
       textStyleId: resolveTextStyleId(segment, activeVariantId, variants),
       fontOverride: resolveFontOverride(segment, activeVariantId, variants),
       colorOverride: resolveColorOverride(segment, activeVariantId, variants),
+      // highlightStyle is segment-scoped (no per-variant override yet),
+      // so the resolver here is trivial — but kept for symmetry with
+      // the other fields if we ever add variant scoping.
+      highlightStyle: segment.highlightStyle,
       sourceSegmentId: segment.id,
       sourceSegmentLabel: shortLabel(segment, segmentIndex),
       sourceVariantId: activeVariantId,
@@ -229,6 +233,7 @@ function summarise(s: StyleSnapshot): string {
   if (s.textStyleId) parts.push(`style ${s.textStyleId}`)
   if (s.fontOverride) parts.push(`font ${s.fontOverride}`)
   if (s.colorOverride && Object.keys(s.colorOverride).length > 0) parts.push('colour')
+  if (s.highlightStyle) parts.push('highlight')
   if (s.eyebrow) parts.push('eyebrow')
   if (s.chips && s.chips.length > 0) parts.push(`${s.chips.length} chips`)
   return parts.length === 0 ? 'không có gì để dán' : parts.join(' · ')

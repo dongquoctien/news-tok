@@ -127,6 +127,7 @@ export function Card({
             wordBoundaries={segment.wordBoundaries}
             fontOverride={fontOverride}
             colorOverride={colorOverride}
+            highlightStyle={segment.highlightStyle}
           />
         </div>
       </AbsoluteFill>

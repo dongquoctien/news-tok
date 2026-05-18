@@ -233,6 +233,53 @@ export const ColorOverrideSchema = z.object({
 export type ColorOverride = z.infer<typeof ColorOverrideSchema>
 
 /**
+ * Inline highlight style for phrases wrapped in `**...**` inside the
+ * narration `text`. Applies to the on-screen HEADLINE only — Edge TTS
+ * narration strips the markers before voicing, and subtitle karaoke is
+ * intentionally untouched (subtitles already have their own per-word
+ * styling pipeline).
+ *
+ * Every field is optional so a user can change just one knob (e.g.
+ * "make the bold phrase yellow") without redefining the whole style.
+ * The renderer falls back to legacy defaults when this object is
+ * absent — built-in 3 "story*" layouts keep their red/yellow plate;
+ * other layouts simply leave `**phrase**` rendered as plain text.
+ */
+export const HighlightStyleSchema = z.object({
+  /** Text color of the highlighted phrase. */
+  color: z.string().optional(),
+  /**
+   * Background color used when `bgStyle === 'plate'`. Ignored for
+   * 'underline' / 'glow' / 'none' — those rely on `color` only (or
+   * derive their own accent from it for the glow halo).
+   */
+  bgColor: z.string().optional(),
+  /**
+   * How the highlight is painted:
+   *   - `plate`     → solid rounded rectangle behind the phrase (default)
+   *   - `underline` → coloured underline beneath the phrase
+   *   - `glow`      → soft text-shadow halo around the phrase
+   *   - `none`      → only the color / weight / italic change applies
+   */
+  bgStyle: z.enum(['plate', 'underline', 'glow', 'none']).default('plate'),
+  /** Override font weight (300..900) for the highlighted phrase. */
+  fontWeight: z.number().int().min(100).max(900).optional(),
+  /** Render the highlighted phrase in italic. */
+  italic: z.boolean().default(false),
+  /**
+   * Horizontal padding for the plate, in % of the base font size.
+   * Ignored when `bgStyle !== 'plate'`. Default 4 matches StoryPill.
+   */
+  paddingPct: z.number().min(0).max(20).default(4),
+  /**
+   * Plate corner radius in px (at 9:16 base; renderer scales it).
+   * Ignored when `bgStyle !== 'plate'`.
+   */
+  radiusPx: z.number().min(0).max(40).default(8),
+})
+export type HighlightStyle = z.infer<typeof HighlightStyleSchema>
+
+/**
  * Non-destructive image edits applied to a segment's background photo.
  * The original file under `library/` or the cache stays untouched —
  * the renderer composes these as CSS `transform`, `clip-path`, and
@@ -444,6 +491,18 @@ export const SegmentSchema = z.object({
    * over this, so per-variant tweaks don't leak across renders.
    */
   colorOverride: ColorOverrideSchema.optional(),
+  /**
+   * Optional highlight style for phrases wrapped in `**...**` inside
+   * `text`. When set, every match in the narration text is repainted
+   * by the renderer using this style. The `**` markers are stripped
+   * before Edge TTS so the audio never reads "sao sao". Subtitles
+   * (karaoke under the video) are intentionally left untouched —
+   * narration headline only.
+   *
+   * Legacy "story*" layouts keep their hardcoded red/yellow plate
+   * when this field is absent so older projects render unchanged.
+   */
+  highlightStyle: HighlightStyleSchema.optional(),
   /**
    * Optional per-segment SFX override. When set, wins over `TextStyle.sfx`
    * at render time. Use to silence a style's cue (set `enterSoundId` to

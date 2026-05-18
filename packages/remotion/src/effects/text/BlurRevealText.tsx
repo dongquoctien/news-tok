@@ -1,6 +1,7 @@
 import { interpolate, useCurrentFrame, useVideoConfig } from 'remotion'
 import { typographyStyle, type TextPrimitiveProps } from './types.js'
 import { useResponsive } from '../../scenes/sizing.js'
+import { HighlightedRun } from './highlight-run.js'
 
 /**
  * Cinematic-style "fade from blur" reveal. CSS equivalent would be
@@ -11,6 +12,8 @@ import { useResponsive } from '../../scenes/sizing.js'
  */
 export const BlurRevealText = ({
   text,
+  parts,
+  highlightStyle,
   style,
   fontOverride,
   colorOverride,
@@ -34,7 +37,7 @@ export const BlurRevealText = ({
         filter: `blur(${blur}px)`,
       }}
     >
-      {text}
+      {parts && highlightStyle ? <HighlightedRun runs={parts} highlight={highlightStyle} /> : text}
     </div>
   )
 }
