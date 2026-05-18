@@ -189,7 +189,26 @@ export const TextStyleSchema = z.object({
   // Layout (relative to the 9:16 canvas; renderer adapts to 16:9 / 1:1)
   align: z.enum(['left', 'center', 'right']).default('center'),
   anchor: z.enum(['top', 'middle', 'bottom']).default('bottom'),
+  /**
+   * Uniform margin from every canvas edge. Legacy single-knob — kept
+   * as the fallback when none of the per-edge fields below is set so
+   * older styles render byte-identically.
+   */
   marginPct: z.number().min(0).max(40).default(8),
+  /**
+   * Per-edge margin overrides. Each value, when present, replaces
+   * `marginPct` for that specific edge — letting a user push the
+   * headline tighter against one side (e.g. `marginLeftPct: 2`) while
+   * keeping the other three at the uniform default. Missing fields
+   * fall back to `marginPct`.
+   *
+   * Units are % of the rendered canvas (same convention as
+   * `marginPct`), so 9:16 / 16:9 / 1:1 all read the same.
+   */
+  marginTopPct: z.number().min(0).max(40).optional(),
+  marginRightPct: z.number().min(0).max(40).optional(),
+  marginBottomPct: z.number().min(0).max(40).optional(),
+  marginLeftPct: z.number().min(0).max(40).optional(),
   // Motion
   enter: TextMotionSchema.default('fade'),
   exit: z.enum(['fade', 'slideDown', 'none']).default('fade'),

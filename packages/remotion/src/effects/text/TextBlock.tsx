@@ -100,7 +100,14 @@ function plateStyle(style: TextStyle, padBasePx: number): CSSProperties | null {
 }
 
 function anchorStyle(style: TextStyle): CSSProperties {
-  const margin = `${style.marginPct}%`
+  // Per-edge override > uniform `marginPct`. Each edge resolves
+  // independently so a user can leave 3 sides on the default and tighten
+  // just the left (`marginLeftPct: 2`) without redefining the whole
+  // layout block.
+  const top = style.marginTopPct ?? style.marginPct
+  const right = style.marginRightPct ?? style.marginPct
+  const bottom = style.marginBottomPct ?? style.marginPct
+  const left = style.marginLeftPct ?? style.marginPct
   const justify =
     style.anchor === 'top'
       ? 'flex-start'
@@ -112,7 +119,10 @@ function anchorStyle(style: TextStyle): CSSProperties {
   return {
     justifyContent: justify,
     alignItems: align,
-    padding: margin,
+    paddingTop: `${top}%`,
+    paddingRight: `${right}%`,
+    paddingBottom: `${bottom}%`,
+    paddingLeft: `${left}%`,
     pointerEvents: 'none',
   }
 }

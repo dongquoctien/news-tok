@@ -261,6 +261,12 @@ export function TextStyleBuilder({
             align: base.align,
             anchor: base.anchor,
             marginPct: base.marginPct,
+            // Carry per-edge overrides verbatim from the base so a reset
+            // on a built-in style with custom margins doesn't lose them.
+            marginTopPct: base.marginTopPct,
+            marginRightPct: base.marginRightPct,
+            marginBottomPct: base.marginBottomPct,
+            marginLeftPct: base.marginLeftPct,
           }
         case 'decorators':
           return {
@@ -450,7 +456,13 @@ function BuilderPreviewText({
       : draft.align === 'right'
         ? 'flex-end'
         : 'center'
-  const m = `${draft.marginPct}%`
+  // Per-edge override > uniform `marginPct` — same fallback rule as
+  // the renderer's `anchorStyle` so the preview matches what users see
+  // in the final mp4.
+  const topPct = draft.marginTopPct ?? draft.marginPct
+  const rightPct = draft.marginRightPct ?? draft.marginPct
+  const bottomPct = draft.marginBottomPct ?? draft.marginPct
+  const leftPct = draft.marginLeftPct ?? draft.marginPct
   const animStyle = previewAnimationStyle(draft.enter, draft.enterDurationSec)
 
   return (
@@ -459,7 +471,10 @@ function BuilderPreviewText({
         style={{
           position: 'absolute',
           inset: 0,
-          padding: m,
+          paddingTop: `${topPct}%`,
+          paddingRight: `${rightPct}%`,
+          paddingBottom: `${bottomPct}%`,
+          paddingLeft: `${leftPct}%`,
           display: 'flex',
           flexDirection: 'column',
           justifyContent: justify,
@@ -690,6 +705,57 @@ function LayoutTab({
   draft: TextStyle
   onPatch: (p: Partial<TextStyle>) => void
 }) {
+  // Resolve effective per-edge values. When the per-edge override is
+  // unset we surface `marginPct` so the slider doesn't reset to 0 the
+  // moment the user opens the tab — same trick as the renderer.
+  const top = draft.marginTopPct ?? draft.marginPct
+  const right = draft.marginRightPct ?? draft.marginPct
+  const bottom = draft.marginBottomPct ?? draft.marginPct
+  const left = draft.marginLeftPct ?? draft.marginPct
+  const linked =
+    draft.marginTopPct == null &&
+    draft.marginRightPct == null &&
+    draft.marginBottomPct == null &&
+    draft.marginLeftPct == null
+
+  // Apply the same value to whichever override the user is currently
+  // editing. When linked = true we just bump `marginPct`; otherwise we
+  // write the per-edge field so the other three keep their override.
+  const setEdge = (edge: 'top' | 'right' | 'bottom' | 'left', v: number) => {
+    if (linked) {
+      onPatch({ marginPct: v })
+      return
+    }
+    if (edge === 'top') onPatch({ marginTopPct: v })
+    if (edge === 'right') onPatch({ marginRightPct: v })
+    if (edge === 'bottom') onPatch({ marginBottomPct: v })
+    if (edge === 'left') onPatch({ marginLeftPct: v })
+  }
+
+  const setLinked = (next: boolean) => {
+    if (next) {
+      // Collapse to a single `marginPct`. Use the top edge as the
+      // canonical value (matches how the user usually reads "margin")
+      // and clear the four per-edge overrides.
+      onPatch({
+        marginPct: top,
+        marginTopPct: undefined,
+        marginRightPct: undefined,
+        marginBottomPct: undefined,
+        marginLeftPct: undefined,
+      })
+    } else {
+      // Seed per-edge fields with the current uniform value so the
+      // sliders start where the linked slider was.
+      onPatch({
+        marginTopPct: draft.marginPct,
+        marginRightPct: draft.marginPct,
+        marginBottomPct: draft.marginPct,
+        marginLeftPct: draft.marginPct,
+      })
+    }
+  }
+
   return (
     <>
       <Field label="Position">
@@ -703,15 +769,74 @@ function LayoutTab({
           (top / middle / bottom) and horizontal align (left / center / right).
         </p>
       </Field>
-      <Slider
-        label="Margin (% of canvas)"
-        min={0}
-        max={40}
-        step={1}
-        value={draft.marginPct}
-        unit="%"
-        onChange={(v) => onPatch({ marginPct: v })}
-      />
+
+      <Field label="Margin (% of canvas)">
+        <label className="flex items-center gap-2 text-xs">
+          <input
+            type="checkbox"
+            checked={linked}
+            onChange={(e) => setLinked(e.target.checked)}
+            className="size-3.5 cursor-pointer accent-primary"
+          />
+          Đồng đều 4 cạnh
+        </label>
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          Bỏ chọn để chỉnh riêng từng cạnh (ví dụ kéo left margin nhỏ
+          lại để headline sát mép trái khi anchor = left).
+        </p>
+        {linked ? (
+          <div className="mt-2">
+            <Slider
+              label="All edges"
+              min={0}
+              max={40}
+              step={1}
+              value={draft.marginPct}
+              unit="%"
+              onChange={(v) => onPatch({ marginPct: v })}
+            />
+          </div>
+        ) : (
+          <div className="mt-2 grid grid-cols-2 gap-3">
+            <Slider
+              label="Top"
+              min={0}
+              max={40}
+              step={1}
+              value={top}
+              unit="%"
+              onChange={(v) => setEdge('top', v)}
+            />
+            <Slider
+              label="Right"
+              min={0}
+              max={40}
+              step={1}
+              value={right}
+              unit="%"
+              onChange={(v) => setEdge('right', v)}
+            />
+            <Slider
+              label="Bottom"
+              min={0}
+              max={40}
+              step={1}
+              value={bottom}
+              unit="%"
+              onChange={(v) => setEdge('bottom', v)}
+            />
+            <Slider
+              label="Left"
+              min={0}
+              max={40}
+              step={1}
+              value={left}
+              unit="%"
+              onChange={(v) => setEdge('left', v)}
+            />
+          </div>
+        )}
+      </Field>
     </>
   )
 }
