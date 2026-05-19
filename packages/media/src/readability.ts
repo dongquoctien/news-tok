@@ -6,6 +6,17 @@ import type { AssetRef } from '@news-tok/shared/schema'
 import { cacheExists, cacheKey, cachePath, writeAtomic } from './cache.js'
 import { downloadToCache } from './download.js'
 
+/**
+ * Hard floor on article body length before we trigger the stealth browser
+ * fallback. Set to a value that comfortably clears every CAPTCHA / anti-bot
+ * boilerplate page we've seen in production (nld.com.vn returns ~140 chars,
+ * Cloudflare interstitial ~100, soha.vn limit page ~250) but still sits
+ * under the shortest legitimate news flash we've measured (~700 chars on
+ * "tin nhanh" stubs that have actual body content). 400 keeps the
+ * fallback off real articles while still catching every interstitial.
+ */
+const MIN_ARTICLE_TEXT_CHARS = 400
+
 export type ExtractedMedia = {
   kind: 'image' | 'video'
   url: string
@@ -218,11 +229,73 @@ async function tryDownloadImage(
   }
 }
 
+/**
+ * Run Readability on a raw HTML string. Returns null when Readability
+ * can't find an article body (e.g. the page is a CAPTCHA wall). Kept
+ * as a small helper so `extractArticle` can call it twice — once on
+ * the plain-fetch HTML, then again on the stealth-browser HTML if the
+ * first pass came back too short.
+ *
+ * Narrows `parsed` to non-null in the return type so downstream code
+ * doesn't have to re-prove the guard for every field access.
+ */
+type ParsedArticle = NonNullable<ReturnType<Readability['parse']>>
+function parseWithReadability(
+  html: string,
+  url: string
+): { parsed: ParsedArticle; media: ExtractedMedia[] } | null {
+  const dom = new JSDOM(html, { url })
+  // Extract media BEFORE Readability — Readability strips most of the
+  // DOM, including `<meta>` tags, so we have to capture them off the
+  // raw document first.
+  const media = extractMedia(dom.window.document, url)
+  const reader = new Readability(dom.window.document)
+  const parsed = reader.parse()
+  if (!parsed || !parsed.textContent) return null
+  return { parsed, media }
+}
+
+/**
+ * Stealth-browser fallback. News sites (nld.com.vn, soha.vn, some
+ * Cloudflare-fronted regional publishers) increasingly serve a
+ * CAPTCHA / anti-DDoS interstitial to plain Node `fetch` while
+ * letting real Chromium through. The crawler package already runs a
+ * stealthy Chromium for image / music scraping, so we reuse its
+ * `withPage` helper here. Dynamic import keeps Playwright off the
+ * load path for callers that never need the fallback (Tests, the
+ * MCP server build, and the happy-path Readability parse all
+ * remain Playwright-free).
+ *
+ * Returns the page HTML, or null when Chromium can't reach the URL
+ * (network, timeout, browser launch failure). Null lets the caller
+ * surface a clean error rather than crash the whole pipeline.
+ */
+async function fetchWithStealthBrowser(url: string): Promise<string | null> {
+  try {
+    const { withPage } = await import('./crawler/browser.js')
+    return await withPage(async (page) => {
+      // domcontentloaded is enough — Readability doesn't need the JS
+      // shim layer to have hydrated, and 'load' adds 5-10s on news
+      // sites with lazy ad iframes. Cap at 30s so the orchestrator
+      // doesn't sit forever on a wedged page.
+      await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 })
+      return await page.content()
+    })
+  } catch {
+    return null
+  }
+}
+
 export async function extractArticle(
   url: string,
   options: ExtractOptions = {}
 ): Promise<ExtractedArticle> {
-  const key = cacheKey(['readability', 'v2-media', url])
+  // Cache key bumped to v3 so previously-cached CAPTCHA / anti-bot
+  // bodies (from before the stealth-browser fallback shipped) get a
+  // chance to re-fetch through the real Chromium path. Older v2-media
+  // entries on disk simply become orphan cache files; they cost a few
+  // KB but don't affect correctness.
+  const key = cacheKey(['readability', 'v3-pw-fallback', url])
   const path = cachePath('articles', key, 'json')
 
   if (!options.force && cacheExists(path)) {
@@ -240,17 +313,42 @@ export async function extractArticle(
   }
   const html = await res.text()
 
-  const dom = new JSDOM(html, { url })
-  // Extract media BEFORE Readability — Readability strips most of the
-  // DOM, including `<meta>` tags, so we have to capture them off the
-  // raw document first.
-  const media = extractMedia(dom.window.document, url)
+  let extracted = parseWithReadability(html, url)
+  let usedFallback = false
 
-  const reader = new Readability(dom.window.document)
-  const parsed = reader.parse()
-  if (!parsed || !parsed.textContent) {
+  // CAPTCHA / anti-bot pages typically parse fine through Readability
+  // but yield ~50-250 chars of "Please complete this challenge" text.
+  // Re-run through the stealth browser when the body is suspiciously
+  // short OR when Readability bailed entirely. Skip the fallback when
+  // the caller already asked us to skip media downloads AND the text
+  // we got is plausible — caption-only flows don't need a slow
+  // browser launch just to fluff out the body.
+  const tooShort =
+    !extracted || extracted.parsed.textContent.trim().length < MIN_ARTICLE_TEXT_CHARS
+  if (tooShort) {
+    const fallbackHtml = await fetchWithStealthBrowser(url)
+    if (fallbackHtml) {
+      const retry = parseWithReadability(fallbackHtml, url)
+      // Only adopt the fallback when it actually beats the first pass.
+      // Some sites serve the same body to fetch and to Chromium — in
+      // that case we keep whatever the first pass produced rather than
+      // pay the browser cost for the same answer.
+      if (
+        retry &&
+        retry.parsed.textContent.trim().length >
+          (extracted?.parsed.textContent.trim().length ?? 0)
+      ) {
+        extracted = retry
+        usedFallback = true
+      }
+    }
+  }
+
+  if (!extracted) {
     throw new Error(`Readability could not extract content from ${url}`)
   }
+
+  const { parsed, media } = extracted
 
   // Auto-download images (skip videos; they can be huge). Failed
   // downloads are silently dropped — the metadata still lives in
@@ -273,6 +371,15 @@ export async function extractArticle(
     lang: parsed.lang ?? null,
     media,
     mediaAssets,
+  }
+
+  // Final guard — if even the stealth fallback couldn't get a usable
+  // body, refuse to cache + return so the orchestrator surfaces the
+  // failure cleanly instead of treating an empty article as success.
+  if (result.text.length < MIN_ARTICLE_TEXT_CHARS) {
+    throw new Error(
+      `Article body too short (${result.text.length} chars) after ${usedFallback ? 'stealth-browser fallback' : 'plain fetch'} — likely a CAPTCHA / anti-bot interstitial. Try pasting the article text directly instead of the URL.`
+    )
   }
 
   await writeAtomic(path, JSON.stringify(result, null, 2))

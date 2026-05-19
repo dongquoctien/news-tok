@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { createLogger } from '@news-tok/shared/logger'
+import { readStoryboard } from '@news-tok/render'
 import { extractProjectId, runClaudeCli } from '@/lib/claude-cli'
 import {
   findRunningJob,
@@ -411,25 +412,62 @@ async function runClaude(job: OrchestrateJob, prompt: string): Promise<void> {
     void log.warn('job cancelled', { jobId: job.jobId, projectId })
     return
   }
+
+  // A Claude CLI run that exits cleanly with a projectId can still be a
+  // partial failure: the subprocess might have called createProject and
+  // then bailed out without populating any segments (anti-bot CAPTCHA on
+  // the article URL, network wedge between tools, model refusal, …).
+  // Probe the storyboard on disk — only treat the job as completed when
+  // updateStoryboard actually wrote a non-empty `segments` array,
+  // otherwise the user lands on an empty editor and thinks the feature
+  // is broken.
+  let segmentCount = 0
+  let storyboardError: string | undefined
+  if (projectId) {
+    try {
+      const story = await readStoryboard(projectId)
+      segmentCount = story.segments.length
+    } catch (err) {
+      storyboardError = err instanceof Error ? err.message : String(err)
+    }
+  }
+  const success = !!projectId && segmentCount > 0
+
+  let failureReason: string | undefined
+  if (!success) {
+    if (!projectId) {
+      failureReason = 'AI không tạo được project (Claude CLI thoát mà không gọi createProject).'
+    } else if (storyboardError) {
+      failureReason = `Đã tạo project nhưng không đọc được storyboard: ${storyboardError}`
+    } else {
+      failureReason =
+        'AI tạo project nhưng không có segment nào — có thể bài báo bị chặn (anti-bot/CAPTCHA) hoặc nội dung quá ngắn. Thử dán nội dung dạng text thay vì URL.'
+    }
+  }
+
   await writeOrchestrateJob({
     ...(final ?? job),
-    status: projectId ? 'completed' : 'failed',
+    status: success ? 'completed' : 'failed',
     endedAt: new Date().toISOString(),
     projectId,
-    phase: projectId ? 'done' : final?.phase,
-    step: projectId ? 'Hoàn tất — đang mở Studio…' : 'Không tạo được dự án',
-    error: projectId ? undefined : 'No projectId detected in Claude output',
+    phase: success ? 'done' : final?.phase,
+    step: success ? 'Hoàn tất — đang mở Studio…' : 'Không tạo được video',
+    error: success ? undefined : failureReason,
   })
-  if (projectId) {
+  if (success) {
     void log.info('job completed', {
       jobId: job.jobId,
       projectId,
+      segmentCount,
       durationMs: Date.now() - new Date(job.startedAt).getTime(),
     })
   } else {
-    void log.error('job ended without projectId', {
+    void log.error('job ended without usable storyboard', {
       jobId: job.jobId,
+      projectId,
+      segmentCount,
       lastPhase: final?.phase,
+      reason: failureReason,
       stderrTail: stderrFinal.slice(-500),
     })
   }
