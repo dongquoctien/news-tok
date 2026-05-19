@@ -236,6 +236,64 @@ export const BUILT_IN_LAYOUTS: BuiltInLayoutMeta[] = [
     hint:
       'Tease the next clip: background photo + "VIDEO TIẾP THEO" eyebrow + bold headline + triple-stack swipe-up chevron with "Vuốt lên xem ngay".',
   },
+  // NEWSTOKVN brand-locked set — intro / keypoint / outro layouts
+  // built from the channel's banner artwork. Use as the opening
+  // beat (intro), main story beats (keypoint), and closing card
+  // (outro) so the whole video reads as one channel.
+  {
+    id: 'builtin-newstokvn-intro-cover',
+    name: 'NEWSTOKVN — Intro cover',
+    family: 'editorial',
+    slots: { media: false, eyebrow: true, chips: false, fileId: false },
+    thumbnail: '/layout-previews/builtin-newstokvn-intro-cover.png',
+    hint:
+      'Brand cover intro: deep purple radial + centered NEWSTOKVN logo + gradient caps headline + yellow lightning bolts.',
+  },
+  {
+    id: 'builtin-newstokvn-intro-marquee',
+    name: 'NEWSTOKVN — Intro marquee',
+    family: 'editorial',
+    slots: { media: false, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-intro-marquee.png',
+    hint:
+      'Energetic intro: pulsing red "CẬP NHẬT LIÊN TỤC" chip + slide-in marquee headline + flame badge + "BREAKING NEWS 24/7" red chip.',
+  },
+  {
+    id: 'builtin-newstokvn-keypoint-bulletin',
+    name: 'NEWSTOKVN — Bulletin keypoint',
+    family: 'media-led',
+    slots: { media: true, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-bulletin.png',
+    hint:
+      'TV-bulletin keypoint: purple "NEWSTOKVN · TIN NÓNG" header + boxed media + purple-plate headline + footer category strip.',
+  },
+  {
+    id: 'builtin-newstokvn-keypoint-flame',
+    name: 'NEWSTOKVN — Flame keypoint',
+    family: 'media-led',
+    slots: { media: true, eyebrow: true, chips: false, fileId: false },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-flame.png',
+    hint:
+      'Punchy keypoint: full-bleed photo + top-left flame chip + bold white headline with **purple plate** accent on the hook phrase.',
+  },
+  {
+    id: 'builtin-newstokvn-outro-channels',
+    name: 'NEWSTOKVN — Outro categories',
+    family: 'editorial',
+    slots: { media: false, eyebrow: true, chips: true, fileId: false },
+    thumbnail: '/layout-previews/builtin-newstokvn-outro-channels.png',
+    hint:
+      'Brand outro: logo + handle + 2-row grid of category chips (defaults to THỜI SỰ / PHÁP LUẬT / KHOA HỌC / CÔNG NGHỆ / ...) + red "THEO DÕI NGAY" CTA.',
+  },
+  {
+    id: 'builtin-newstokvn-outro-banner',
+    name: 'NEWSTOKVN — Outro banner recap',
+    family: 'editorial',
+    slots: { media: false, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-outro-banner.png',
+    hint:
+      'Mirrors the Intro cover at the END of the video — flame + BREAKING badges, centered logo, gradient headline, tagline. Closes the channel brand loop.',
+  },
 ]
 
 /** Look up a layout meta by id; returns undefined for user layouts
