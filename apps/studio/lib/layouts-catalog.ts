@@ -313,6 +313,51 @@ export const BUILT_IN_LAYOUTS: BuiltInLayoutMeta[] = [
       'Before/after split: 2 stacked photo frames (background + foreground[0]) with TRƯỚC / SAU chips (override via chips[0..1]) + VS badge + bottom headline.',
   },
   {
+    id: 'builtin-newstokvn-keypoint-breaking-card',
+    name: 'NEWSTOKVN — Breaking news card',
+    family: 'editorial',
+    slots: { media: true, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-breaking-card.png',
+    hint:
+      'White photo card on brand purple with red BREAKING NEWS arched chip on top + red headline + rotating LIVE globe badge + lower-third "HOT NEWS THIS MORNING" + follow footer.',
+  },
+  {
+    id: 'builtin-newstokvn-keypoint-highlight',
+    name: 'NEWSTOKVN — Yellow highlight bar',
+    family: 'editorial',
+    slots: { media: true, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-highlight.png',
+    hint:
+      'Magazine-style: photo full-bleed + yellow NEWS UPDATE chip top-left + bold caps headline with **yellow highlight bar** on accent phrases + leaf icon "Đọc thêm" CTA.',
+  },
+  {
+    id: 'builtin-newstokvn-keypoint-international',
+    name: 'NEWSTOKVN — International news',
+    family: 'editorial',
+    slots: { media: true, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-international.png',
+    hint:
+      'World-news look: red INTERNATIONAL NEWS arched chip top + slightly desaturated photo + bottom plate with yellow timestamp pill (fileId) + huge headline + subtitle body (eyebrow) + "ĐỌC THÊM" link.',
+  },
+  {
+    id: 'builtin-newstokvn-keypoint-flash-tab',
+    name: 'NEWSTOKVN — Flash news tab',
+    family: 'editorial',
+    slots: { media: true, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-flash-tab.png',
+    hint:
+      'Editorial flash card: top brand row + photo upper half + vertical FLASH NEWS red tab sticker on photo edge + purple lower-third caption + "More details →" link.',
+  },
+  {
+    id: 'builtin-newstokvn-keypoint-incident',
+    name: 'NEWSTOKVN — Incident report',
+    family: 'editorial',
+    slots: { media: true, eyebrow: true, chips: true, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-incident.png',
+    hint:
+      'Triple-tier incident card: top brand row + red SỰ CỐ chip + boxed evidence photo + dark plate with Breaking News chip + headline + body (chips[0]) + Read More + source line (fileId).',
+  },
+  {
     id: 'builtin-newstokvn-outro-channels',
     name: 'NEWSTOKVN — Outro categories',
     family: 'editorial',
