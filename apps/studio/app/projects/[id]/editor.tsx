@@ -3,10 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import {
+  ArrowDown,
   ArrowLeft,
+  ArrowUp,
   Captions,
   CaptionsOff,
   ChevronDown,
+  Copy,
   Crop,
   Film,
   FolderOpen,
@@ -15,13 +18,17 @@ import {
   Layers,
   Loader2,
   Mic,
+  MoreVertical,
   Music,
   Palette,
   PlayCircle,
+  Plus,
   RefreshCw,
   Save,
   Share2,
+  Sparkles,
   Stamp,
+  Trash2,
   Type,
   Volume2,
 } from 'lucide-react'
@@ -72,8 +79,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
 
 type Status = 'idle' | 'saving' | 'saved' | 'error'
@@ -114,6 +123,8 @@ export function ProjectEditor({ initial }: { initial: Project }) {
   const [voicePickerMode, setVoicePickerMode] = useState<'missing' | 'all' | null>(null)
   /** Brief feedback for the "Open folder" toolbar action. */
   const [openFolderError, setOpenFolderError] = useState<string | null>(null)
+  /** When non-null, the segment id pending a delete confirmation. */
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   const currentSig = useMemo(() => projectSignature(project), [project])
   const isDirty = currentSig !== lastSavedSig
@@ -148,6 +159,156 @@ export function ProjectEditor({ initial }: { initial: Project }) {
 
   const updateProject = useCallback((patch: Partial<Project>) => {
     setProject((p) => ({ ...p, ...patch, updatedAt: new Date().toISOString() }))
+  }, [])
+
+  /**
+   * Build a fresh Segment with the project's default voice + safe-fallback
+   * fields. Kept inline (not pulled into shared/) because every callsite
+   * needs the project's language to resolve the right Edge TTS voice.
+   *
+   * Scene defaults follow the canonical 3-act layout used by smoke-render
+   * and the AI orchestrator: title for the opener, keypoint for body
+   * beats, outro for the closer.
+   */
+  const makeSegment = useCallback(
+    (scene: 'title' | 'keypoint' | 'outro' | 'quote', text = ''): Segment => {
+      // Per-scene duration defaults — title/outro stay short (5s) so they
+      // don't drag, keypoint gets 7s which matches the 'standard' length
+      // preset on the home page (~7s per beat).
+      const durationSec = scene === 'keypoint' ? 7 : 5
+      return {
+        id: `seg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+        durationSec,
+        scene,
+        text,
+        voice: {
+          provider: 'edge-tts',
+          voiceId: DEFAULT_VOICES[project.language],
+          speed: 1,
+        },
+        visuals: {},
+        effects: [],
+      }
+    },
+    [project.language]
+  )
+
+  /**
+   * Smart "+ Thêm" rule. Picks scene + insertion index from the current
+   * storyboard shape so the user gets the most sensible default:
+   *
+   *   - empty list  → opener: scene='title', appended at index 0
+   *   - last is outro → body beat: scene='keypoint', inserted BEFORE the
+   *     outro so the closing line stays at the end
+   *   - otherwise   → scene='keypoint', appended
+   *
+   * Returns the inserted segment id so the caller can auto-select it.
+   */
+  const addSegment = useCallback((): string => {
+    let newId = ''
+    setProject((p) => {
+      const segments = [...p.segments]
+      let scene: 'title' | 'keypoint' = 'keypoint'
+      let insertAt = segments.length
+      if (segments.length === 0) {
+        scene = 'title'
+      } else if (segments[segments.length - 1]?.scene === 'outro') {
+        insertAt = segments.length - 1
+      }
+      const seg = makeSegment(scene)
+      newId = seg.id
+      segments.splice(insertAt, 0, seg)
+      return { ...p, segments, updatedAt: new Date().toISOString() }
+    })
+    return newId
+  }, [makeSegment])
+
+  /**
+   * Insert title + keypoint + outro in one shot. Used by the empty-state
+   * "Tạo skeleton" button so users don't have to add three segments by
+   * hand. Returns the id of the keypoint (middle one) so the editor can
+   * auto-select it — that's the segment most users want to fill first.
+   */
+  const scaffoldSkeleton = useCallback((): string => {
+    let middleId = ''
+    setProject((p) => {
+      if (p.segments.length > 0) return p
+      const title = makeSegment('title')
+      const keypoint = makeSegment('keypoint')
+      const outro = makeSegment('outro')
+      middleId = keypoint.id
+      return {
+        ...p,
+        segments: [title, keypoint, outro],
+        updatedAt: new Date().toISOString(),
+      }
+    })
+    return middleId
+  }, [makeSegment])
+
+  /**
+   * Deep-clone a segment, generate a new id, and insert it directly
+   * after the source. Carries every field (text, voice, narration,
+   * visuals, style overrides) so the duplicate is render-ready — saves
+   * the user from re-running TTS for repeated body beats. Returns the
+   * new id so the caller can switch selection to it.
+   */
+  const duplicateSegment = useCallback((sourceId: string): string => {
+    let dupId = ''
+    setProject((p) => {
+      const idx = p.segments.findIndex((s) => s.id === sourceId)
+      if (idx < 0) return p
+      const source = p.segments[idx]!
+      const clone: Segment = {
+        ...source,
+        id: `seg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+      }
+      dupId = clone.id
+      const segments = [...p.segments]
+      segments.splice(idx + 1, 0, clone)
+      return { ...p, segments, updatedAt: new Date().toISOString() }
+    })
+    return dupId
+  }, [])
+
+  /**
+   * Drop a segment from the storyboard. No undo (user opt-out — confirm
+   * dialog at the call site is enough). When the removed segment was
+   * selected, fall back to the previous neighbor (or null when the list
+   * is now empty).
+   */
+  const removeSegment = useCallback((id: string) => {
+    setProject((p) => {
+      const idx = p.segments.findIndex((s) => s.id === id)
+      if (idx < 0) return p
+      const segments = p.segments.filter((s) => s.id !== id)
+      return { ...p, segments, updatedAt: new Date().toISOString() }
+    })
+    setSelectedId((cur) => {
+      if (cur !== id) return cur
+      const idx = project.segments.findIndex((s) => s.id === id)
+      const next =
+        project.segments[idx - 1] ?? project.segments[idx + 1] ?? null
+      return next?.id ?? null
+    })
+  }, [project.segments])
+
+  /**
+   * Move a segment one slot up or down. Direction is clamped at the
+   * edges so the caller can wire this to a menu without worrying about
+   * the array bounds.
+   */
+  const moveSegment = useCallback((id: string, dir: 'up' | 'down') => {
+    setProject((p) => {
+      const idx = p.segments.findIndex((s) => s.id === id)
+      if (idx < 0) return p
+      const target = dir === 'up' ? idx - 1 : idx + 1
+      if (target < 0 || target >= p.segments.length) return p
+      const segments = [...p.segments]
+      const [moved] = segments.splice(idx, 1)
+      segments.splice(target, 0, moved!)
+      return { ...p, segments, updatedAt: new Date().toISOString() }
+    })
   }, [])
 
   // Two-step bgMusic flow:
@@ -1039,36 +1200,150 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             jitter as the OS toggles the scrollbar in and out. */}
         <aside className="overflow-y-auto border-r p-3 [scrollbar-gutter:stable]">
           {project.segments.length === 0 ? (
-            <p className="px-2 py-4 text-sm text-muted-foreground">
-              No segments yet. Ask Claude in the terminal to build the storyboard for this
-              project.
-            </p>
+            // Empty-state CTA pair. Skeleton handles the common "I want
+            // intro + body + outro" shape in one click; "+ Thêm" is the
+            // escape hatch for users who want to build piece by piece.
+            <div className="px-1 py-2">
+              <p className="mb-3 text-sm text-muted-foreground">
+                Chưa có segment nào. Tạo cấu trúc 3 đoạn (title + keypoint +
+                outro) hoặc thêm từng cái một.
+              </p>
+              <div className="flex flex-col gap-2">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={() => {
+                    const id = scaffoldSkeleton()
+                    if (id) setSelectedId(id)
+                  }}
+                >
+                  <Sparkles />
+                  Tạo skeleton 3 segment
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    const id = addSegment()
+                    if (id) setSelectedId(id)
+                  }}
+                >
+                  <Plus />
+                  Thêm segment đầu tiên
+                </Button>
+              </div>
+            </div>
           ) : (
-            <ul className="space-y-1">
-              {project.segments.map((s, idx) => (
-                <li key={s.id}>
-                  <button
-                    onClick={() => setSelectedId(s.id)}
-                    className={cn(
-                      'w-full rounded-md border px-3 py-2 text-left transition-colors',
-                      s.id === selectedId
-                        ? 'border-primary bg-primary/10'
-                        : 'border-transparent hover:bg-secondary'
-                    )}
-                  >
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="text-xs font-semibold uppercase text-muted-foreground">
-                        {idx + 1}. {s.scene}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">
-                        {s.durationSec.toFixed(1)}s
-                      </span>
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-sm">{s.text}</p>
-                  </button>
-                </li>
-              ))}
-            </ul>
+            <>
+              <ul className="space-y-1">
+                {project.segments.map((s, idx) => {
+                  const isFirst = idx === 0
+                  const isLast = idx === project.segments.length - 1
+                  return (
+                    <li key={s.id} className="group relative">
+                      <button
+                        onClick={() => setSelectedId(s.id)}
+                        className={cn(
+                          'w-full rounded-md border px-3 py-2 pr-8 text-left transition-colors',
+                          s.id === selectedId
+                            ? 'border-primary bg-primary/10'
+                            : 'border-transparent hover:bg-secondary'
+                        )}
+                      >
+                        <div className="flex items-baseline justify-between gap-2">
+                          <span className="text-xs font-semibold uppercase text-muted-foreground">
+                            {idx + 1}. {s.scene}
+                          </span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {s.durationSec.toFixed(1)}s
+                          </span>
+                        </div>
+                        <p
+                          className={cn(
+                            'mt-1 line-clamp-2 text-sm',
+                            !s.text && 'italic text-muted-foreground/60'
+                          )}
+                        >
+                          {s.text || '(chưa có narration)'}
+                        </p>
+                      </button>
+                      {/* 3-dot menu — absolute so it can sit inside the
+                          row's pr-8 reserve without consuming click area
+                          from the select button above. */}
+                      <div className="absolute right-1 top-1.5">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="size-6 opacity-60 hover:opacity-100"
+                              aria-label={`Tuỳ chọn segment ${idx + 1}`}
+                              title="Tuỳ chọn segment"
+                            >
+                              <MoreVertical className="size-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-44">
+                            <DropdownMenuItem
+                              onSelect={() => {
+                                const newId = duplicateSegment(s.id)
+                                if (newId) setSelectedId(newId)
+                              }}
+                            >
+                              <Copy className="size-3.5" />
+                              Nhân bản
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={isFirst}
+                              onSelect={() => moveSegment(s.id, 'up')}
+                            >
+                              <ArrowUp className="size-3.5" />
+                              Lên trên
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              disabled={isLast}
+                              onSelect={() => moveSegment(s.id, 'down')}
+                            >
+                              <ArrowDown className="size-3.5" />
+                              Xuống dưới
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+                              onSelect={(e) => {
+                                // Defer so Radix can close the menu first;
+                                // otherwise the menu and confirm dialog
+                                // fight for focus and the dialog never
+                                // opens cleanly.
+                                e.preventDefault()
+                                requestAnimationFrame(() =>
+                                  setPendingDeleteId(s.id)
+                                )
+                              }}
+                            >
+                              <Trash2 className="size-3.5" />
+                              Xoá
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    </li>
+                  )
+                })}
+              </ul>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-3 w-full"
+                onClick={() => {
+                  const id = addSegment()
+                  if (id) setSelectedId(id)
+                }}
+              >
+                <Plus />
+                Thêm keypoint
+              </Button>
+            </>
           )}
         </aside>
 
@@ -1259,11 +1534,38 @@ export function ProjectEditor({ initial }: { initial: Project }) {
             />
           ) : (
             <p className="text-sm text-muted-foreground">
-              Select a segment to edit, or ask Claude to add segments.
+              Chọn một segment ở danh sách bên trái để chỉnh sửa, hoặc bấm
+              "+ Thêm keypoint" để tạo mới.
             </p>
           )}
         </aside>
       </div>
+      <ConfirmDialog
+        open={pendingDeleteId !== null}
+        onOpenChange={(open) => {
+          if (!open) setPendingDeleteId(null)
+        }}
+        title="Xoá segment này?"
+        description={
+          pendingDeleteId
+            ? (() => {
+                const idx = project.segments.findIndex(
+                  (s) => s.id === pendingDeleteId
+                )
+                const seg = project.segments[idx]
+                if (!seg) return 'Segment đã không còn tồn tại.'
+                const preview = seg.text.slice(0, 80) || '(chưa có narration)'
+                return `Segment ${idx + 1} · ${seg.scene}: "${preview}". Hành động này không hoàn tác được.`
+              })()
+            : null
+        }
+        confirmLabel="Xoá"
+        destructive
+        onConfirm={() => {
+          if (pendingDeleteId) removeSegment(pendingDeleteId)
+          setPendingDeleteId(null)
+        }}
+      />
       <BgMusicTrimDialog
         open={trimDialogOpen}
         onOpenChange={(open) => {

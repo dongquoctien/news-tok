@@ -1,4 +1,4 @@
-import { Terminal } from 'lucide-react'
+import { FolderPlus } from 'lucide-react'
 import { listProjects } from '@news-tok/render'
 import {
   Card,
@@ -7,6 +7,7 @@ import {
   CardTitle,
 } from '@/components/ui/card'
 import { ProjectsGrid } from '@/components/studio/projects-grid'
+import { NewProjectButton } from '@/components/studio/new-project-button'
 import { BrandLogo } from '@/components/brand-logo'
 import { ThemeToggle } from '@/components/theme/theme-toggle'
 
@@ -19,10 +20,15 @@ export default async function ProjectsListPage() {
   return (
     <main className="flex min-h-screen flex-col">
       {/* Same nav header as home. BrandLogo doubles as the "back to
-          home" affordance — clicking it goes to `/`. */}
+          home" affordance — clicking it goes to `/`. The New project
+          button lives here so it's always one click away regardless of
+          how many projects are listed below. */}
       <header className="flex items-center justify-between gap-4 border-b px-6 py-3">
         <BrandLogo />
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <NewProjectButton />
+          <ThemeToggle />
+        </div>
       </header>
 
       <section className="mx-auto w-full max-w-6xl flex-1 p-8">
@@ -40,13 +46,20 @@ export default async function ProjectsListPage() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Terminal className="size-5" />
+                <FolderPlus className="size-5" />
                 No projects yet
               </CardTitle>
-              <CardDescription>
-                Projects are created from the Claude CLI. Open a terminal in this repo and run{' '}
-                <code className="rounded bg-muted px-1.5 py-0.5 text-sm">claude</code>, then ask
-                it to create a video from a URL or text.
+              <CardDescription className="space-y-3">
+                <p>
+                  Tạo project trống ngay tại đây, hoặc quay về{' '}
+                  <a href="/" className="underline hover:text-foreground">
+                    trang chủ
+                  </a>{' '}
+                  để dán link bài báo và để AI dựng kịch bản giúp bạn.
+                </p>
+                <div>
+                  <NewProjectButton label="Tạo project đầu tiên" />
+                </div>
               </CardDescription>
             </CardHeader>
           </Card>
