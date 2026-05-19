@@ -25,7 +25,8 @@
     "smoke:media": "tsx scripts/smoke-media.ts",
     "smoke:media:network": "tsx scripts/smoke-media-network.ts",
     "smoke:mcp": "node scripts/smoke-mcp.mjs",
-    "smoke:m6": "tsx scripts/smoke-m6.ts"
+    "smoke:m6": "tsx scripts/smoke-m6.ts",
+    "smoke:extract": "tsx scripts/smoke-extract.ts"
   },
   "devDependencies": {
     "@types/node": "^20.17.6",
