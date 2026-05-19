@@ -13,6 +13,12 @@ import { NeonSign } from './NeonSign.js'
 import { NumberedSteps } from './NumberedSteps.js'
 import { PhoneMockup } from './PhoneMockup.js'
 import { PortraitQuote } from './PortraitQuote.js'
+import { NewstokvnIntroCover } from './NewstokvnIntroCover.js'
+import { NewstokvnIntroMarquee } from './NewstokvnIntroMarquee.js'
+import { NewstokvnKeypointBulletin } from './NewstokvnKeypointBulletin.js'
+import { NewstokvnKeypointFlame } from './NewstokvnKeypointFlame.js'
+import { NewstokvnOutroBanner } from './NewstokvnOutroBanner.js'
+import { NewstokvnOutroChannels } from './NewstokvnOutroChannels.js'
 import { OutroFollowChannel } from './OutroFollowChannel.js'
 import { OutroNextVideo } from './OutroNextVideo.js'
 import { OutroSubscribeBurst } from './OutroSubscribeBurst.js'
@@ -75,6 +81,18 @@ const BUILT_IN_LAYOUTS: Record<string, LayoutComponent> = {
   'builtin-outroSubscribeBurst': OutroSubscribeBurst,
   'builtin-outroFollowChannel': OutroFollowChannel,
   'builtin-outroNextVideo': OutroNextVideo,
+  // NEWSTOKVN brand-locked set — intro / keypoint / outro layouts
+  // built from the channel's banner artwork (deep purple gradient,
+  // lightning bolt + flame accents, red BREAKING chips). Each pairs
+  // a distinct moment in the video timeline with consistent brand
+  // chrome so a series of clips feels like one channel, not seven
+  // random templates.
+  'builtin-newstokvn-intro-cover': NewstokvnIntroCover,
+  'builtin-newstokvn-intro-marquee': NewstokvnIntroMarquee,
+  'builtin-newstokvn-keypoint-bulletin': NewstokvnKeypointBulletin,
+  'builtin-newstokvn-keypoint-flame': NewstokvnKeypointFlame,
+  'builtin-newstokvn-outro-channels': NewstokvnOutroChannels,
+  'builtin-newstokvn-outro-banner': NewstokvnOutroBanner,
 }
 
 /**
