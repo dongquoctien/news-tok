@@ -16,7 +16,11 @@ import { PortraitQuote } from './PortraitQuote.js'
 import { NewstokvnIntroCover } from './NewstokvnIntroCover.js'
 import { NewstokvnIntroMarquee } from './NewstokvnIntroMarquee.js'
 import { NewstokvnKeypointBulletin } from './NewstokvnKeypointBulletin.js'
+import { NewstokvnKeypointComparison } from './NewstokvnKeypointComparison.js'
 import { NewstokvnKeypointFlame } from './NewstokvnKeypointFlame.js'
+import { NewstokvnKeypointQuote } from './NewstokvnKeypointQuote.js'
+import { NewstokvnKeypointStat } from './NewstokvnKeypointStat.js'
+import { NewstokvnKeypointTimeline } from './NewstokvnKeypointTimeline.js'
 import { NewstokvnOutroBanner } from './NewstokvnOutroBanner.js'
 import { NewstokvnOutroChannels } from './NewstokvnOutroChannels.js'
 import { OutroFollowChannel } from './OutroFollowChannel.js'
@@ -91,6 +95,16 @@ const BUILT_IN_LAYOUTS: Record<string, LayoutComponent> = {
   'builtin-newstokvn-intro-marquee': NewstokvnIntroMarquee,
   'builtin-newstokvn-keypoint-bulletin': NewstokvnKeypointBulletin,
   'builtin-newstokvn-keypoint-flame': NewstokvnKeypointFlame,
+  // Second-wave NEWSTOKVN keypoints — informed by 2026 short-form
+  // research (typography-as-hero, kinetic numbers, pull-quote
+  // pattern, before/after split). Each picks a different content
+  // shape so the orchestrator can pair layout to story: number-
+  // driven → stat, direct speech → quote, chronology → timeline,
+  // juxtaposition → comparison.
+  'builtin-newstokvn-keypoint-stat': NewstokvnKeypointStat,
+  'builtin-newstokvn-keypoint-quote': NewstokvnKeypointQuote,
+  'builtin-newstokvn-keypoint-timeline': NewstokvnKeypointTimeline,
+  'builtin-newstokvn-keypoint-comparison': NewstokvnKeypointComparison,
   'builtin-newstokvn-outro-channels': NewstokvnOutroChannels,
   'builtin-newstokvn-outro-banner': NewstokvnOutroBanner,
 }

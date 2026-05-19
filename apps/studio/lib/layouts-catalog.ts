@@ -277,6 +277,42 @@ export const BUILT_IN_LAYOUTS: BuiltInLayoutMeta[] = [
       'Punchy keypoint: full-bleed photo + top-left flame chip + bold white headline with **purple plate** accent on the hook phrase.',
   },
   {
+    id: 'builtin-newstokvn-keypoint-stat',
+    name: 'NEWSTOKVN — Stat hero',
+    family: 'design-forward',
+    slots: { media: true, eyebrow: true, chips: true, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-stat.png',
+    hint:
+      'Single-number hero: photo top + huge gradient stat number (fileId) + label (chips[0]) + headline body. Use when the story is one big number ("45 TỶ ĐỒNG", "1.600 TẤN", "47%").',
+  },
+  {
+    id: 'builtin-newstokvn-keypoint-quote',
+    name: 'NEWSTOKVN — Pull quote',
+    family: 'editorial',
+    slots: { media: true, eyebrow: true, chips: false, fileId: true },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-quote.png',
+    hint:
+      'Pull quote: full-bleed portrait + big purple quote glyph + italic serif quote (auto-wrapped in curly quotes) + attribution line ("— Theo VTV24"). Best for direct statements.',
+  },
+  {
+    id: 'builtin-newstokvn-keypoint-timeline',
+    name: 'NEWSTOKVN — Timeline chronology',
+    family: 'media-led',
+    slots: { media: true, eyebrow: true, chips: true, fileId: false },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-timeline.png',
+    hint:
+      'Chronology: photo top + 3 timestamped events (chips: "05:00 · event"). Best for "what happened, in order" — incident recaps, war-day events.',
+  },
+  {
+    id: 'builtin-newstokvn-keypoint-comparison',
+    name: 'NEWSTOKVN — Before/after compare',
+    family: 'media-led',
+    slots: { media: true, eyebrow: false, chips: true, fileId: false },
+    thumbnail: '/layout-previews/builtin-newstokvn-keypoint-comparison.png',
+    hint:
+      'Before/after split: 2 stacked photo frames (background + foreground[0]) with TRƯỚC / SAU chips (override via chips[0..1]) + VS badge + bottom headline.',
+  },
+  {
     id: 'builtin-newstokvn-outro-channels',
     name: 'NEWSTOKVN — Outro categories',
     family: 'editorial',
