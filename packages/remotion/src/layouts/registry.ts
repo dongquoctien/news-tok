@@ -15,9 +15,14 @@ import { PhoneMockup } from './PhoneMockup.js'
 import { PortraitQuote } from './PortraitQuote.js'
 import { NewstokvnIntroCover } from './NewstokvnIntroCover.js'
 import { NewstokvnIntroMarquee } from './NewstokvnIntroMarquee.js'
+import { NewstokvnKeypointBreakingCard } from './NewstokvnKeypointBreakingCard.js'
 import { NewstokvnKeypointBulletin } from './NewstokvnKeypointBulletin.js'
 import { NewstokvnKeypointComparison } from './NewstokvnKeypointComparison.js'
 import { NewstokvnKeypointFlame } from './NewstokvnKeypointFlame.js'
+import { NewstokvnKeypointFlashTab } from './NewstokvnKeypointFlashTab.js'
+import { NewstokvnKeypointHighlight } from './NewstokvnKeypointHighlight.js'
+import { NewstokvnKeypointIncident } from './NewstokvnKeypointIncident.js'
+import { NewstokvnKeypointInternational } from './NewstokvnKeypointInternational.js'
 import { NewstokvnKeypointQuote } from './NewstokvnKeypointQuote.js'
 import { NewstokvnKeypointStat } from './NewstokvnKeypointStat.js'
 import { NewstokvnKeypointTimeline } from './NewstokvnKeypointTimeline.js'
@@ -105,6 +110,17 @@ const BUILT_IN_LAYOUTS: Record<string, LayoutComponent> = {
   'builtin-newstokvn-keypoint-quote': NewstokvnKeypointQuote,
   'builtin-newstokvn-keypoint-timeline': NewstokvnKeypointTimeline,
   'builtin-newstokvn-keypoint-comparison': NewstokvnKeypointComparison,
+  // Third-wave NEWSTOKVN keypoints — designs ported from user-
+  // provided thumbnail screenshots (breaking-card on red, news-
+  // update highlight, international-news with arched chip, flash-
+  // news vertical tab, incident triple-tier card). Each holds the
+  // brand purple + yellow accent system but borrows a specific
+  // editorial idiom from print news.
+  'builtin-newstokvn-keypoint-breaking-card': NewstokvnKeypointBreakingCard,
+  'builtin-newstokvn-keypoint-highlight': NewstokvnKeypointHighlight,
+  'builtin-newstokvn-keypoint-international': NewstokvnKeypointInternational,
+  'builtin-newstokvn-keypoint-flash-tab': NewstokvnKeypointFlashTab,
+  'builtin-newstokvn-keypoint-incident': NewstokvnKeypointIncident,
   'builtin-newstokvn-outro-channels': NewstokvnOutroChannels,
   'builtin-newstokvn-outro-banner': NewstokvnOutroBanner,
 }
