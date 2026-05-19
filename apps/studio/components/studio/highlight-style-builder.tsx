@@ -5,7 +5,6 @@ import { Sparkles, X } from 'lucide-react'
 import type { HighlightStyle } from '@news-tok/shared/schema'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
-import { Input } from '@/components/ui/input'
 import {
   Select,
   SelectContent,
@@ -13,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
-import { cn } from '@/lib/utils'
+import { ColorSwatchField } from '@/components/studio/color-swatch-field'
 
 /**
  * Inline builder for `segment.highlightStyle` — the style applied to
@@ -33,12 +32,6 @@ import { cn } from '@/lib/utils'
  *     inline so the user can spot a contrast / weight problem
  *     immediately, without having to flip back to the storyboard.
  */
-
-const SWATCHES: string[] = [
-  '#ffffff', '#fde047', '#facc15', '#fbbf24',
-  '#ef4444', '#dc2626', '#22ff67', '#34d399',
-  '#67e8f9', '#a78bfa', '#f472b6', '#0b0b0f',
-]
 
 const BG_STYLE_OPTIONS: Array<{ id: HighlightStyle['bgStyle']; label: string; hint: string }> = [
   { id: 'plate', label: 'Plate', hint: 'Solid rounded rectangle behind the phrase.' },
@@ -199,13 +192,13 @@ export function HighlightStyleBuilder({
             </div>
           </div>
 
-          <ColorRow
+          <ColorSwatchField
             label="Màu chữ"
             value={value!.color}
             onChange={(v) => patch({ color: v })}
           />
           {value!.bgStyle !== 'none' ? (
-            <ColorRow
+            <ColorSwatchField
               label={value!.bgStyle === 'plate' ? 'Màu nền' : 'Màu hiệu ứng'}
               value={value!.bgColor}
               onChange={(v) => patch({ bgColor: v })}
@@ -213,45 +206,6 @@ export function HighlightStyleBuilder({
           ) : null}
         </div>
       )}
-    </div>
-  )
-}
-
-function ColorRow({
-  label,
-  value,
-  onChange,
-}: {
-  label: string
-  value: string | undefined
-  onChange: (next: string | undefined) => void
-}) {
-  return (
-    <div>
-      <Label className="text-xs">{label}</Label>
-      <div className="mt-1 flex flex-wrap items-center gap-1">
-        {SWATCHES.map((hex) => (
-          <button
-            key={hex}
-            type="button"
-            onClick={() => onChange(hex)}
-            title={hex}
-            className={cn(
-              'size-6 rounded border transition-all',
-              value === hex
-                ? 'border-primary ring-1 ring-primary'
-                : 'border-border/60 hover:scale-110'
-            )}
-            style={{ background: hex }}
-          />
-        ))}
-        <Input
-          value={value ?? ''}
-          onChange={(e) => onChange(e.target.value || undefined)}
-          placeholder="#hex"
-          className="ml-1 h-7 w-24 font-mono text-xs"
-        />
-      </div>
     </div>
   )
 }

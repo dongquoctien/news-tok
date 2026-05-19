@@ -17,7 +17,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import {
@@ -25,26 +24,10 @@ import {
   textCss as libTextCss,
 } from '@/lib/text-style-preview'
 import { DeviceMockupPreview, splitRatioFor } from './device-mockup-preview'
-
-/**
- * Curated accent palette — 12 swatches matching the topic-flavoured
- * presets the orchestrator already reaches for. Users can click one to
- * fill the active channel, or type a custom hex below.
- */
-const SWATCHES: Array<{ id: string; hex: string; label: string }> = [
-  { id: 'white', hex: '#ffffff', label: 'White' },
-  { id: 'yellow', hex: '#fde047', label: 'Hormozi yellow' },
-  { id: 'red', hex: '#ef4444', label: 'Breaking red' },
-  { id: 'cyan', hex: '#67e8f9', label: 'Tech cyan' },
-  { id: 'green', hex: '#22ff67', label: 'Saturated green' },
-  { id: 'mint', hex: '#34d399', label: 'Wellness mint' },
-  { id: 'pink', hex: '#f472b6', label: 'Neon pink' },
-  { id: 'orange', hex: '#ea580c', label: 'Lifestyle orange' },
-  { id: 'gold', hex: '#fbbf24', label: 'Finance gold' },
-  { id: 'purple', hex: '#a78bfa', label: 'Editorial purple' },
-  { id: 'black', hex: '#0b0b0f', label: 'Pure black' },
-  { id: 'dimmed', hex: 'rgba(255,255,255,0.4)', label: 'Dimmed white' },
-]
+import {
+  ColorSwatchField,
+  STUDIO_SWATCHES,
+} from './color-swatch-field'
 
 type Channel = 'primary' | 'accent' | 'stroke' | 'idle'
 
@@ -68,33 +51,6 @@ const CHANNEL_META: Record<
     label: 'Idle',
     hint: 'Not-yet-spoken karaoke words (e.g. dimmed white).',
   },
-}
-
-function Swatch({
-  hex,
-  selected,
-  onSelect,
-  title,
-}: {
-  hex: string
-  selected: boolean
-  onSelect: () => void
-  title: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      title={title}
-      className={cn(
-        'group relative size-8 shrink-0 rounded-md border transition-all',
-        selected
-          ? 'border-primary ring-2 ring-primary ring-offset-2 ring-offset-background'
-          : 'border-border/60 hover:scale-110'
-      )}
-      style={{ background: hex }}
-    />
-  )
 }
 
 function ChannelRow({
@@ -135,32 +91,14 @@ function ChannelRow({
       </div>
 
       {enabled ? (
-        <>
-          <div className="mt-3 flex flex-wrap gap-1.5">
-            {SWATCHES.map((s) => (
-              <Swatch
-                key={s.id}
-                hex={s.hex}
-                selected={value === s.hex}
-                onSelect={() => onChange(s.hex)}
-                title={s.label}
-              />
-            ))}
-          </div>
-          <div className="mt-2 flex items-center gap-2">
-            <span
-              className="size-6 shrink-0 rounded border"
-              style={{ background: value }}
-              aria-hidden
-            />
-            <Input
-              value={value ?? ''}
-              onChange={(e) => onChange(e.target.value)}
-              placeholder="#hex or rgba(...)"
-              className="h-7 font-mono text-xs"
-            />
-          </div>
-        </>
+        <div className="mt-3">
+          <ColorSwatchField
+            value={value}
+            onChange={(v) => onChange(v ?? '')}
+            size="roomy"
+            hexPlaceholder="#hex or rgba(...)"
+          />
+        </div>
       ) : (
         <Button
           type="button"
@@ -170,7 +108,7 @@ function ChannelRow({
           // so disabled-state cards align with whatever's below in the
           // active-state cards (swatch grid + hex input).
           className="mt-auto w-full"
-          onClick={() => onChange(SWATCHES[0]!.hex)}
+          onClick={() => onChange(STUDIO_SWATCHES[0]!.hex)}
         >
           Override this channel
         </Button>
