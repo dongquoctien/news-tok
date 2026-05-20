@@ -44,6 +44,42 @@ export type LayoutRecipe = {
   defaultEyebrow: { vi: string; en: string }
 }
 
+/**
+ * NEWSTOKVN brand palette — deep purple radial + yellow zap + red
+ * breaking badge. Shared by newstokvn-breaking / newstokvn-flash /
+ * newstokvn-cover layouts so they read as one channel.
+ */
+export const NEWSTOKVN_PALETTE = {
+  /** Deep brand purple — used in radial bg and slanted text panels. */
+  purpleDeep: '#2e1065',
+  purpleMid: '#4c1d95',
+  purpleLight: '#7c3aed',
+  /** Soft lavender for tagline + secondary copy. */
+  lavender: '#c4b5fd',
+  /** Yellow lightning bolt + accent zap lines. */
+  zap: '#facc15',
+  /** Red breaking badge (matches the BREAKING NEWS rectangle). */
+  breakingRed: '#DC2626',
+  /** Body text + headline base colour. */
+  white: '#FFFFFF',
+} as const
+
+/**
+ * Shared recipe for every NEWSTOKVN-branded layout — same palette,
+ * different decorator silhouette. Defined once so the three layouts
+ * stay in lockstep when the palette changes.
+ */
+export const NEWSTOKVN_RECIPE: LayoutRecipe = {
+  layout: 'newstokvn-breaking',
+  palette: {
+    primary: NEWSTOKVN_PALETTE.purpleMid,
+    accent: NEWSTOKVN_PALETTE.zap,
+    ink: NEWSTOKVN_PALETTE.purpleDeep,
+    secondary: NEWSTOKVN_PALETTE.breakingRed,
+  },
+  defaultEyebrow: { vi: 'TIN NÓNG', en: 'BREAKING' },
+}
+
 export const TOPIC_TO_LAYOUT: Record<ThumbnailTopic, LayoutRecipe> = {
   crime: {
     layout: 'news-breaking',
@@ -120,4 +156,21 @@ export const TOPIC_TO_LAYOUT: Record<ThumbnailTopic, LayoutRecipe> = {
 export function recipeForTopic(topic: string): LayoutRecipe {
   const recipe = (TOPIC_TO_LAYOUT as Record<string, LayoutRecipe | undefined>)[topic]
   return recipe ?? TOPIC_TO_LAYOUT.generic
+}
+
+/**
+ * Resolve the recipe for a specific layout id, overriding topic-derived
+ * palette when the caller picks a brand-locked layout. The three
+ * NEWSTOKVN layouts always share `NEWSTOKVN_RECIPE` so they read as
+ * one channel regardless of the article's topic classification.
+ *
+ * For the 6 generic layouts, the topic recipe wins (e.g. crime →
+ * news-breaking with red palette, finance → news-breaking with yellow
+ * palette).
+ */
+export function recipeForLayout(topic: string, layout: string): LayoutRecipe {
+  if (layout === 'newstokvn-breaking' || layout === 'newstokvn-flash' || layout === 'newstokvn-cover') {
+    return NEWSTOKVN_RECIPE
+  }
+  return recipeForTopic(topic)
 }

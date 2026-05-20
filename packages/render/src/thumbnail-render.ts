@@ -4,6 +4,7 @@ import { relative, resolve, sep, dirname } from 'node:path'
 import type { Project, Thumbnail } from '@news-tok/shared/schema'
 import { resolveDataPath } from '@news-tok/shared/paths'
 import { bundleForProject } from './bundle.js'
+import { stageBrandAssets } from './brand-staging.js'
 import { dataDir, projectDir } from './paths.js'
 
 /**
@@ -26,17 +27,25 @@ function toPublicUrl(p: string): string {
 }
 
 function rewriteThumbnailAssets(thumbnail: Thumbnail): Thumbnail {
+  let next: Thumbnail = thumbnail
   const bg = thumbnail.background
   if (bg.kind === 'random-frame') {
-    return { ...thumbnail, background: { ...bg, framePath: toPublicUrl(bg.framePath) } }
-  }
-  if (bg.kind === 'asset-ref') {
-    return {
-      ...thumbnail,
+    next = { ...next, background: { ...bg, framePath: toPublicUrl(bg.framePath) } }
+  } else if (bg.kind === 'asset-ref') {
+    next = {
+      ...next,
       background: { ...bg, asset: { ...bg.asset, path: toPublicUrl(bg.asset.path) } },
     }
   }
-  return thumbnail
+  // Watermark logo URL — rewrite if it's a disk path, leave as-is if
+  // already a public URL (e.g. /public/newstokvn-logo.png from staging).
+  if (next.watermark.logoUrl && !next.watermark.logoUrl.startsWith('/public/')) {
+    next = {
+      ...next,
+      watermark: { ...next.watermark, logoUrl: toPublicUrl(next.watermark.logoUrl) },
+    }
+  }
+  return next
 }
 
 export type RenderThumbnailOptions = {
@@ -56,10 +65,17 @@ export async function renderThumbnailStill(opts: RenderThumbnailOptions): Promis
   await mkdir(outDir, { recursive: true })
   const outputPath = opts.outputPath ?? resolve(outDir, 'thumb.jpg')
 
+  // Stage the channel logo into publicDir BEFORE bundling so the
+  // newstokvn-* layouts can reference it at /public/newstokvn-logo.png.
+  // Idempotent — re-staging when the file is already there is a no-op.
+  await stageBrandAssets()
+  const brandLogoUrl = '/public/newstokvn-logo.png'
+
   const serveUrl = await bundleForProject(opts.projectId)
   const inputProps = {
     thumbnail: rewriteThumbnailAssets(opts.thumbnail),
     topic: opts.topic ?? 'generic',
+    brandLogoUrl,
   }
 
   const composition = await selectComposition({

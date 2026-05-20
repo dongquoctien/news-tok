@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { buildDefaultEdits } from './default-edits.js'
 import { lintAgainstAllPlatforms, UNIVERSAL_SAFE_ZONE } from './safe-zones.js'
-import { recipeForTopic, TOPIC_TO_LAYOUT } from './topic-router.js'
+import {
+  NEWSTOKVN_RECIPE,
+  recipeForLayout,
+  recipeForTopic,
+  TOPIC_TO_LAYOUT,
+} from './topic-router.js'
 import type { ThumbnailLayout } from '@news-tok/shared/schema'
 
 const LAYOUTS: ThumbnailLayout[] = [
@@ -11,6 +16,9 @@ const LAYOUTS: ThumbnailLayout[] = [
   'science-clean',
   'knowledge-bookish',
   'sports-hype',
+  'newstokvn-breaking',
+  'newstokvn-flash',
+  'newstokvn-cover',
 ]
 
 describe('buildDefaultEdits', () => {
@@ -70,5 +78,18 @@ describe('buildDefaultEdits', () => {
       title: 'Sao Việt hôm nay',
     })
     expect(edits.eyebrow).toBe(TOPIC_TO_LAYOUT.entertainment.defaultEyebrow.vi)
+  })
+
+  it('NEWSTOKVN brand layouts ignore topic-derived palette via recipeForLayout', () => {
+    // Even when topic = crime (would normally yield red palette), the
+    // brand layouts pin the deep-purple recipe so the channel reads
+    // consistently across articles.
+    expect(recipeForLayout('crime', 'newstokvn-breaking')).toBe(NEWSTOKVN_RECIPE)
+    expect(recipeForLayout('finance', 'newstokvn-flash')).toBe(NEWSTOKVN_RECIPE)
+    expect(recipeForLayout('sports', 'newstokvn-cover')).toBe(NEWSTOKVN_RECIPE)
+    // But the 6 generic layouts still get the topic recipe.
+    expect(recipeForLayout('crime', 'news-breaking').palette.primary).toBe(
+      TOPIC_TO_LAYOUT.crime.palette.primary
+    )
   })
 })

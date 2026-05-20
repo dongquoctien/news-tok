@@ -18,10 +18,12 @@ import {
   renderThumbnailStill,
 } from '@news-tok/render'
 import { buildThumbnailConfig } from '@news-tok/thumbnail'
+import type { ThumbnailLayout } from '@news-tok/shared/schema'
 
 const projectId = process.argv[2]
+const layoutOverride = process.argv[3] as ThumbnailLayout | undefined
 if (!projectId) {
-  console.error('Usage: pnpm tsx scripts/smoke-thumbnail.ts <projectId>')
+  console.error('Usage: pnpm tsx scripts/smoke-thumbnail.ts <projectId> [layout]')
   process.exit(2)
 }
 
@@ -62,6 +64,7 @@ async function main() {
     videoPath,
     outDir: candidatesDir,
     topic,
+    layoutOverride,
   })
   const t1 = Date.now()
   console.log(`[smoke-thumbnail] config built in ${t1 - t0}ms`)

@@ -80,6 +80,37 @@ export function ThumbnailRenderer({
 
       <LayoutDecorator layout={layout} recipe={recipe} />
 
+      {/* Centered NEWSTOKVN logo plate for the brand cover layout.
+          Painted between the decorator radial halo and the eyebrow
+          tagline so it reads as the focal element. The logo URL falls
+          back to the watermark logoUrl — same image, different size. */}
+      {layout === 'newstokvn-cover' && watermark.logoUrl ? (
+        <div
+          style={{
+            position: 'absolute',
+            top: 380,
+            left: '50%',
+            width: 480,
+            height: 480,
+            transform: 'translateX(-50%)',
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,0.94)',
+            boxShadow:
+              '0 0 80px rgba(168,85,247,0.65), 0 24px 60px rgba(0,0,0,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden',
+          }}
+        >
+          <img
+            src={resolveImageSrc(watermark.logoUrl)}
+            alt=""
+            style={{ width: '86%', height: '86%', objectFit: 'contain' }}
+          />
+        </div>
+      ) : null}
+
       {edits.eyebrowStyle && edits.eyebrow ? (
         <TextBlock style={edits.eyebrowStyle} text={edits.eyebrow} />
       ) : null}
@@ -112,7 +143,7 @@ export function ThumbnailRenderer({
         </div>
       ) : null}
 
-      {watermark.enabled ? <WatermarkLayer watermark={watermark} /> : null}
+      {watermark.enabled ? <WatermarkLayer watermark={watermark} resolveImageSrc={resolveImageSrc} /> : null}
     </div>
   )
 }
@@ -285,7 +316,13 @@ function splitOnAccent(text: string, accent: string): Array<{ kind: 'plain' | 'a
   return out
 }
 
-function WatermarkLayer({ watermark }: { watermark: Thumbnail['watermark'] }) {
+function WatermarkLayer({
+  watermark,
+  resolveImageSrc,
+}: {
+  watermark: Thumbnail['watermark']
+  resolveImageSrc: (path: string) => string
+}) {
   const padding = 48
   const positionStyle: React.CSSProperties = (() => {
     switch (watermark.position) {
@@ -301,6 +338,47 @@ function WatermarkLayer({ watermark }: { watermark: Thumbnail['watermark'] }) {
         return { right: padding, bottom: padding }
     }
   })()
+  // Logo variant — show the channel mark next to the handle. Used by
+  // newstokvn-* layouts so the cover doubles as a brand stamp. The
+  // logo URL is resolved through the caller's image resolver so
+  // Remotion + Studio both see the right URL space.
+  if (watermark.kind === 'logo' && watermark.logoUrl) {
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          ...positionStyle,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 16,
+          padding: '10px 18px',
+          background: watermark.bgColor,
+          borderRadius: 12,
+          fontFamily: 'Inter, sans-serif',
+        }}
+      >
+        <img
+          src={resolveImageSrc(watermark.logoUrl)}
+          alt=""
+          style={{
+            width: watermark.logoSize,
+            height: watermark.logoSize,
+            objectFit: 'contain',
+          }}
+        />
+        <span
+          style={{
+            color: watermark.color,
+            fontSize: watermark.fontSize,
+            fontWeight: 800,
+            letterSpacing: 0.5,
+          }}
+        >
+          {watermark.text}
+        </span>
+      </div>
+    )
+  }
   return (
     <div
       style={{
@@ -334,6 +412,14 @@ function accentBgFor(layout: ThumbnailLayout, recipe: LayoutRecipe): string | un
     // science / knowledge: just colour change, no plate.
     case 'science-clean':
     case 'knowledge-bookish':
+      return undefined
+    case 'newstokvn-breaking':
+    case 'newstokvn-flash':
+      // Yellow zap plate for the accent phrase — pops against deep purple.
+      return recipe.palette.accent
+    case 'newstokvn-cover':
+      // Cover keeps accent as colour-only so the centered headline
+      // stays uncluttered.
       return undefined
     default: {
       const _exhaustive: never = layout

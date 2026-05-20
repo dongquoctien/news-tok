@@ -111,6 +111,11 @@ export async function buildThumbnailConfig(
   }
 
   // 5. Assemble + validate.
+  // Brand-locked layouts get the logo watermark by default so the cover
+  // doubles as a channel stamp. The other 6 layouts keep the plain
+  // text plate to stay backwards compatible.
+  const isBrandLayout =
+    layout === 'newstokvn-breaking' || layout === 'newstokvn-flash' || layout === 'newstokvn-cover'
   const raw: Thumbnail = {
     layout,
     background: picked
@@ -119,11 +124,13 @@ export async function buildThumbnailConfig(
     edits,
     watermark: {
       enabled: true,
+      kind: isBrandLayout ? 'logo' : 'text',
       text: '@newstokvn',
+      logoSize: isBrandLayout ? 80 : 96,
       position: 'bottom-right',
       color: '#ffffff',
-      fontSize: 32,
-      bgColor: 'rgba(0,0,0,0.45)',
+      fontSize: 30,
+      bgColor: isBrandLayout ? 'rgba(0,0,0,0.65)' : 'rgba(0,0,0,0.45)',
     },
     candidateFrames: candidateFrames.map((f) => ({ path: f.path, atSec: f.atSec })),
     safeZoneWarnings: warnings,
