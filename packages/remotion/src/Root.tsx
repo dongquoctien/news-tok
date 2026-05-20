@@ -2,11 +2,17 @@ import { Composition, type CalculateMetadataFunction } from 'remotion'
 import {
   ASPECT_PRESETS,
   ProjectSchema,
+  ThumbnailSchema,
   resolveRenderPreset,
   type Aspect,
   type Project,
+  type Thumbnail,
 } from '@news-tok/shared/schema'
 import { NewsTokComposition, type NewsTokCompositionProps } from './compositions/NewsTokComposition.js'
+import {
+  ThumbnailComposition,
+  type ThumbnailCompositionProps,
+} from './compositions/ThumbnailComposition.js'
 
 const FALLBACK_PROJECT: Project = ProjectSchema.parse({
   id: 'placeholder',
@@ -93,6 +99,62 @@ export const RemotionRoot = () => {
         height={ASPECT_PRESETS['1:1'].height}
         durationInFrames={90}
       />
+      <Composition
+        id="Thumbnail916"
+        component={ThumbnailComposition}
+        defaultProps={FALLBACK_THUMBNAIL_PROPS}
+        fps={30}
+        width={1080}
+        height={1920}
+        durationInFrames={1}
+      />
     </>
   )
+}
+
+const FALLBACK_THUMBNAIL_PROPS: ThumbnailCompositionProps = {
+  thumbnail: ThumbnailSchema.parse({
+    layout: 'news-breaking',
+    background: { kind: 'solid', color: '#0b0b0f' },
+    edits: {
+      title: 'Sample headline',
+      eyebrow: 'NEWS',
+      titleStyle: {
+        x: 56,
+        y: 980,
+        width: 968,
+        fontSize: 88,
+        fontWeight: 900,
+        color: '#ffffff',
+        align: 'left',
+        letterSpacing: -0.5,
+        lineHeight: 1.08,
+        uppercase: false,
+      },
+      eyebrowStyle: {
+        x: 56,
+        y: 880,
+        width: 360,
+        fontSize: 36,
+        fontWeight: 900,
+        color: '#ffffff',
+        bgColor: '#E11D48',
+        align: 'left',
+        letterSpacing: 4,
+        lineHeight: 1,
+        uppercase: true,
+      },
+      vignette: 0.3,
+      overlay: { color: '#000000', opacity: 0.35 },
+    },
+    watermark: {
+      enabled: true,
+      text: '@newstokvn',
+      position: 'bottom-right',
+      color: '#ffffff',
+      fontSize: 32,
+      bgColor: 'rgba(0,0,0,0.45)',
+    },
+  }) as Thumbnail,
+  topic: 'generic',
 }

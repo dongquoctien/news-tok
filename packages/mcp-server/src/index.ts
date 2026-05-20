@@ -43,6 +43,14 @@ import { DEFAULT_VOICES } from '@news-tok/shared/schema'
 import { generateSocialCaptions } from '@news-tok/shared/social'
 import { createProject, listProjects } from './projects.js'
 import { researchProjectAesthetic } from './research.js'
+import {
+  runGenerateThumbnail,
+  runRegenerateThumbnail,
+  runPreviewSafeZones,
+  generateThumbnailInputSchema,
+  regenerateThumbnailInputSchema,
+  previewSafeZonesInputSchema,
+} from './thumbnail-tools.js'
 
 function ok(payload: unknown) {
   const text = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2)
@@ -850,6 +858,60 @@ async function main() {
       try {
         const outPaths = await renderProjectMedia(projectId, { variants })
         return ok({ outputPaths: outPaths })
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'generateThumbnail',
+    {
+      title: 'Generate a social-upload thumbnail (1080x1920 JPG)',
+      description:
+        'Generate a 1080x1920 JPG thumbnail for the project, sized to be safe on TikTok / YT Shorts / FB Reels / IG Reels (single shared file). Requires renderProject to have completed — the tool extracts 5 candidate frames from output.mp4 (10/30/50/70/90%), picks the middle one as background, drops the headline + eyebrow chip + watermark inside the universal safe zone (y=250..1440), and renders the still to data/projects/<id>/thumb.jpg. Auto-classifies topic from the project (crime → news-breaking red plate, entertainment → bomb yellow chip, tech/health → science-clean gradient, education/travel/food → knowledge-bookish cream, sports → sports-hype). Pass `layout` to override. The Thumbnail config (layout, background, edits, candidateFrames, warnings) persists into project.thumbnail so Studio can edit it.',
+      inputSchema: generateThumbnailInputSchema,
+    },
+    async (args) => {
+      try {
+        const result = await runGenerateThumbnail(args)
+        return ok(result)
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'regenerateThumbnail',
+    {
+      title: 'Re-render the thumbnail keeping current edits',
+      description:
+        'Re-extract candidate frames from output.mp4 and re-render thumb.jpg using the current project.thumbnail edits (title, position, eyebrow, layout, watermark). Use after a fresh renderProject when you want the thumbnail to reflect new video content but keep the user-tuned text + styling. If project.thumbnail is missing, falls back to a full generateThumbnail.',
+      inputSchema: regenerateThumbnailInputSchema,
+    },
+    async (args) => {
+      try {
+        const result = await runRegenerateThumbnail(args)
+        return ok(result)
+      } catch (err) {
+        return fail(err)
+      }
+    }
+  )
+
+  server.registerTool(
+    'previewSafeZones',
+    {
+      title: 'List platform safe-zone rects for thumbnail editing',
+      description:
+        'Return every platform UI overlay rect for TikTok / YT Shorts / FB Reels / IG Reels on a 1080x1920 canvas. The Studio editor draws these as translucent masks so users can verify their headline + face placement reads on every platform. Useful as a no-render lint pass before regenerating.',
+      inputSchema: previewSafeZonesInputSchema,
+    },
+    async (args) => {
+      try {
+        const result = await runPreviewSafeZones(args)
+        return ok(result)
       } catch (err) {
         return fail(err)
       }

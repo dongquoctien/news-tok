@@ -242,6 +242,29 @@ All MCP tools are exposed under the `mcp__news-tok__*` namespace:
 - `renderSegment({ projectId, segmentId })` — renders one segment to mp4.
 - `renderProject({ projectId })` — renders all segments and concats into
   `output.mp4`.
+- `generateThumbnail({ projectId, layout?, frameCount? })` — generate
+  the 1080×1920 JPG social-upload thumbnail at
+  `data/projects/<id>/thumb.jpg`. Requires a rendered `output.mp4` —
+  the tool extracts 5 candidate frames from the final video,
+  auto-classifies the project topic, picks the matching layout
+  (`news-breaking` / `news-weather` / `entertainment-bomb` /
+  `science-clean` / `knowledge-bookish` / `sports-hype`) with the
+  topic palette, lays headline + eyebrow + watermark inside the
+  universal safe zone (intersection of TikTok / YT Shorts / FB Reels
+  / IG Reels UI bands → `y` range 250..1440), and persists the full
+  config into `project.thumbnail` so Studio can edit later. Returns
+  `{ thumbnail, path, warnings }` where `warnings` lists every safe-
+  zone violation (e.g. text overflowing IG bottom band) so you can
+  flag them to the user.
+- `regenerateThumbnail({ projectId })` — keep the current edits
+  (layout, headline, position, accent) but re-extract candidate
+  frames from `output.mp4` and re-render `thumb.jpg`. Use after a
+  fresh `renderProject` when you want the thumbnail to reflect new
+  video content without rewriting the cover styling.
+- `previewSafeZones({ projectId })` — return the rect list for every
+  platform's UI band on a 1080×1920 canvas. Useful as a no-render
+  lint pass to confirm what would be checked before re-generating.
+  Pure data, no file I/O on the output side.
 
 These tools cache aggressively. Calling `searchImage` with the same query twice
 returns the same cached file; never re-download manually.
@@ -392,7 +415,28 @@ per segment.
    user picks all 3, call `renderProject({ projectId, variants: 'all' })`.
 10. Report the absolute path(s) to the output file(s) so the user can open
     them — for multi-variant renders, list every output explicitly.
-11. **Generate + rewrite social captions** (REQUIRED — do not skip).
+11. **Generate the social-upload thumbnail** (REQUIRED — do not skip).
+    Call `generateThumbnail({ projectId })`. The tool extracts 5
+    candidate frames from `output.mp4` (10/30/50/70/90%), picks the
+    middle frame as background, drops a headline + eyebrow chip + the
+    `@newstokvn` watermark inside the universal safe zone (y=250..1440,
+    the intersection of TikTok / YT Shorts / FB Reels / IG Reels UI
+    bands), and renders `data/projects/<id>/thumb.jpg` (1080×1920 JPG).
+    The chosen layout depends on the project's topic (auto-classified
+    via the same keyword router as `researchProjectAesthetic`): crime /
+    politics / finance → `news-breaking`, entertainment / lifestyle →
+    `entertainment-bomb`, tech / health / nature → `science-clean`,
+    education / travel / food → `knowledge-bookish`, sports →
+    `sports-hype`. Override via `generateThumbnail({ projectId,
+    layout: 'sports-hype' })` when the auto pick feels off.
+
+    Report the absolute path of `thumb.jpg`. If
+    `result.warnings.length > 0`, list each one (e.g. "Title overlaps
+    instagram-reels bottom UI band") so the user knows what may be
+    obscured when posting. The user can refine layout / text / frame in
+    Studio at `/projects/<id>/thumbnail` — your job is only to ship a
+    sensible default.
+12. **Generate + rewrite social captions** (REQUIRED — do not skip).
     Call `generateSocialCaption({ projectId })` to pull the template
     baseline. The template glues every keypoint into the caption body
     so it reads like a transcript — DO NOT paste it verbatim. Rewrite

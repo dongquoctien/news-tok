@@ -15,6 +15,7 @@ export default defineConfig({
     '@news-tok/shared',
     '@news-tok/media',
     '@news-tok/render',
+    '@news-tok/thumbnail',
   ],
   // Keep heavy native/binding-bearing libs as runtime externals.
   external: [

@@ -9,4 +9,9 @@ export {
   type ProjectSummary,
 } from './projects.js'
 export { readJob, writeJob, newJobId, type JobRecord, type JobStatus } from './jobs.js'
+export {
+  renderThumbnailStill,
+  renderProjectThumbnail,
+  type RenderThumbnailOptions,
+} from './thumbnail-render.js'
 export * from './paths.js'

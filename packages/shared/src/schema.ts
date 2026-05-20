@@ -783,6 +783,123 @@ export const SocialCaptionsCacheSchema = z.object({
 })
 export type SocialCaptionsCache = z.infer<typeof SocialCaptionsCacheSchema>
 
+/**
+ * Thumbnail configuration — one file shared across TikTok / YT Shorts /
+ * Facebook Reels / Instagram Reels. Canvas is always 1080x1920 (matches
+ * the video). All headline + chip + watermark coordinates are pixels in
+ * that coordinate space; the renderer scales them down for previews.
+ *
+ * `background.kind`:
+ *   - `random-frame` → a frame extracted from output.mp4 (or a segment
+ *     mp4). `framePath` is an absolute path on disk; the extractor
+ *     stages it under `data/projects/<id>/thumb-candidates/`.
+ *   - `asset-ref`    → reuse an image already in `project.library` or
+ *     a cached searchImage result. Stored as a full AssetRef so the
+ *     editor can show provenance.
+ *   - `solid`        → fall back to a single colour fill (no photo).
+ *     Useful when no frame extraction has run yet.
+ *
+ * `edits.titleStyle` / `eyebrowStyle` carry the absolute position +
+ * typography for each text block. Coordinates are top-left origin in
+ * the 1080x1920 canvas. The editor enforces dragging inside the
+ * universal safe zone (y=250..1440) and writes warnings to
+ * `safeZoneWarnings` when the user overrides that.
+ */
+export const ThumbnailTextStyleSchema = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number().positive(),
+  fontSize: z.number().int().positive(),
+  fontWeight: z.number().int().min(100).max(900).default(800),
+  color: z.string(),
+  bgColor: z.string().optional(),
+  align: z.enum(['left', 'center', 'right']).default('left'),
+  fontFamily: z.string().optional(),
+  letterSpacing: z.number().default(0),
+  lineHeight: z.number().default(1.1),
+  uppercase: z.boolean().default(false),
+})
+export type ThumbnailTextStyle = z.infer<typeof ThumbnailTextStyleSchema>
+
+export const ThumbnailChipSchema = z.object({
+  text: z.string().min(1).max(40),
+  x: z.number(),
+  y: z.number(),
+  bgColor: z.string(),
+  color: z.string(),
+  fontSize: z.number().int().positive().default(38),
+})
+export type ThumbnailChip = z.infer<typeof ThumbnailChipSchema>
+
+export const ThumbnailLayoutSchema = z.enum([
+  'news-breaking',
+  'news-weather',
+  'entertainment-bomb',
+  'science-clean',
+  'knowledge-bookish',
+  'sports-hype',
+])
+export type ThumbnailLayout = z.infer<typeof ThumbnailLayoutSchema>
+
+export const ThumbnailSchema = z.object({
+  path: z.string().optional(),
+  layout: ThumbnailLayoutSchema,
+  background: z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('random-frame'),
+      framePath: z.string(),
+      atSec: z.number().nonnegative().optional(),
+    }),
+    z.object({
+      kind: z.literal('asset-ref'),
+      asset: AssetRefSchema,
+    }),
+    z.object({
+      kind: z.literal('solid'),
+      color: z.string(),
+    }),
+  ]),
+  edits: z.object({
+    title: z.string().min(1),
+    eyebrow: z.string().max(40).optional(),
+    /** Phrase to repaint with accent treatment (mirrors `**...**` markup). */
+    accent: z.string().optional(),
+    titleStyle: ThumbnailTextStyleSchema,
+    eyebrowStyle: ThumbnailTextStyleSchema.optional(),
+    chip: ThumbnailChipSchema.optional(),
+    /** Vignette intensity (0..1) painted on top of the background. */
+    vignette: z.number().min(0).max(1).default(0.2),
+    /** Solid overlay between bg and text — usually a 30% black plate. */
+    overlay: z
+      .object({
+        color: z.string(),
+        opacity: z.number().min(0).max(1),
+      })
+      .optional(),
+  }),
+  watermark: z.object({
+    enabled: z.boolean().default(true),
+    text: z.string().default('@newstokvn'),
+    position: z.enum(['bottom-right', 'bottom-left', 'top-right', 'top-left']).default('bottom-right'),
+    color: z.string().default('#ffffff'),
+    fontSize: z.number().int().positive().default(32),
+    bgColor: z.string().default('rgba(0,0,0,0.45)'),
+  }),
+  /** Frame candidates extracted from the rendered video. */
+  candidateFrames: z
+    .array(
+      z.object({
+        path: z.string(),
+        atSec: z.number().nonnegative(),
+      })
+    )
+    .default([]),
+  /** Lint output — strings describing which text blocks overflow which platform's safe zone. */
+  safeZoneWarnings: z.array(z.string()).default([]),
+  generatedAt: z.string().datetime().optional(),
+})
+export type Thumbnail = z.infer<typeof ThumbnailSchema>
+
 export const ProjectSchema = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -859,6 +976,12 @@ export const ProjectSchema = z.object({
    * endpoint falls back to the local template when this is absent.
    */
   socialCaptions: SocialCaptionsCacheSchema.optional(),
+  /**
+   * Thumbnail config for social-upload cover image. Optional so legacy
+   * storyboards parse unchanged. Populated by MCP `generateThumbnail`
+   * (after `renderProject`) and editable from Studio's thumb editor.
+   */
+  thumbnail: ThumbnailSchema.optional(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
 })
