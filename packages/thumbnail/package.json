@@ -22,10 +22,7 @@
   },
   "dependencies": {
     "@news-tok/media": "workspace:*",
-    "@news-tok/remotion": "workspace:*",
     "@news-tok/shared": "workspace:*",
-    "@remotion/bundler": "^4.0.459",
-    "@remotion/renderer": "^4.0.459",
     "ffmpeg-static": "^5.2.0",
     "zod": "^3.25.0"
   },

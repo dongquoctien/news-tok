@@ -23,3 +23,16 @@ export { buildDefaultEdits, focalAnchorYFor, type DefaultEditsInput } from './de
 
 export { ThumbnailRenderer, type ThumbnailRendererProps } from './layouts/ThumbnailRenderer.js'
 export { LayoutDecorator } from './layouts/decorators.js'
+
+export {
+  extractFrames,
+  extractBestFrame,
+  type ExtractFramesInput,
+  type ExtractedFrame,
+} from './extract-frame.js'
+
+export {
+  buildThumbnailConfig,
+  type BuildThumbnailConfigInput,
+  type BuildThumbnailConfigResult,
+} from './generate.js'
