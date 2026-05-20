@@ -838,6 +838,13 @@ export const ThumbnailLayoutSchema = z.enum([
   'science-clean',
   'knowledge-bookish',
   'sports-hype',
+  // NEWSTOKVN brand-locked thumbnails — deep purple radial + yellow zap
+  // + red breaking badge + slanted uppercase headline + logo watermark.
+  // Use these when the project is the channel's flagship content
+  // (breaking news, daily flash, channel cover).
+  'newstokvn-breaking',
+  'newstokvn-flash',
+  'newstokvn-cover',
 ])
 export type ThumbnailLayout = z.infer<typeof ThumbnailLayoutSchema>
 
@@ -879,7 +886,19 @@ export const ThumbnailSchema = z.object({
   }),
   watermark: z.object({
     enabled: z.boolean().default(true),
+    /**
+     * Watermark mode:
+     *   - 'text' (default) → render `text` field as a plain pill
+     *     (legacy 6 layouts use this)
+     *   - 'logo' → render the NEWSTOKVN logo PNG + the handle next to it
+     *     (newstokvn-* layouts default to this for brand consistency)
+     */
+    kind: z.enum(['text', 'logo']).default('text'),
     text: z.string().default('@newstokvn'),
+    /** Logo image URL — only honoured when kind='logo'. */
+    logoUrl: z.string().optional(),
+    /** Logo width in px (height auto). Default 96 px = nicely visible at 1080w. */
+    logoSize: z.number().int().positive().default(96),
     position: z.enum(['bottom-right', 'bottom-left', 'top-right', 'top-left']).default('bottom-right'),
     color: z.string().default('#ffffff'),
     fontSize: z.number().int().positive().default(32),

@@ -7,7 +7,7 @@ import {
   ThumbnailRenderer,
   type ThumbnailRendererProps,
 } from '@news-tok/thumbnail/layouts'
-import { recipeForTopic } from '@news-tok/thumbnail/topic-router'
+import { recipeForLayout } from '@news-tok/thumbnail/topic-router'
 import type { Thumbnail, ThumbnailLayout } from '@news-tok/shared/schema'
 
 /**
@@ -26,15 +26,30 @@ export type ThumbnailCompositionProps = {
    * topic; falls back to `generic` (red breaking-news look) when absent.
    */
   topic: string
+  /**
+   * Brand logo URL staged into publicDir by `stageBrandAssets()`. When
+   * present and the thumbnail's watermark.logoUrl is missing, fills in
+   * the URL so newstokvn-* layouts pick up the channel logo automatically.
+   */
+  brandLogoUrl?: string
 }
 
-export function ThumbnailComposition({ thumbnail, topic }: ThumbnailCompositionProps) {
-  const recipe = recipeForTopic(topic)
+export function ThumbnailComposition({ thumbnail, topic, brandLogoUrl }: ThumbnailCompositionProps) {
+  // recipeForLayout honours brand-locked layouts by pinning the NEWSTOKVN
+  // palette regardless of topic. Other layouts still get their topic
+  // recipe.
+  const recipe = recipeForLayout(topic, thumbnail.layout)
+  // Backfill watermark.logoUrl from the staged brand asset URL so the
+  // user doesn't need to set it manually when picking a newstokvn layout.
+  const watermark =
+    thumbnail.watermark.kind === 'logo' && !thumbnail.watermark.logoUrl && brandLogoUrl
+      ? { ...thumbnail.watermark, logoUrl: brandLogoUrl }
+      : thumbnail.watermark
   const props: ThumbnailRendererProps = {
     layout: thumbnail.layout,
     edits: thumbnail.edits,
     background: thumbnail.background,
-    watermark: thumbnail.watermark,
+    watermark,
     recipe,
     // The bundle serves data/ at /public/... — relative-to-data paths
     // already include that prefix when the render pipeline wrote them.

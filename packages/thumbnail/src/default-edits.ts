@@ -156,6 +156,57 @@ function titleStyleFor(layout: ThumbnailLayout, recipe: LayoutRecipe, language: 
         lineHeight: 0.98,
         uppercase: true,
       }
+    case 'newstokvn-breaking':
+      // Slanted bold uppercase, white on deep purple, lower 3rd anchor.
+      // Larger font + tighter line-height matches the brand banner.
+      return {
+        x: TITLE_MARGIN_X + 100, // shift right of the lightning bolt
+        y: 1020,
+        width: width - 100,
+        fontSize: 92,
+        fontWeight: 900,
+        color: '#FFFFFF',
+        bgColor: undefined,
+        align: 'left',
+        fontFamily: baseFont,
+        letterSpacing: -1,
+        lineHeight: 0.98,
+        uppercase: true,
+      }
+    case 'newstokvn-flash':
+      // Centered slanted headline between the two flanking zap bolts.
+      return {
+        x: TITLE_MARGIN_X + 120,
+        y: 1020,
+        width: width - 240,
+        fontSize: 84,
+        fontWeight: 900,
+        color: '#FFFFFF',
+        bgColor: undefined,
+        align: 'center',
+        fontFamily: baseFont,
+        letterSpacing: -0.5,
+        lineHeight: 1.0,
+        uppercase: true,
+      }
+    case 'newstokvn-cover':
+      // Headline anchors below the centered logo (which lives at
+      // y=380..860). Capped fontSize to keep 3-line VN titles inside
+      // the safe zone above the tagline at y=1400.
+      return {
+        x: TITLE_MARGIN_X,
+        y: 950,
+        width,
+        fontSize: 76,
+        fontWeight: 900,
+        color: '#FFFFFF',
+        bgColor: undefined,
+        align: 'center',
+        fontFamily: baseFont,
+        letterSpacing: -0.5,
+        lineHeight: 1.02,
+        uppercase: true,
+      }
     default: {
       const _never: never = layout
       void _never
@@ -269,6 +320,58 @@ function eyebrowStyleFor(layout: ThumbnailLayout, recipe: LayoutRecipe, language
         lineHeight: 1,
         uppercase: true,
       }
+    case 'newstokvn-breaking':
+      // Optional channel chip top-left (decorator paints the
+      // BREAKING + 24/7 stacked badge on the right). Keeps a small
+      // category eyebrow so the user can label this segment.
+      return {
+        x: TITLE_MARGIN_X,
+        y: 940,
+        width: 320,
+        fontSize: 32,
+        fontWeight: 900,
+        color: recipe.palette.ink,
+        bgColor: recipe.palette.accent,
+        align: 'left',
+        fontFamily: baseFont,
+        letterSpacing: 4,
+        lineHeight: 1,
+        uppercase: true,
+      }
+    case 'newstokvn-flash':
+      return {
+        x: TITLE_MARGIN_X,
+        y: 900,
+        width: 360,
+        fontSize: 32,
+        fontWeight: 900,
+        color: recipe.palette.ink,
+        bgColor: recipe.palette.accent,
+        align: 'center',
+        fontFamily: baseFont,
+        letterSpacing: 4,
+        lineHeight: 1,
+        uppercase: true,
+      }
+    case 'newstokvn-cover':
+      // Tagline-style eyebrow at the bottom (matches the brand banner
+      // "TIN NHANH • XU HƯỚNG • NỔI BẬT"). Pushed well below the
+      // headline so the two don't overlap when the headline wraps to
+      // 3-4 lines on long Vietnamese titles.
+      return {
+        x: TITLE_MARGIN_X,
+        y: 1400,
+        width: THUMB_WIDTH - TITLE_MARGIN_X * 2,
+        fontSize: 28,
+        fontWeight: 700,
+        color: '#c4b5fd',
+        bgColor: undefined,
+        align: 'center',
+        fontFamily: baseFont,
+        letterSpacing: 4,
+        lineHeight: 1,
+        uppercase: true,
+      }
     default:
       return undefined
   }
@@ -286,12 +389,24 @@ export function buildDefaultEdits(input: DefaultEditsInput): Thumbnail['edits'] 
 
   return {
     title: split.plain,
-    eyebrow,
+    // Cover layout uses the brand tagline as the eyebrow when the
+    // caller didn't pass one — matches the channel banner instead of
+    // a "BREAKING" chip.
+    eyebrow:
+      layout === 'newstokvn-cover' && !input.eyebrow
+        ? input.language === 'vi'
+          ? 'TIN NHANH · XU HƯỚNG · NỔI BẬT'
+          : 'FAST NEWS · TRENDS · TOP STORIES'
+        : eyebrow,
     accent: input.accent ?? split.accent,
     titleStyle: titleStyleFor(layout, recipe, language),
     eyebrowStyle: eyebrowStyleFor(layout, recipe, language),
     chip: undefined,
-    vignette: layout === 'news-breaking' || layout === 'entertainment-bomb' || layout === 'sports-hype' ? 0.3 : 0.15,
+    vignette: layout === 'news-breaking' || layout === 'entertainment-bomb' || layout === 'sports-hype'
+      ? 0.3
+      : layout === 'newstokvn-breaking' || layout === 'newstokvn-flash' || layout === 'newstokvn-cover'
+        ? 0.1 // decorator already paints a deep purple wash
+        : 0.15,
     overlay:
       layout === 'news-breaking' || layout === 'entertainment-bomb' || layout === 'sports-hype'
         ? { color: '#000000', opacity: 0.35 }

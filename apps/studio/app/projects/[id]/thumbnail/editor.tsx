@@ -22,7 +22,7 @@ import type {
 // ffmpeg-static + Node fs branch (which lives behind the barrel
 // re-export in @news-tok/thumbnail/index.ts).
 import { ThumbnailRenderer } from '@news-tok/thumbnail/layouts'
-import { recipeForTopic } from '@news-tok/thumbnail/topic-router'
+import { recipeForLayout } from '@news-tok/thumbnail/topic-router'
 import {
   PLATFORM_SAFE_ZONES,
   SAFE_ZONE_COLORS,
@@ -46,6 +46,11 @@ const LAYOUTS: { id: ThumbnailLayout; label: string }[] = [
   { id: 'science-clean', label: 'Science clean' },
   { id: 'knowledge-bookish', label: 'Knowledge bookish' },
   { id: 'sports-hype', label: 'Sports hype' },
+  // NEWSTOKVN brand-locked layouts — deep purple radial + zap + logo
+  // watermark. Pinned palette regardless of topic classification.
+  { id: 'newstokvn-breaking', label: 'NEWSTOKVN breaking' },
+  { id: 'newstokvn-flash', label: 'NEWSTOKVN flash' },
+  { id: 'newstokvn-cover', label: 'NEWSTOKVN cover' },
 ]
 
 const PREVIEW_HEIGHT = 720
@@ -58,6 +63,9 @@ const PREVIEW_SCALE = PREVIEW_HEIGHT / THUMB_HEIGHT
  */
 function assetSrc(path: string): string {
   if (/^https?:|^data:|^blob:/i.test(path)) return path
+  // Relative URLs (already Studio public assets like /newstokvn-logo.png)
+  // pass through untouched — they would 404 if routed through /api/asset.
+  if (path.startsWith('/')) return path
   // The asset route accepts a `path` query param. Encode it so Windows
   // backslashes survive.
   return `/api/asset?path=${encodeURIComponent(path)}`
@@ -85,7 +93,10 @@ export function ThumbnailEditor({ projectId, initialProject }: Props) {
       })
   }, [projectId])
 
-  const recipe = useMemo(() => recipeForTopic(topic), [topic])
+  const recipe = useMemo(
+    () => recipeForLayout(topic, thumbnail?.layout ?? 'news-breaking'),
+    [topic, thumbnail?.layout]
+  )
 
   const onGenerate = useCallback(async () => {
     setBusy('generate')
@@ -320,7 +331,17 @@ export function ThumbnailEditor({ projectId, initialProject }: Props) {
                   layout={thumbnail.layout}
                   edits={thumbnail.edits}
                   background={thumbnail.background}
-                  watermark={thumbnail.watermark}
+                  watermark={
+                    // Backfill logo URL for the live preview so newstokvn-*
+                    // layouts show the channel logo even when the saved
+                    // watermark hasn't been re-rendered through the
+                    // server pipeline yet (which stages the logo into
+                    // publicDir). Studio's Next.js public folder serves
+                    // the same file at /newstokvn-logo.png.
+                    thumbnail.watermark.kind === 'logo' && !thumbnail.watermark.logoUrl
+                      ? { ...thumbnail.watermark, logoUrl: '/newstokvn-logo.png' }
+                      : thumbnail.watermark
+                  }
                   recipe={recipe}
                   resolveImageSrc={assetSrc}
                 />

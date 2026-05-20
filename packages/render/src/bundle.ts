@@ -68,13 +68,22 @@ async function listUserLayouts(): Promise<{ name: string; path: string }[]> {
  * minimal fixture).
  */
 async function hashBuiltInRemotion(): Promise<string> {
-  const targets = [
+  // Top-level dirs whose IMMEDIATE files we hash (flat scan).
+  const flatDirs = [
     resolve(REPO_ROOT, 'packages', 'remotion', 'src', 'layouts'),
     resolve(REPO_ROOT, 'packages', 'remotion', 'src', 'scenes'),
+    resolve(REPO_ROOT, 'packages', 'remotion', 'src', 'compositions'),
+    // @news-tok/thumbnail is consumed by the Remotion bundle through
+    // ThumbnailComposition.tsx — without hashing the source here, the
+    // bundler cache holds onto a stale React tree after edits to
+    // layouts/decorators.tsx or ThumbnailRenderer.tsx and the renderer
+    // silently reuses the previous bundle.
+    resolve(REPO_ROOT, 'packages', 'thumbnail', 'src'),
+    resolve(REPO_ROOT, 'packages', 'thumbnail', 'src', 'layouts'),
   ]
   const h = createHash('sha256')
   let touched = false
-  for (const dir of targets) {
+  for (const dir of flatDirs) {
     if (!existsSync(dir)) continue
     const entries = await readdir(dir, { withFileTypes: true })
     const files = entries
