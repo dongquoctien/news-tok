@@ -18,16 +18,19 @@ import type {
   ThumbnailLayout,
   ThumbnailTextStyle,
 } from '@news-tok/shared/schema'
+// Import via deep paths so Next.js client bundle never pulls the
+// ffmpeg-static + Node fs branch (which lives behind the barrel
+// re-export in @news-tok/thumbnail/index.ts).
+import { ThumbnailRenderer } from '@news-tok/thumbnail/layouts'
+import { recipeForTopic } from '@news-tok/thumbnail/topic-router'
 import {
   PLATFORM_SAFE_ZONES,
   SAFE_ZONE_COLORS,
   THUMB_HEIGHT,
   THUMB_WIDTH,
-  ThumbnailRenderer,
   UNIVERSAL_SAFE_ZONE,
   lintAgainstAllPlatforms,
-  recipeForTopic,
-} from '@news-tok/thumbnail'
+} from '@news-tok/thumbnail/safe-zones'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 

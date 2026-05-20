@@ -1,9 +1,13 @@
 import { AbsoluteFill } from 'remotion'
+// Import via deep paths so the Remotion bundler doesn't pull the
+// ffmpeg-static + Node fs branch from @news-tok/thumbnail/index.ts.
+// The browser bundle only ever needs the pure-React renderer + the
+// topic palette router.
 import {
   ThumbnailRenderer,
-  recipeForTopic,
   type ThumbnailRendererProps,
-} from '@news-tok/thumbnail'
+} from '@news-tok/thumbnail/layouts'
+import { recipeForTopic } from '@news-tok/thumbnail/topic-router'
 import type { Thumbnail, ThumbnailLayout } from '@news-tok/shared/schema'
 
 /**
