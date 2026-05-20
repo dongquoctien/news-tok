@@ -20,3 +20,6 @@ export {
 } from './topic-router.js'
 
 export { buildDefaultEdits, focalAnchorYFor, type DefaultEditsInput } from './default-edits.js'
+
+export { ThumbnailRenderer, type ThumbnailRendererProps } from './layouts/ThumbnailRenderer.js'
+export { LayoutDecorator } from './layouts/decorators.js'
