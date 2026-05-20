@@ -17,6 +17,7 @@
     "@news-tok/remotion": "workspace:*",
     "@news-tok/render": "workspace:*",
     "@news-tok/shared": "workspace:*",
+    "@news-tok/thumbnail": "workspace:*",
     "@next/env": "^16.2.6",
     "@radix-ui/react-dialog": "^1.1.4",
     "@radix-ui/react-dropdown-menu": "^2.1.16",

@@ -32,6 +32,9 @@ importers:
       '@news-tok/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@news-tok/thumbnail':
+        specifier: workspace:*
+        version: link:../../packages/thumbnail
       '@next/env':
         specifier: ^16.2.6
         version: 16.2.6

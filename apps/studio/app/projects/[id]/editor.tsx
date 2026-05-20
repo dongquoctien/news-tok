@@ -1076,6 +1076,17 @@ export function ProjectEditor({ initial }: { initial: Project }) {
               </Button>
             }
           />
+          <Link href={`/projects/${project.id}/thumbnail`}>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={project.segments.length === 0}
+              title="Edit the 1080×1920 thumbnail cover for social upload"
+            >
+              <ImageIcon />
+              Thumbnail
+            </Button>
+          </Link>
           {project.variants && project.variants.length > 0 ? (
             // Split button: primary action "Render all" on the left, a
             // narrow caret on the right opens a native <select> hidden
