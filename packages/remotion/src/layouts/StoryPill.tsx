@@ -78,7 +78,7 @@ export function StoryPill({
       <div
         style={{
           position: 'absolute',
-          top: 56 * r.unit,
+          top: '6%',
           left: '50%',
           transform: 'translateX(-50%)',
           background: '#ffffff',
@@ -86,7 +86,7 @@ export function StoryPill({
           padding: `${10 * r.unit}px ${28 * r.unit}px`,
           borderRadius: 999,
           fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-          fontSize: 26 * r.font,
+          fontSize: r.safeFont(26),
           fontWeight: 800,
           letterSpacing: 2,
           textTransform: 'uppercase',
@@ -102,9 +102,9 @@ export function StoryPill({
       <div
         style={{
           position: 'absolute',
-          left: 56 * r.unit,
-          right: 56 * r.unit,
-          bottom: 140 * r.unit,
+          left: '5%',
+          right: '5%',
+          bottom: '12%',
           display: 'flex',
           flexDirection: 'column',
           alignItems: 'flex-start',
@@ -114,7 +114,7 @@ export function StoryPill({
         <div
           style={{
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 78 * r.font,
+            fontSize: r.safeFont(78),
             fontWeight: 900,
             lineHeight: 1.08,
             color: '#ffffff',

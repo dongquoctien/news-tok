@@ -32,7 +32,7 @@ export const TitleCard = ({
   // apply when a layout is in charge — the layout owns its own
   // chrome.
   if (segment.layoutId) {
-    const Layout = resolveLayout(segment.layoutId)
+    const Layout = resolveLayout(segment.layoutId, project.aspect)
     return (
       <Layout
         text={segment.text}

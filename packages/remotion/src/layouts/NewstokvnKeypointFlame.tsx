@@ -80,8 +80,8 @@ export function NewstokvnKeypointFlame({
       <div
         style={{
           position: 'absolute',
-          top: 56 * r.unit,
-          left: 56 * r.unit,
+          top: '5%',
+          left: '5%',
           display: 'flex',
           alignItems: 'center',
           gap: 10 * r.unit,
@@ -97,7 +97,7 @@ export function NewstokvnKeypointFlame({
         <span
           style={{
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 24 * r.font,
+            fontSize: r.safeFont(24),
             fontWeight: 900,
             letterSpacing: 3,
             textTransform: 'uppercase',
@@ -111,11 +111,11 @@ export function NewstokvnKeypointFlame({
       <div
         style={{
           position: 'absolute',
-          left: 56 * r.unit,
-          right: 56 * r.unit,
-          bottom: 140 * r.unit,
+          left: '5%',
+          right: '5%',
+          bottom: '12%',
           fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-          fontSize: 76 * r.font,
+          fontSize: r.safeFont(76),
           fontWeight: 900,
           lineHeight: 1.08,
           color: '#ffffff',

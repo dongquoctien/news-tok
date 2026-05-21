@@ -62,7 +62,9 @@ export function BreakingNews({
           top: 0,
           left: 0,
           right: 0,
-          height: 110 * r.unit,
+          // Square frames don't have the vertical room of 9:16 — slim
+          // the banner so the media + headline still fit comfortably.
+          height: r.square ? '8%' : 110 * r.unit,
           background: 'linear-gradient(180deg, #dc2626 0%, #b91c1c 100%)',
           display: 'flex',
           alignItems: 'center',
@@ -75,7 +77,7 @@ export function BreakingNews({
         <span
           style={{
             fontFamily: 'Inter, system-ui, sans-serif',
-            fontSize: 40 * r.font,
+            fontSize: r.safeFont(40),
             fontWeight: 900,
             letterSpacing: 6,
             color: '#ffffff',
@@ -91,10 +93,14 @@ export function BreakingNews({
       <div
         style={{
           position: 'absolute',
-          top: 160 * r.unit,
-          left: 56 * r.unit,
-          right: 56 * r.unit,
-          height: '52%',
+          top: r.square ? '12%' : 160 * r.unit,
+          left: '5%',
+          right: '5%',
+          // Square: less vertical room for the media so the headline
+          // still has its own band. 52% works for 9:16 (~1000px) but
+          // becomes 562px at 1080-tall — too tight against banner +
+          // headline + footer. Use 44% in square mode.
+          height: r.square ? '44%' : '52%',
           overflow: 'hidden',
           borderRadius: 12,
           border: '3px solid rgba(255, 255, 255, 0.18)',
@@ -159,7 +165,7 @@ export function BreakingNews({
           <span
             style={{
               fontFamily: 'Inter, system-ui, sans-serif',
-              fontSize: 14 * r.font,
+              fontSize: r.safeFont(14),
               fontWeight: 800,
               letterSpacing: 2,
               color: '#ffffff',
@@ -175,9 +181,9 @@ export function BreakingNews({
       <div
         style={{
           position: 'absolute',
-          top: '70%',
-          left: 56 * r.unit,
-          right: 56 * r.unit,
+          top: r.square ? '60%' : '70%',
+          left: '5%',
+          right: '5%',
           maxWidth: '90%',
           filter: 'drop-shadow(0 4px 24px rgba(37, 99, 235, 0.55))',
         }}
@@ -202,7 +208,7 @@ export function BreakingNews({
           bottom: 0,
           left: 0,
           right: 0,
-          height: 80 * r.unit,
+          height: r.square ? '6%' : 80 * r.unit,
           background: 'linear-gradient(180deg, #0f172a 0%, #020617 100%)',
           display: 'flex',
           alignItems: 'center',
@@ -214,7 +220,7 @@ export function BreakingNews({
         <span
           style={{
             fontFamily: 'Inter, system-ui, sans-serif',
-            fontSize: 22 * r.font,
+            fontSize: r.safeFont(22),
             fontWeight: 700,
             letterSpacing: 4,
             color: '#cbd5f5',
@@ -226,7 +232,7 @@ export function BreakingNews({
         <span
           style={{
             fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-            fontSize: 18 * r.font,
+            fontSize: r.safeFont(18),
             fontWeight: 600,
             color: '#ffffff',
             opacity: 0.7,

@@ -583,11 +583,37 @@ When the user requests a visual effect not covered by the built-in library:
    `scene: "<PascalCaseName>"`.
 5. Call `renderSegment` to re-render.
 
+Aspect-safe tips when authoring a custom scene or layout:
+
+- Prefer `'X%'` strings for `top` / `left` / `right` / `bottom` /
+  `height` / `width` over `N * r.unit` — percentages adapt to any
+  aspect, while `r.unit` is constant (1.0) at every supported preset.
+- Use `r.safeFont(N)` instead of `N * r.font` for headlines and chips.
+  Raw `r.font` collapses to ~56% at 1:1 because it scales by
+  `height / 1920`; `safeFont` clamps the scale to `[0.78, 1.1]` at
+  square / landscape so type stays legible. Portrait is unchanged.
+- Use `r.square` (or `r.kind === 'square'`) to drop or shrink a chrome
+  band when the canvas can't fit it — e.g. a 110-unit-tall top banner
+  becomes `'8%'` at 1:1 so the media + headline still have room.
+
 ## Conventions
 
 - **Default voice (Vietnamese)**: `vi-VN-HoaiMyNeural`
 - **Default voice (English)**: `en-US-AriaNeural`
-- **Default aspect**: `9:16`, 30 fps, 1080×1920
+- **Default aspect**: `9:16`, 30 fps, 1080×1920. Other supported values:
+  `16:9` (1920×1080, YouTube / landscape) and `1:1` (1080×1080, Facebook
+  + Instagram feed). At `1:1` the renderer accepts a curated subset of
+  layouts and auto-falls-back the rest to `builtin-fullBleed` so every
+  storyboard renders. Square-supported layouts: `builtin-fullBleed`,
+  `builtin-storyPill`, `builtin-storyChip`, `builtin-storyVtv`,
+  `builtin-card`, `builtin-magazineCover`, `builtin-statHero`,
+  `builtin-breakingNews`, `builtin-newstokvn-keypoint-flame`,
+  `builtin-newstokvn-keypoint-highlight`,
+  `builtin-newstokvn-keypoint-quote`,
+  `builtin-newstokvn-keypoint-bulletin`,
+  `builtin-newstokvn-keypoint-comparison`,
+  `builtin-newstokvn-keypoint-international`. When generating a 1:1
+  video, prefer one of these for `segment.layoutId` (or omit it).
 - **Default watermark**: `@newstokvn` text watermark, bottom-right of every
   segment, drawn by `LogoMarker` from `project.logo`. `createProject` writes
   this watermark spec into every new project — keep it unless the user asks

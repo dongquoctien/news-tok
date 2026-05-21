@@ -11,7 +11,8 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { BUILT_IN_LAYOUTS } from '@/lib/layouts-catalog'
+import type { Aspect } from '@news-tok/shared/schema'
+import { BUILT_IN_LAYOUTS, isLayoutSupportedAtAspect } from '@/lib/layouts-catalog'
 import { useFavorites } from '@/lib/use-favorites'
 import { cn } from '@/lib/utils'
 import {
@@ -31,10 +32,18 @@ import {
  */
 export function LayoutPicker({
   currentId,
+  aspect,
   onApply,
   trigger,
 }: {
   currentId: string | undefined
+  /**
+   * Project aspect. Layouts not in the 1:1-supported set are dimmed +
+   * non-selectable when this is '1:1' (they auto-fall-back to
+   * FullBleed at render time, which would surprise the user otherwise).
+   * Default '9:16' preserves the pre-aspect-aware behaviour.
+   */
+  aspect?: Aspect
   onApply: (layoutId: string | undefined) => void
   trigger: React.ReactNode
 }) {
@@ -112,16 +121,24 @@ export function LayoutPicker({
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
             {layouts.map((layout) => {
               const selected = picked === layout.id
+              const supported = aspect ? isLayoutSupportedAtAspect(layout.id, aspect) : true
               return (
                 <button
                   key={layout.id}
                   type="button"
-                  onClick={() => setPicked(layout.id)}
+                  onClick={() => supported && setPicked(layout.id)}
+                  disabled={!supported}
+                  title={
+                    supported
+                      ? undefined
+                      : 'Layout này được tinh chỉnh cho 9:16. Khi aspect là 1:1, render sẽ tự fallback sang Full bleed.'
+                  }
                   className={cn(
                     'group relative overflow-hidden rounded-md border bg-secondary/20 text-left transition-colors',
                     selected
                       ? 'border-primary ring-2 ring-primary/50'
-                      : 'border-border hover:border-muted-foreground/40 hover:bg-secondary/40'
+                      : 'border-border hover:border-muted-foreground/40 hover:bg-secondary/40',
+                    supported ? '' : 'opacity-40 cursor-not-allowed hover:bg-secondary/20'
                   )}
                 >
                   {/* Full 9:16 thumbnail so users can read the actual
@@ -145,6 +162,11 @@ export function LayoutPicker({
                     {selected ? (
                       <div className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">
                         <Check className="size-3.5" />
+                      </div>
+                    ) : null}
+                    {aspect === '1:1' && !supported ? (
+                      <div className="absolute bottom-2 left-2 rounded bg-black/65 px-1.5 py-0.5 text-[9px] uppercase tracking-wide text-amber-300">
+                        Falls back at 1:1
                       </div>
                     ) : null}
                   </div>

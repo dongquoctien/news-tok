@@ -64,7 +64,7 @@ export function NewstokvnKeypointBulletin({
           top: 0,
           left: 0,
           right: 0,
-          height: 110 * r.unit,
+          height: r.square ? '8.5%' : 110 * r.unit,
           background: 'linear-gradient(180deg, #7c3aed 0%, #5b21b6 100%)',
           display: 'flex',
           alignItems: 'center',
@@ -95,7 +95,7 @@ export function NewstokvnKeypointBulletin({
         <span
           style={{
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 32 * r.font,
+            fontSize: r.safeFont(32),
             fontWeight: 900,
             color: '#ffffff',
             letterSpacing: 3,
@@ -112,10 +112,10 @@ export function NewstokvnKeypointBulletin({
       <div
         style={{
           position: 'absolute',
-          top: 160 * r.unit,
-          left: 56 * r.unit,
-          right: 56 * r.unit,
-          height: '46%',
+          top: r.square ? '12%' : 160 * r.unit,
+          left: '5%',
+          right: '5%',
+          height: r.square ? '40%' : '46%',
           overflow: 'hidden',
           borderRadius: 12,
           border: '3px solid rgba(168,85,247,0.6)',
@@ -153,7 +153,7 @@ export function NewstokvnKeypointBulletin({
               background: 'rgba(11,3,20,0.78)',
               color: '#ede9fe',
               fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-              fontSize: 18 * r.font,
+              fontSize: r.safeFont(18),
               fontWeight: 700,
               letterSpacing: 2,
               borderRadius: 4,
@@ -170,9 +170,9 @@ export function NewstokvnKeypointBulletin({
       <div
         style={{
           position: 'absolute',
-          left: 56 * r.unit,
-          right: 56 * r.unit,
-          top: '66%',
+          left: '5%',
+          right: '5%',
+          top: r.square ? '56%' : '66%',
           maxWidth: '90%',
           padding: `${22 * r.unit}px ${28 * r.unit}px`,
           background:
@@ -200,7 +200,7 @@ export function NewstokvnKeypointBulletin({
           bottom: 0,
           left: 0,
           right: 0,
-          height: 72 * r.unit,
+          height: r.square ? '6%' : 72 * r.unit,
           background: 'linear-gradient(180deg, #5b21b6 0%, #2e1065 100%)',
           display: 'flex',
           alignItems: 'center',
@@ -212,7 +212,7 @@ export function NewstokvnKeypointBulletin({
         <span
           style={{
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 22 * r.font,
+            fontSize: r.safeFont(22),
             fontWeight: 800,
             color: '#facc15',
             letterSpacing: 3,
@@ -224,7 +224,7 @@ export function NewstokvnKeypointBulletin({
         <span
           style={{
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 22 * r.font,
+            fontSize: r.safeFont(22),
             fontWeight: 700,
             color: '#ede9fe',
             letterSpacing: 1,

@@ -1,4 +1,33 @@
 import type { LayoutFamily } from '@news-tok/shared/layout-meta'
+import type { Aspect } from '@news-tok/shared/schema'
+
+/**
+ * Layouts retuned + visually audited at 1080×1080. Single source of
+ * truth lives in `packages/remotion/src/layouts/registry.ts`
+ * (`LAYOUTS_SUPPORTED_IN_SQUARE`). Studio mirrors that set here so the
+ * layout-picker can dim non-supported cards when `project.aspect ===
+ * '1:1'` — those layouts auto-fall-back to FullBleed at render time.
+ *
+ * Keep in sync with the renderer set: editing one without the other
+ * means Studio shows a layout as "supported" while the renderer
+ * actually falls it back, or vice versa.
+ */
+const SUPPORTED_IN_SQUARE = new Set<string>([
+  'builtin-fullBleed',
+  'builtin-storyPill',
+  'builtin-storyChip',
+  'builtin-storyVtv',
+  'builtin-card',
+  'builtin-magazineCover',
+  'builtin-statHero',
+  'builtin-breakingNews',
+  'builtin-newstokvn-keypoint-flame',
+  'builtin-newstokvn-keypoint-highlight',
+  'builtin-newstokvn-keypoint-quote',
+  'builtin-newstokvn-keypoint-bulletin',
+  'builtin-newstokvn-keypoint-comparison',
+  'builtin-newstokvn-keypoint-international',
+])
 
 /**
  * Catalog of built-in layouts known to Studio. Mirrors the keys in
@@ -381,6 +410,17 @@ export const BUILT_IN_LAYOUTS: BuiltInLayoutMeta[] = [
  *  (which Studio would resolve from disk in a later PR). */
 export function getBuiltInLayout(id: string): BuiltInLayoutMeta | undefined {
   return BUILT_IN_LAYOUTS.find((l) => l.id === id)
+}
+
+/**
+ * True when the layout is in the curated 1:1-supported set. The
+ * renderer's `resolveLayout(id, '1:1')` falls back to FullBleed for
+ * layouts NOT in this set, so callers (e.g. layout picker) can use
+ * this to dim those cards under aspect '1:1'.
+ */
+export function isLayoutSupportedAtAspect(id: string, aspect: Aspect): boolean {
+  if (aspect !== '1:1') return true
+  return SUPPORTED_IN_SQUARE.has(id)
 }
 
 /** True when `getBuiltInLayout(id)` requires `segment.eyebrow`, used

@@ -20,7 +20,7 @@ export const Outro = ({ segment, project, textStyle, fontOverride, colorOverride
   const style = textStyle ?? CLASSIC
 
   if (segment.layoutId) {
-    const Layout = resolveLayout(segment.layoutId)
+    const Layout = resolveLayout(segment.layoutId, project.aspect)
     return (
       <Layout
         text={segment.text}

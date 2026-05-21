@@ -81,9 +81,9 @@ export function MagazineCover({
         <div
           style={{
             position: 'absolute',
-            top: 64 * r.unit,
-            left: 64 * r.unit,
-            right: 64 * r.unit,
+            top: '6%',
+            left: '6%',
+            right: '6%',
             display: 'flex',
             flexDirection: 'column',
             gap: 12 * r.unit,
@@ -96,7 +96,7 @@ export function MagazineCover({
               alignItems: 'baseline',
               gap: 24 * r.unit,
               fontFamily: 'Inter, system-ui, sans-serif',
-              fontSize: 22 * r.font,
+              fontSize: r.safeFont(22),
               fontWeight: 700,
               letterSpacing: 4,
               textTransform: 'uppercase',
@@ -123,9 +123,9 @@ export function MagazineCover({
       <div
         style={{
           position: 'absolute',
-          left: 64 * r.unit,
-          right: 64 * r.unit,
-          bottom: 96 * r.unit,
+          left: '6%',
+          right: '6%',
+          bottom: '9%',
           maxWidth: '85%',
         }}
       >

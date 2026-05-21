@@ -79,8 +79,8 @@ export function StoryVtv({
       <div
         style={{
           position: 'absolute',
-          top: 48 * r.unit,
-          left: 48 * r.unit,
+          top: '5%',
+          left: '4.5%',
           display: 'flex',
           alignItems: 'center',
           gap: 10 * r.unit,
@@ -102,7 +102,7 @@ export function StoryVtv({
         <span
           style={{
             fontFamily: 'Inter, system-ui, sans-serif',
-            fontSize: 24 * r.font,
+            fontSize: r.safeFont(24),
             fontWeight: 800,
             letterSpacing: 3,
             color: '#ffffff',
@@ -117,13 +117,13 @@ export function StoryVtv({
       <div
         style={{
           position: 'absolute',
-          top: 116 * r.unit,
-          left: 48 * r.unit,
+          top: r.square ? '14%' : '10.5%',
+          left: '4.5%',
           padding: `${8 * r.unit}px ${16 * r.unit}px`,
           background: '#dc2626',
           color: '#ffffff',
           fontFamily: 'Inter, system-ui, sans-serif',
-          fontSize: 22 * r.font,
+          fontSize: r.safeFont(22),
           fontWeight: 800,
           letterSpacing: 3,
           textTransform: 'uppercase',
@@ -139,11 +139,11 @@ export function StoryVtv({
       <div
         style={{
           position: 'absolute',
-          left: 48 * r.unit,
-          right: 48 * r.unit,
-          bottom: 110 * r.unit,
+          left: '4.5%',
+          right: '4.5%',
+          bottom: '10%',
           fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-          fontSize: 70 * r.font,
+          fontSize: r.safeFont(70),
           fontWeight: 900,
           lineHeight: 1.08,
           color: '#ffffff',

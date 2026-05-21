@@ -22,6 +22,7 @@
     "migrate:paths": "tsx scripts/migrate-paths.ts",
     "gc": "tsx scripts/gc.ts",
     "smoke:render": "tsx scripts/smoke-render.ts",
+    "smoke:aspect": "tsx scripts/smoke-aspect.ts",
     "smoke:media": "tsx scripts/smoke-media.ts",
     "smoke:media:network": "tsx scripts/smoke-media-network.ts",
     "smoke:mcp": "node scripts/smoke-mcp.mjs",
