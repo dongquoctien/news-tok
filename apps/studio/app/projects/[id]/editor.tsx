@@ -2040,6 +2040,7 @@ function SegmentEditor({
             </code>
             <LayoutPicker
               currentId={segment.layoutId}
+              aspect={aspect}
               onApply={(id) => onChange({ layoutId: id })}
               trigger={
                 <Button variant="outline" size="sm">

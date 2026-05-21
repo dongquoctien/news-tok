@@ -79,10 +79,12 @@ export function NewstokvnKeypointComparison({
       <div
         style={{
           position: 'absolute',
-          top: 56 * r.unit,
-          left: 40 * r.unit,
-          right: 40 * r.unit,
-          height: '40%',
+          top: r.square ? '4%' : 56 * r.unit,
+          left: '4%',
+          right: '4%',
+          // Square has less vertical room; pull each frame to 32% so
+          // the VS dot + bottom headline plate still breathe.
+          height: r.square ? '32%' : '40%',
           overflow: 'hidden',
           borderRadius: 12,
           border: '3px solid rgba(168,85,247,0.55)',
@@ -121,7 +123,7 @@ export function NewstokvnKeypointComparison({
             color: '#ffffff',
             borderRadius: 4,
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 22 * r.font,
+            fontSize: r.safeFont(22),
             fontWeight: 900,
             letterSpacing: 3,
             textTransform: 'uppercase',
@@ -137,7 +139,9 @@ export function NewstokvnKeypointComparison({
       <div
         style={{
           position: 'absolute',
-          top: 'calc(40% + 80px)',
+          // First frame ends at (top% + height%). VS dot sits in the
+          // gap above the second frame.
+          top: r.square ? 'calc(4% + 32% + 10px)' : 'calc(40% + 80px)',
           left: '50%',
           transform: `translateX(-50%) translateY(${(1 - bottomIn) * -8}px)`,
           opacity: bottomIn,
@@ -151,7 +155,7 @@ export function NewstokvnKeypointComparison({
           justifyContent: 'center',
           color: '#0b0314',
           fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-          fontSize: 32 * r.font,
+          fontSize: r.safeFont(32),
           fontWeight: 900,
           boxShadow:
             '0 10px 28px rgba(250,204,21,0.55), 0 0 0 4px rgba(11,3,20,0.65)',
@@ -165,10 +169,10 @@ export function NewstokvnKeypointComparison({
       <div
         style={{
           position: 'absolute',
-          top: 'calc(40% + 130px)',
-          left: 40 * r.unit,
-          right: 40 * r.unit,
-          height: '40%',
+          top: r.square ? 'calc(4% + 32% + 70px)' : 'calc(40% + 130px)',
+          left: '4%',
+          right: '4%',
+          height: r.square ? '32%' : '40%',
           overflow: 'hidden',
           borderRadius: 12,
           border: '3px solid rgba(250,204,21,0.55)',
@@ -206,7 +210,7 @@ export function NewstokvnKeypointComparison({
             color: '#0b0314',
             borderRadius: 4,
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 22 * r.font,
+            fontSize: r.safeFont(22),
             fontWeight: 900,
             letterSpacing: 3,
             textTransform: 'uppercase',
@@ -221,9 +225,9 @@ export function NewstokvnKeypointComparison({
       <div
         style={{
           position: 'absolute',
-          left: 40 * r.unit,
-          right: 40 * r.unit,
-          bottom: 70 * r.unit,
+          left: '4%',
+          right: '4%',
+          bottom: '6%',
           padding: `${16 * r.unit}px ${22 * r.unit}px`,
           background:
             'linear-gradient(180deg, rgba(76,29,149,0.85) 0%, rgba(46,16,101,0.92) 100%)',
@@ -233,7 +237,7 @@ export function NewstokvnKeypointComparison({
           opacity: headlineIn,
           transform: `translateY(${(1 - headlineIn) * 16}px)`,
           fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-          fontSize: 34 * r.font,
+          fontSize: r.safeFont(34),
           fontWeight: 800,
           lineHeight: 1.18,
           color: '#ffffff',

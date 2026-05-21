@@ -136,7 +136,7 @@ async function main() {
     {
       title: 'Create a new video project',
       description:
-        'Create a new news-tok project folder under data/projects/<id>/ with an empty storyboard.json. Returns the projectId and the absolute path to the storyboard.',
+        'Create a new news-tok project folder under data/projects/<id>/ with an empty storyboard.json. Returns the projectId and the absolute path to the storyboard. Aspect supports 9:16 (1080x1920, default for TikTok/Reels/Shorts), 16:9 (1920x1080, for YouTube/landscape), and 1:1 (1080x1080, for Facebook/Instagram feed). At 1:1 a curated subset of layouts is supported — others auto-fall-back to FullBleed at render time. Supported 1:1 layouts: builtin-fullBleed, builtin-storyPill, builtin-storyChip, builtin-storyVtv, builtin-card, builtin-magazineCover, builtin-statHero, builtin-breakingNews, builtin-newstokvn-keypoint-flame, builtin-newstokvn-keypoint-highlight, builtin-newstokvn-keypoint-quote, builtin-newstokvn-keypoint-bulletin, builtin-newstokvn-keypoint-comparison, builtin-newstokvn-keypoint-international.',
       inputSchema: {
         source: z.object({
           type: z.enum(['text', 'url', 'file']),

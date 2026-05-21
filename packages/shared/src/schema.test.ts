@@ -104,6 +104,23 @@ describe('ProjectSchema', () => {
     ).toThrow()
   })
 
+  it('accepts 1:1 and round-trips through ProjectSchema', () => {
+    const p = ProjectSchema.parse({
+      ...minimalProject(),
+      aspect: '1:1',
+    })
+    expect(p.aspect).toBe('1:1')
+    // Round-trip — JSON.stringify ↔ parse — survives because no
+    // aspect-dependent field gets dropped or mutated by the schema.
+    const round = ProjectSchema.parse(JSON.parse(JSON.stringify(p)))
+    expect(round.aspect).toBe('1:1')
+  })
+
+  it('accepts 16:9 as well', () => {
+    const p = ProjectSchema.parse({ ...minimalProject(), aspect: '16:9' })
+    expect(p.aspect).toBe('16:9')
+  })
+
   it('rejects datetimes that are not ISO 8601', () => {
     expect(() =>
       ProjectSchema.parse({

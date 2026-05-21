@@ -1,3 +1,4 @@
+import type { Aspect } from '@news-tok/shared/schema'
 import type { LayoutComponent } from './types.js'
 import { BreakingNews } from './BreakingNews.js'
 import { BrowserWindow } from './BrowserWindow.js'
@@ -138,17 +139,54 @@ declare global {
 }
 
 /**
+ * Built-in layouts that have been audited for 1:1 (1080×1080). Includes
+ * the always-safe `FullBleed` fallback plus a curated subset whose
+ * chrome is centered or symmetric (top + bottom around a focal element)
+ * so it compresses cleanly to a square canvas. Layouts NOT in this set
+ * fall through to `FullBleed` when `project.aspect === '1:1'` so their
+ * portrait-tuned hardcoded positions never render at the wrong aspect.
+ *
+ * Single source of truth — Studio's layout picker imports this same
+ * set to dim non-supported cards in the picker UI.
+ */
+export const LAYOUTS_SUPPORTED_IN_SQUARE: ReadonlySet<string> = new Set([
+  'builtin-fullBleed',
+  // Generic — see PLAN.md "Curated layout retuning"
+  'builtin-storyPill',
+  'builtin-storyChip',
+  'builtin-storyVtv',
+  'builtin-card',
+  'builtin-magazineCover',
+  'builtin-statHero',
+  'builtin-breakingNews',
+  // NEWSTOKVN — square-friendly + light-retune candidates from the
+  // per-file audit. Other NEWSTOKVN layouts (both intros, both outros,
+  // breaking-card, flash-tab, incident, stat, timeline) rely on 3+
+  // stacked content blocks and don't compress to 1080-tall.
+  'builtin-newstokvn-keypoint-flame',
+  'builtin-newstokvn-keypoint-highlight',
+  'builtin-newstokvn-keypoint-quote',
+  'builtin-newstokvn-keypoint-bulletin',
+  'builtin-newstokvn-keypoint-comparison',
+  'builtin-newstokvn-keypoint-international',
+])
+
+/**
  * Resolve a layout id to the component that renders it. Falls back to
  * `FullBleed` for:
  *   - `undefined` id (storyboards saved before the layout library)
  *   - unknown id (e.g. user deleted the layout but a segment still
  *     references it)
+ *   - `aspect === '1:1'` AND the layout isn't in
+ *     `LAYOUTS_SUPPORTED_IN_SQUARE` — the layout was tuned for 9:16
+ *     only and would render with broken proportions at 1080×1080.
  *
  * This guarantees a renderable layout for every segment — the
  * downstream scene wrapper never has to worry about a missing layout.
  */
-export function resolveLayout(id?: string): LayoutComponent {
+export function resolveLayout(id?: string, aspect?: Aspect): LayoutComponent {
   if (!id) return FullBleed
+  if (aspect === '1:1' && !LAYOUTS_SUPPORTED_IN_SQUARE.has(id)) return FullBleed
   const user = globalThis.__NEWS_TOK_USER_LAYOUTS__
   return user?.[id] ?? BUILT_IN_LAYOUTS[id] ?? FullBleed
 }

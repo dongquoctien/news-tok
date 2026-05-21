@@ -75,11 +75,11 @@ export function StoryChip({
       <div
         style={{
           position: 'absolute',
-          left: 56 * r.unit,
-          right: 56 * r.unit,
-          bottom: 180 * r.unit,
+          left: '5%',
+          right: '5%',
+          bottom: '16%',
           fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-          fontSize: 84 * r.font,
+          fontSize: r.safeFont(84),
           fontWeight: 900,
           lineHeight: 1.04,
           letterSpacing: 0.5,
@@ -110,14 +110,14 @@ export function StoryChip({
       <div
         style={{
           position: 'absolute',
-          left: 56 * r.unit,
-          bottom: 96 * r.unit,
+          left: '5%',
+          bottom: '8%',
           background: '#facc15',
           color: '#0b0b0f',
           padding: `${10 * r.unit}px ${22 * r.unit}px`,
           borderRadius: 6,
           fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-          fontSize: 28 * r.font,
+          fontSize: r.safeFont(28),
           fontWeight: 900,
           letterSpacing: 3,
           textTransform: 'uppercase',

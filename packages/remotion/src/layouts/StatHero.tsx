@@ -47,10 +47,10 @@ export function StatHero({
         <div
           style={{
             position: 'absolute',
-            top: 64 * r.unit,
-            right: 64 * r.unit,
+            top: '6%',
+            right: '6%',
             fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-            fontSize: 22 * r.font,
+            fontSize: r.safeFont(22),
             fontWeight: 600,
             letterSpacing: 3,
             textTransform: 'uppercase',
@@ -76,7 +76,7 @@ export function StatHero({
           <div
             style={{
               fontFamily: 'Inter, system-ui, sans-serif',
-              fontSize: 26 * r.font,
+              fontSize: r.safeFont(26),
               fontWeight: 700,
               letterSpacing: 4,
               textTransform: 'uppercase',
@@ -119,7 +119,7 @@ export function StatHero({
                   display: 'inline-block',
                   padding: `${10 * r.unit}px ${22 * r.unit}px`,
                   fontFamily: 'Inter, system-ui, sans-serif',
-                  fontSize: 22 * r.font,
+                  fontSize: r.safeFont(22),
                   fontWeight: 700,
                   letterSpacing: 2,
                   textTransform: 'uppercase',

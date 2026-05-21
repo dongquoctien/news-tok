@@ -104,7 +104,7 @@ export function NewstokvnKeypointInternational({
       <div
         style={{
           position: 'absolute',
-          top: 64 * r.unit,
+          top: '5.5%',
           left: '50%',
           transform: `translateX(-50%) scale(${0.7 + archIn * 0.3})`,
           opacity: archIn,
@@ -113,7 +113,7 @@ export function NewstokvnKeypointInternational({
           color: '#ffffff',
           borderRadius: 999,
           fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-          fontSize: 28 * r.font,
+          fontSize: r.safeFont(28),
           fontWeight: 900,
           letterSpacing: 4,
           textTransform: 'uppercase',
@@ -128,10 +128,14 @@ export function NewstokvnKeypointInternational({
       <div
         style={{
           position: 'absolute',
-          left: 56 * r.unit,
-          right: 56 * r.unit,
-          bottom: 130 * r.unit,
-          padding: `${28 * r.unit}px ${24 * r.unit}px`,
+          left: '5%',
+          right: '5%',
+          bottom: '7%',
+          // Tighter padding at square so the four stacked lines fit
+          // without overflowing the plate.
+          padding: r.square
+            ? `${18 * r.unit}px ${20 * r.unit}px`
+            : `${28 * r.unit}px ${24 * r.unit}px`,
           background:
             'linear-gradient(180deg, rgba(46,16,101,0.94) 0%, rgba(26,5,51,0.96) 100%)',
           borderRadius: 14,
@@ -150,7 +154,7 @@ export function NewstokvnKeypointInternational({
             color: '#1a0533',
             borderRadius: 999,
             fontFamily: '"JetBrains Mono", ui-monospace, monospace',
-            fontSize: 20 * r.font,
+            fontSize: r.safeFont(20),
             fontWeight: 800,
             letterSpacing: 2,
             marginBottom: 16 * r.unit,
@@ -162,7 +166,7 @@ export function NewstokvnKeypointInternational({
         <div
           style={{
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 60 * r.font,
+            fontSize: r.safeFont(60),
             fontWeight: 900,
             lineHeight: 1.1,
             color: '#ffffff',
@@ -177,7 +181,7 @@ export function NewstokvnKeypointInternational({
           style={{
             marginTop: 18 * r.unit,
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 26 * r.font,
+            fontSize: r.safeFont(26),
             fontWeight: 500,
             lineHeight: 1.35,
             color: '#cbd5f5',
@@ -192,7 +196,7 @@ export function NewstokvnKeypointInternational({
           style={{
             marginTop: 18 * r.unit,
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 22 * r.font,
+            fontSize: r.safeFont(22),
             fontWeight: 800,
             letterSpacing: 2,
             color: '#facc15',

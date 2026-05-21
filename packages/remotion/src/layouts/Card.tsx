@@ -58,7 +58,9 @@ export function Card({
         <div
           style={{
             position: 'relative',
-            flex: '0 0 64%',
+            // Tighter media band at 1:1 — square frames give the text
+            // band less room, so steal 8% back from the media.
+            flex: r.square ? '0 0 56%' : '0 0 64%',
             borderRadius: cardRadius,
             overflow: 'hidden',
             boxShadow: '0 24px 60px rgba(0, 0, 0, 0.45)',
@@ -110,7 +112,7 @@ export function Card({
             <div
               style={{
                 fontFamily: 'Inter, system-ui, sans-serif',
-                fontSize: 22 * r.font,
+                fontSize: r.safeFont(22),
                 fontWeight: 700,
                 letterSpacing: 3,
                 textTransform: 'uppercase',

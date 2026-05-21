@@ -95,8 +95,8 @@ export function NewstokvnKeypointQuote({
       <div
         style={{
           position: 'absolute',
-          top: 56 * r.unit,
-          left: 56 * r.unit,
+          top: '5%',
+          left: '5%',
           display: 'flex',
           alignItems: 'center',
           gap: 10 * r.unit,
@@ -114,7 +114,7 @@ export function NewstokvnKeypointQuote({
         <span
           style={{
             fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-            fontSize: 22 * r.font,
+            fontSize: r.safeFont(22),
             fontWeight: 900,
             letterSpacing: 3,
             textTransform: 'uppercase',
@@ -129,10 +129,13 @@ export function NewstokvnKeypointQuote({
       <div
         style={{
           position: 'absolute',
-          left: 40 * r.unit,
-          bottom: 600 * r.unit,
+          left: '3.5%',
+          // Big decorative glyph sits above the quote body. Anchor to
+          // a fraction of the canvas so the gap above the quote stays
+          // consistent across aspects.
+          bottom: r.square ? '46%' : '54%',
           fontFamily: '"Playfair Display", Georgia, serif',
-          fontSize: 280 * r.font,
+          fontSize: r.safeFont(280),
           fontWeight: 900,
           lineHeight: 1,
           color: '#a855f7',
@@ -150,11 +153,11 @@ export function NewstokvnKeypointQuote({
       <div
         style={{
           position: 'absolute',
-          left: 64 * r.unit,
-          right: 64 * r.unit,
-          bottom: 220 * r.unit,
+          left: '6%',
+          right: '6%',
+          bottom: r.square ? '22%' : '20%',
           fontFamily: '"Playfair Display", Georgia, serif',
-          fontSize: 58 * r.font,
+          fontSize: r.safeFont(58),
           fontWeight: 700,
           fontStyle: 'italic',
           lineHeight: 1.2,
@@ -172,14 +175,14 @@ export function NewstokvnKeypointQuote({
       <div
         style={{
           position: 'absolute',
-          left: 56 * r.unit,
-          right: 56 * r.unit,
-          bottom: 130 * r.unit,
+          left: '5%',
+          right: '5%',
+          bottom: '12%',
           textAlign: 'center',
           opacity: attributionIn,
           transform: `translateY(${(1 - attributionIn) * 12}px)`,
           fontFamily: 'Be Vietnam Pro, Inter, system-ui, sans-serif',
-          fontSize: 28 * r.font,
+          fontSize: r.safeFont(28),
           fontWeight: 700,
           letterSpacing: 3,
           textTransform: 'uppercase',
